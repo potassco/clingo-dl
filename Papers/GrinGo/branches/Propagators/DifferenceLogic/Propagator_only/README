@@ -1,0 +1,28 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% ASP modulo Difference Logic %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+BASIC CALL:
+    clingo <script> <encoding> <instance> <options>
+    
+    Example:
+        clingo differenceLogic.lp open_shop_dl.lp tai4_4_1.lp
+        
+SCRIPTS:
+    differenceLogic.lp:
+        Requires:
+            - dl_lang.lp
+            - x - y <= c --> &diff{x-y}<=c
+        - solves ASP modulo difference logic programs
+        Options:
+          - number solutions controlled via clingo
+          -c trace=1:
+              - enables detailed output of theory propagation      
+          -c state=1:
+              - enables state-based negative cycle detection       
+          -c negation=1:
+              - enables strict semantic*  
+          -c propagation=1:
+              - enables full propagation*
+              
+*options might not work in conjunction with defined theory atoms (atoms in the head)
