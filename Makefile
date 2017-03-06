@@ -15,8 +15,9 @@ DEPEND=$(patsubst %,%.d,$(basename $(SOURCE)))
 $(TARGET): $(OBJECT)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LDLIBS) -o $@ $^
 
+.DELETE_ON_ERROR: %.Td
 %.o: %.cpp
-%.o: %.cpp %.d
+%.o %.Td: %.cpp %.d
 	$(CXX) -c -MT $@ -MMD -MP -MF $*.Td $(CXXFLAGS) $(CPPFLAGS) $<
 	mv -f $*.Td $*.d
 
