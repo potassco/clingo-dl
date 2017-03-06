@@ -405,21 +405,21 @@ int get_int(std::string constname, Control &ctl, int def) {
 }
 
 int main(int argc, char *argv[]) {
-    Control ctl{{argv + 1, static_cast<size_t>(argc - 2)}, nullptr, 20};
-    // TODO: configure strict/non-strict mode
-    int c = 0;
-    if (argc > 1) {
-        std::string s = argv[argc - 1];
-        size_t pos = 0;
-        std::string token;
-        while ((pos = s.find(' ')) != std::string::npos) {
-            token = s.substr(0, pos);
-            ctl.load(token.c_str());
-            s.erase(0, pos + 1);
+    char **argv2 = argv + 1;
+    int argc2 = argc - 1;
+    for (; *argv2; ++argv2, --argc2) {
+        if (std::strcmp(*argv2, "--") == 0) {
+            ++argv2;
+            --argc2;
+            break;
         }
-        ctl.load(s.c_str());
-        c = get_int("strict", ctl, 0);
     }
+    Control ctl{{argv2, numeric_cast<size_t>(argc2)}, nullptr, 20};
+    for (char **arg = argv + 1; arg != argv + (argc - argc2 - 1); ++arg) {
+        ctl.load(*arg);
+    }
+    // TODO: configure strict/non-strict mode
+    // int c = get_int("strict", ctl, 0);
 
     DifferenceLogicPropagator p;
     ctl.register_propagator(p, false);

@@ -1,3 +1,5 @@
+#const n=100.
+
 executionTime(1,1,54).
 executionTime(1,2,34).
 executionTime(1,3,61).
@@ -30,4 +32,4 @@ assign(4,1,1).
 assign(4,2,3).
 assign(4,3,2).
 assign(4,4,4).
-bound(100).
+bound(n).
