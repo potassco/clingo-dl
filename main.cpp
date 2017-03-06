@@ -114,16 +114,14 @@ private:
     };
 
     class PairComp {
-        bool reverse;
-
     public:
-        PairComp(const bool &revparam = false) { reverse = revparam; }
+        // Note: reverse == true is never used
+        PairComp(bool reverse = false) : reverse(reverse) { }
         bool operator()(const std::pair<int, int> &lhs, const std::pair<int, int> &rhs) const {
-            if (reverse)
-                return (lhs.second < rhs.second);
-            else
-                return (lhs.second > rhs.second);
+            return reverse ? lhs.second < rhs.second : lhs.second > rhs.second;
         }
+    private:
+        bool reverse;
     };
 
     bool valid;
