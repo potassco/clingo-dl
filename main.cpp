@@ -111,10 +111,10 @@ public:
     void reset() { outgoing.clear(); }
 };
 
-class PairComp {
+class DLPairComp {
 public:
     // Note: reverse == true is never used
-    PairComp(bool reverse = false) : reverse(reverse) { }
+    DLPairComp(bool reverse = false) : reverse(reverse) { }
     bool operator()(const std::pair<int, int> &lhs, const std::pair<int, int> &rhs) const {
         return reverse ? lhs.second < rhs.second : lhs.second > rhs.second;
     }
@@ -146,7 +146,7 @@ public:
         int d = graph.edges[edge].weight;
         graph.add_edge(edge);
 
-        using PairPrioQueue = std::priority_queue<std::pair<int, int>, std::vector<std::pair<int, int>>, PairComp>;
+        using PairPrioQueue = std::priority_queue<std::pair<int, int>, std::vector<std::pair<int, int>>, DLPairComp>;
 
         if (numeric_cast<int>(potential.size()) <= u) {
             potential.resize(u + 1, std::numeric_limits<int>::max());
