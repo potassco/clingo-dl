@@ -124,11 +124,6 @@ private:
         bool reverse;
     };
 
-    bool valid;
-    Graph graph;
-    std::vector<int> potential;
-    std::vector<bool> changed;
-
 public:
     DifferenceLogicGraph(const std::vector<Edge> &edges) : valid(false), graph(edges) {}
 
@@ -239,6 +234,12 @@ public:
         this->graph.reset();
         this->potential.clear();
     }
+
+private:
+    bool valid;
+    Graph graph;
+    std::vector<int> potential;
+    std::vector<bool> changed;
 };
 
 class DifferenceLogicPropagator : public Propagator {
