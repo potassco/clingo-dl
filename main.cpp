@@ -93,9 +93,9 @@ template <class K, class V> std::ostream &operator<<(std::ostream &out, std::pai
 }
 
 class DifferenceLogicGraph {
-  private:
+private:
     class Graph {
-      public:
+    public:
         std::vector<std::vector<int>> outgoing;
         const std::vector<Edge> &edges;
 
@@ -116,7 +116,7 @@ class DifferenceLogicGraph {
     class PairComp {
         bool reverse;
 
-      public:
+    public:
         PairComp(const bool &revparam = false) { reverse = revparam; }
         bool operator()(const std::pair<int, int> &lhs, const std::pair<int, int> &rhs) const {
             if (reverse)
@@ -131,7 +131,7 @@ class DifferenceLogicGraph {
     std::vector<int> potential;
     std::vector<bool> changed;
 
-  public:
+public:
     DifferenceLogicGraph(const std::vector<Edge> &edges) : valid(false), graph(edges) {}
 
     bool is_valid() { return this->valid; }
@@ -245,7 +245,7 @@ class DifferenceLogicGraph {
 
 class DifferenceLogicPropagator : public Propagator {
 
-  private:
+private:
     struct StackItem {
         StackItem(uint32_t dl, int si) : decision_level(dl), trail_index(si) {}
         uint32_t decision_level;
@@ -337,7 +337,7 @@ class DifferenceLogicPropagator : public Propagator {
         return true;
     }
 
-  public:
+public:
     DifferenceLogicPropagator() {}
 
     void init(PropagateInit &init) override {
