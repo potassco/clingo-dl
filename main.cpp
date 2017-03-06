@@ -92,11 +92,15 @@ template <class K, class V> std::ostream &operator<<(std::ostream &out, std::pai
     return out;
 }
 
+// NOTE: in its current from this class is not very helpful
+//       edges could be a member of DifferenceLogicGraph as well
+//       to justify a class more methods should be here...
+//       maybe:
+//         edge(int) -> const Edge&
+//         outgoing(int) -> const std::vector<Edge>&
+//       class members should be private
 class WeightedGraph {
 public:
-    std::vector<std::vector<int>> outgoing;
-    const std::vector<Edge> &edges;
-
     WeightedGraph(const std::vector<Edge> &edges) : edges(edges) {}
 
     void add_edge(int edge) {
@@ -109,6 +113,11 @@ public:
     }
 
     void reset() { outgoing.clear(); }
+
+public:
+    std::vector<std::vector<int>> outgoing;
+    const std::vector<Edge> &edges;
+
 };
 
 class DLPairComp {
@@ -122,6 +131,10 @@ private:
     bool reverse;
 };
 
+// NOTE: there is a lot of code modifying the potential
+//       a separate class might make the code more readable
+//       the potential, changed vectors, and outgoing edges can be merged into a node class
+//       this avoids multiple vectors storing related information improving data locality and readability
 class DifferenceLogicGraph {
 public:
     DifferenceLogicGraph(const std::vector<Edge> &edges) : valid(false), graph(edges) {}
@@ -170,7 +183,9 @@ public:
         changed.clear();
         changed.resize(potential.size(), false);
 
+        // can be a member to avoid allocations
         PairPrioQueue gamma;
+        // can be a member to avoid allocations
         std::vector<int> last_edges(potential.size());
 
         int v_gamma = potential[u] + d - potential[v];
@@ -180,6 +195,7 @@ public:
             last_edges[v] = edge;
         }
 
+        // can be a member to avoid allocations
         std::vector<int> gamma_vec(potential.size(), 0);
         gamma.push(std::make_pair(v, v_gamma));
         gamma_vec[v] = v_gamma;
@@ -214,6 +230,7 @@ public:
         }
 
         if (inconsistent) {
+            // can be a member to avoid allocations
             std::vector<int> neg_cycle;
             int begin = v;
             neg_cycle.push_back(graph.edges[last_edges[v]].id);
