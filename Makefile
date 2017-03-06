@@ -20,7 +20,7 @@ $(TARGET): $(OBJECT)
 	$(CXX) -c -MT $@ -MMD -MP -MF $*.Td $(CXXFLAGS) $(CPPFLAGS) $<
 	mv -f $*.Td $*.d
 
-.PHONY: clean
+.PHONY: format
 format:
 	clang-format-3.8 -style="{BasedOnStyle: llvm, IndentWidth: 4, SortIncludes: false, ColumnLimit: 999, AccessModifierOffset: -4}" -i $(SOURCE)
 
