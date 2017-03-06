@@ -92,32 +92,20 @@ template <class K, class V> std::ostream &operator<<(std::ostream &out, std::pai
     return out;
 }
 
-// NOTE: in its current from this class is not very helpful
-//       edges could be a member of DifferenceLogicGraph as well
-//       to justify a class more methods should be here...
-//       maybe:
-//         edge(int) -> const Edge&
-//         outgoing(int) -> const std::vector<Edge>&
-//       class members should be private
-class WeightedGraph {
-public:
-    WeightedGraph(const std::vector<Edge> &edges) : edges(edges) {}
-
-    void add_edge(int edge) {
-        assert(edge < numeric_cast<int>(edges.size()));
-        int maxid = std::max(edges[edge].from, edges[edge].to);
-        if (maxid >= numeric_cast<int>(outgoing.size())) {
-            outgoing.resize(maxid + 1, {});
-        }
-        outgoing[edges[edge].from].emplace_back(edge);
+template <class C>
+void ensure_index(C &c, size_t index) {
+    if (index >= c.size()) {
+        c.resize(index + 1);
     }
+}
 
-    void reset() { outgoing.clear(); }
-
-public:
-    std::vector<std::vector<int>> outgoing;
-    const std::vector<Edge> &edges;
-
+constexpr int undefined_potential = std::numeric_limits<int>::max();
+struct DifferenceLogicNode {
+    std::vector<int> outgoing;
+    int potential = undefined_potential;
+    int last_edge = 0;
+    int gamma = 0;
+    bool changed = false;
 };
 
 class DLPairComp {
@@ -131,131 +119,112 @@ private:
     bool reverse;
 };
 
-// NOTE: there is a lot of code modifying the potential
-//       a separate class might make the code more readable
-//       the potential, changed vectors, and outgoing edges can be merged into a node class
-//       this avoids multiple vectors storing related information improving data locality and readability
 class DifferenceLogicGraph {
 public:
-    DifferenceLogicGraph(const std::vector<Edge> &edges) : valid(false), graph(edges) {}
+    DifferenceLogicGraph(const std::vector<Edge> &edges) : edges_(edges) {}
 
-    bool is_valid() { return valid; }
+    bool is_valid() { return valid_; }
 
     std::unordered_map<int, int> get_assignment() {
         std::unordered_map<int, int> ass;
         int idx = 0;
-        for (int pot : potential) {
-            if (potential[idx] != std::numeric_limits<int>::max()) {
-                ass[idx] = -pot;
+        for (auto &&node : nodes_) {
+            if (node.potential != undefined_potential) {
+                ass[idx] = -node.potential;
             }
             idx++;
         }
         return ass;
     }
 
-    std::vector<int> add_edge(int edge) {
-        int u = graph.edges[edge].from;
-        int v = graph.edges[edge].to;
-        int d = graph.edges[edge].weight;
-        graph.add_edge(edge);
+    std::vector<int> add_edge(int uv_idx) {
+        auto &&uv = edges_[uv_idx];
 
-        using PairPrioQueue = std::priority_queue<std::pair<int, int>, std::vector<std::pair<int, int>>, DLPairComp>;
-
-        if (numeric_cast<int>(potential.size()) <= u) {
-            potential.resize(u + 1, std::numeric_limits<int>::max());
-            potential[u] = 0;
-        } else if (potential[u] == std::numeric_limits<int>::max()) {
-            potential[u] = 0;
+        ensure_index(nodes_, std::max(uv.from, uv.to));
+        auto &&u = nodes_[uv.from], &&v = nodes_[uv.to];
+        if (u.potential == undefined_potential) {
+            u.potential = 0;
         }
-
-        if (numeric_cast<int>(potential.size()) <= v) {
-            potential.resize(v + 1, std::numeric_limits<int>::max());
-            potential[v] = potential[u] + d;
-        } else if (potential[v] == std::numeric_limits<int>::max()) {
-            potential[v] = potential[u] + d;
+        u.outgoing.emplace_back(uv_idx);
+        if (v.potential == undefined_potential) {
+            v.potential = u.potential + uv.weight;
         }
-
-        if (!valid) {
-            valid = true;
+        if (!valid_) {
+            valid_ = true;
             return {};
         }
 
-        changed.clear();
-        changed.resize(potential.size(), false);
-
-        // can be a member to avoid allocations
-        PairPrioQueue gamma;
-        // can be a member to avoid allocations
-        std::vector<int> last_edges(potential.size());
-
-        int v_gamma = potential[u] + d - potential[v];
-        if (v_gamma >= 0) {
+        v.gamma = u.potential + uv.weight - v.potential;
+        if (v.gamma >= 0) {
             return {};
         } else {
-            last_edges[v] = edge;
+            v.last_edge = uv_idx;
         }
 
-        // can be a member to avoid allocations
-        std::vector<int> gamma_vec(potential.size(), 0);
-        gamma.push(std::make_pair(v, v_gamma));
-        gamma_vec[v] = v_gamma;
+        while (!gamma_.empty()) { gamma_.pop(); }
+        if (v.gamma < 0) {
+            gamma_.push(std::make_pair(uv.to, v.gamma));
+        }
 
         bool inconsistent = false;
 
-        while (!gamma.empty() && gamma.top().second < 0) {
-            int s = gamma.top().first;
-            if (s == u) {
+        while (!gamma_.empty()) {
+            int s_idx = gamma_.top().first;
+            if (s_idx == uv.from) {
                 inconsistent = true;
                 break;
             }
-            potential[s] += gamma.top().second;
-            changed[s] = true;
-            gamma.pop();
-            gamma_vec[s] = 0;
-            if (!graph.outgoing[s].empty()) {
-                for (auto eid : graph.outgoing[s]) {
-                    assert(eid < numeric_cast<int>(graph.edges.size()));
-                    int t = graph.edges[eid].to;
-                    if (!changed[t]) {
-                        int weight = graph.edges[eid].weight;
-                        int t_gamma = std::min(gamma_vec[t], potential[s] + weight - potential[t]);
-                        gamma_vec[t] = t_gamma;
-                        if (t_gamma < 0) {
-                            gamma.push(std::make_pair(t, t_gamma));
-                            last_edges[t] = eid;
-                        }
+            auto &&s = nodes_[s_idx];
+            s.potential += gamma_.top().second;
+            s.changed = true;
+            changed_.emplace_back(s_idx);
+            gamma_.pop();
+            s.gamma = 0;
+            for (auto st_idx : s.outgoing) {
+                assert(st_idx < numeric_cast<int>(edges_.size()));
+                auto &&st = edges_[st_idx];
+                auto &&t = nodes_[st.to];
+                if (!t.changed) {
+                    t.gamma = std::min(t.gamma, s.potential + st.weight - t.potential);
+                    if (t.gamma < 0) {
+                        gamma_.push(std::make_pair(st.to, t.gamma));
+                        t.last_edge = st_idx;
                     }
                 }
             }
         }
-
-        if (inconsistent) {
-            // can be a member to avoid allocations
-            std::vector<int> neg_cycle;
-            int begin = v;
-            neg_cycle.push_back(graph.edges[last_edges[v]].id);
-            int next = graph.edges[last_edges[v]].from;
-            while (begin != next) {
-                neg_cycle.push_back(graph.edges[last_edges[next]].id);
-                next = graph.edges[last_edges[next]].from;
-            }
-            return neg_cycle;
+        for (auto x : changed_) {
+            nodes_[x].changed = false;
         }
+        changed_.clear();
 
-        return {};
+        std::vector<int> neg_cycle;
+        if (inconsistent) {
+            // TODO: what exactly is id???
+            neg_cycle.push_back(edges_[v.last_edge].id);
+            auto next_idx = edges_[v.last_edge].from;
+            while (uv.to != next_idx) {
+                auto next = nodes_[next_idx];
+                neg_cycle.push_back(edges_[next.last_edge].id);
+                next_idx = edges_[next.last_edge].from;
+            }
+        }
+        return neg_cycle;
     }
 
     void reset() {
-        valid = false;
-        graph.reset();
-        potential.clear();
+        valid_ = false;
+        nodes_.clear();
     }
 
 private:
-    bool valid;
-    WeightedGraph graph;
-    std::vector<int> potential;
-    std::vector<bool> changed;
+    using PairPrioQueue = std::priority_queue<std::pair<int, int>, std::vector<std::pair<int, int>>, DLPairComp>;
+
+    PairPrioQueue gamma_;
+    std::vector<int> changed_;
+    const std::vector<Edge> &edges_;
+    std::vector<DifferenceLogicNode> nodes_;
+    bool valid_ = false;
 };
 
 struct DLStackItem {
