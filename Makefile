@@ -1,10 +1,13 @@
-CLINGOROOT=/home/wv/opt/clingo-banane
+undefine CXX
+-include FLAGS
 
-CXX=clang++-3.8
-CXXFLAGS=-std=c++11 -W -Wall -g -O0
-CPPFLAGS=-I$(CLINGOROOT)/include
-LDFLAGS=-L$(CLINGOROOT)/lib -Wl,-rpath=$(CLINGOROOT)/lib
-LDLIBS=-lclingo
+CLINGOROOT?=/home/wv/opt/clingo-banane
+
+CXX?=clang++-3.8
+CXXFLAGS?=-std=c++11 -W -Wall -O3 -DNDEBUG
+CPPFLAGS?=-I$(CLINGOROOT)/include
+LDFLAGS?=-L$(CLINGOROOT)/lib -Wl,-rpath=$(CLINGOROOT)/lib
+LDLIBS?=-lclingo
 
 TARGET=propagator
 SOURCE=main.cpp
@@ -12,12 +15,22 @@ SOURCE=main.cpp
 OBJECT=$(patsubst %,%.o,$(basename $(SOURCE)))
 DEPEND=$(patsubst %,%.d,$(basename $(SOURCE)))
 
-$(TARGET): $(OBJECT)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LDLIBS) -o $@ $^
+all: $(TARGET)
+
+FLAGS:
+	rm -f FLAGS
+	echo "CXX:=$(CXX)" >> FLAGS
+	echo "CXXFLAGS:=$(CXXFLAGS)" >> FLAGS
+	echo "CPPFLAGS:=$(CPPFLAGS)" >> FLAGS
+	echo "LDFLAGS:=$(LDFLAGS)" >> FLAGS
+	echo "LDLIBS:=$(LDLIBS)" >> FLAGS
+
+$(TARGET): $(OBJECT) FLAGS
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LDLIBS) -o $@ $(OBJECT)
 
 .DELETE_ON_ERROR: %.Td
 %.o: %.cpp
-%.o %.Td: %.cpp %.d
+%.o %.Td: %.cpp %.d FLAGS
 	$(CXX) -c -MT $@ -MMD -MP -MF $*.Td $(CXXFLAGS) $(CPPFLAGS) $<
 	mv -f $*.Td $*.d
 
