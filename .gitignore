@@ -1,0 +1,4 @@
+*.swp
+*.d
+*.o
+propagator

@@ -32,34 +32,53 @@
 #include <limits>
 
 using namespace Clingo;
-using namespace std;
+
+namespace Detail {
+
+template <int X> using int_type = std::integral_constant<int, X>;
+template <class T, class S> inline void nc_check(S s, int_type<0>) { // same sign
+    (void)s;
+    assert((std::is_same<T, S>::value) || (s >= std::numeric_limits<T>::min() && s <= std::numeric_limits<T>::max()));
+}
+template <class T, class S> inline void nc_check(S s, int_type<-1>) { // Signed -> Unsigned
+    (void)s;
+    assert(s >= 0 && static_cast<S>(static_cast<T>(s)) == s);
+}
+template <class T, class S> inline void nc_check(S s, int_type<1>) { // Unsigned -> Signed
+    (void)s;
+    assert(!(s > std::numeric_limits<T>::max()));
+}
+
+} // namespace Detail
+
+template <class T, class S> inline T numeric_cast(S s) {
+    constexpr int sv = int(std::numeric_limits<T>::is_signed) - int(std::numeric_limits<S>::is_signed);
+    ::Detail::nc_check<T>(s, ::Detail::int_type<sv>());
+    return static_cast<T>(s);
+}
 
 struct Edge {
-    Edge(int i, int x, int y, int k)
-        : id(i),from(x),to(y),weight(k) {}
+    Edge(int i, int x, int y, int k) : id(i), from(x), to(y), weight(k) {}
     int id;
     int from;
     int to;
     int weight;
 };
 
-template <class K, class V>
-std::ostream &operator<<(std::ostream &out, std::unordered_map<K, V> const &map);
-template <class T>
-std::ostream &operator<<(std::ostream &out, std::vector<T> const &vec);
-template <class K, class V>
-std::ostream &operator<<(std::ostream &out, std::pair<K, V> const &pair);
+template <class K, class V> std::ostream &operator<<(std::ostream &out, std::unordered_map<K, V> const &map);
+template <class T> std::ostream &operator<<(std::ostream &out, std::vector<T> const &vec);
+template <class K, class V> std::ostream &operator<<(std::ostream &out, std::pair<K, V> const &pair);
 
-template <class T>
-std::ostream &operator<<(std::ostream &out, std::vector<T> const &vec) {
+template <class T> std::ostream &operator<<(std::ostream &out, std::vector<T> const &vec) {
     out << "{";
-    for (auto &x : vec) { out << " " << x; }
+    for (auto &x : vec) {
+        out << " " << x;
+    }
     out << " }";
     return out;
 }
 
-template <class K, class V>
-std::ostream &operator<<(std::ostream &out, std::unordered_map<K, V> const &map) {
+template <class K, class V> std::ostream &operator<<(std::ostream &out, std::unordered_map<K, V> const &map) {
     using T = std::pair<K, V>;
     std::vector<T> vec;
     vec.assign(map.begin(), map.end());
@@ -68,160 +87,146 @@ std::ostream &operator<<(std::ostream &out, std::unordered_map<K, V> const &map)
     return out;
 }
 
-template <class K, class V>
-std::ostream &operator<<(std::ostream &out, std::pair<K, V> const &pair) {
+template <class K, class V> std::ostream &operator<<(std::ostream &out, std::pair<K, V> const &pair) {
     out << "( " << pair.first << " " << pair.second << " )";
     return out;
 }
 
 class DifferenceLogicGraph {
-private:
+  private:
+    class Graph {
+      public:
+        std::vector<std::vector<int>> outgoing;
+        const std::vector<Edge> &edges;
 
-    class Graph
-    {
-    public:
+        Graph(const std::vector<Edge> &edges) : edges(edges) {}
 
-        vector<vector<int>> outgoing;
-        const vector<Edge>& edges;
-
-        Graph(const vector<Edge>& edges) : edges(edges){}
-
-        void add_edge(int edge)
-        {
-            assert(edge < edges.size());
-			int maxid = max(edges[edge].from,edges[edge].to);
-            if (maxid >= outgoing.size()){
-                outgoing.resize(maxid+1, {});
+        void add_edge(int edge) {
+            assert(edge < numeric_cast<int>(edges.size()));
+            int maxid = std::max(edges[edge].from, edges[edge].to);
+            if (maxid >= numeric_cast<int>(outgoing.size())) {
+                outgoing.resize(maxid + 1, {});
             }
             outgoing[edges[edge].from].emplace_back(edge);
         }
 
-        void reset(){
-            outgoing.clear();
-        }
+        void reset() { outgoing.clear(); }
     };
 
-    class PairComp
-    {
+    class PairComp {
         bool reverse;
-    public:
-        PairComp(const bool& revparam=false)
-           {reverse=revparam;}
-        bool operator() (const pair<int,int>& lhs, const pair<int,int>& rhs) const
-          {
-            if (reverse) return (lhs.second<rhs.second);
-            else return (lhs.second>rhs.second);
-          }
+
+      public:
+        PairComp(const bool &revparam = false) { reverse = revparam; }
+        bool operator()(const std::pair<int, int> &lhs, const std::pair<int, int> &rhs) const {
+            if (reverse)
+                return (lhs.second < rhs.second);
+            else
+                return (lhs.second > rhs.second);
+        }
     };
 
     bool valid;
     Graph graph;
-    vector<int> potential;
-    vector<bool> changed;
+    std::vector<int> potential;
+    std::vector<bool> changed;
 
-public:
-    DifferenceLogicGraph(const vector<Edge>& edges) : graph(edges),valid(false){}
+  public:
+    DifferenceLogicGraph(const std::vector<Edge> &edges) : valid(false), graph(edges) {}
 
-    bool is_valid(){
-        return this->valid;
-    }
+    bool is_valid() { return this->valid; }
 
-    unordered_map<int,int> get_assignment(){
-        unordered_map< int,int > ass;
-        int idx=0;
-        for (int pot : potential){
-            if (potential[idx] != numeric_limits<int>::max()){
-                ass[idx]=-pot;
+    std::unordered_map<int, int> get_assignment() {
+        std::unordered_map<int, int> ass;
+        int idx = 0;
+        for (int pot : potential) {
+            if (potential[idx] != std::numeric_limits<int>::max()) {
+                ass[idx] = -pot;
             }
             idx++;
         }
         return ass;
     }
 
-    vector<int> add_edge(int edge){
+    std::vector<int> add_edge(int edge) {
         int u = graph.edges[edge].from;
         int v = graph.edges[edge].to;
         int d = graph.edges[edge].weight;
         graph.add_edge(edge);
 
-        typedef std::priority_queue<pair<int,int>,std::vector<pair<int,int>>,PairComp> PairPrioQueue;
+        typedef std::priority_queue<std::pair<int, int>, std::vector<std::pair<int, int>>, PairComp> PairPrioQueue;
 
-        if (potential.size()<=u){
-            potential.resize(u+1,numeric_limits<int>::max());
-            potential[u]=0;
-        }
-        else if (potential[u]==numeric_limits<int>::max()){
-            potential[u]=0;
-        }
-
-        if (potential.size()<=v){
-            potential.resize(v+1,numeric_limits<int>::max());
-            potential[v]=potential[u]+d;
-        }
-        else if (potential[v]==numeric_limits<int>::max()){
-            potential[v]=potential[u]+d;
+        if (numeric_cast<int>(potential.size()) <= u) {
+            potential.resize(u + 1, std::numeric_limits<int>::max());
+            potential[u] = 0;
+        } else if (potential[u] == std::numeric_limits<int>::max()) {
+            potential[u] = 0;
         }
 
-        if (!valid){
-            valid=true;
+        if (numeric_cast<int>(potential.size()) <= v) {
+            potential.resize(v + 1, std::numeric_limits<int>::max());
+            potential[v] = potential[u] + d;
+        } else if (potential[v] == std::numeric_limits<int>::max()) {
+            potential[v] = potential[u] + d;
+        }
+
+        if (!valid) {
+            valid = true;
             return {};
         }
 
         changed.clear();
-        changed.resize(potential.size(),false);
+        changed.resize(potential.size(), false);
 
         PairPrioQueue gamma;
-        vector<int> last_edges(potential.size());
+        std::vector<int> last_edges(potential.size());
 
-        int v_gamma = potential[u]+d-potential[v];
-        if (v_gamma>=0){
+        int v_gamma = potential[u] + d - potential[v];
+        if (v_gamma >= 0) {
             return {};
+        } else {
+            last_edges[v] = edge;
         }
-        else{
-            last_edges[v]=edge;
-        }
 
-        vector<int> gamma_vec(potential.size(),0);
-        gamma.push(make_pair(v,v_gamma));
-        gamma_vec[v]=v_gamma;
+        std::vector<int> gamma_vec(potential.size(), 0);
+        gamma.push(std::make_pair(v, v_gamma));
+        gamma_vec[v] = v_gamma;
 
-        bool inconsistent=false;
+        bool inconsistent = false;
 
-        while (!gamma.empty() && gamma.top().second<0){
+        while (!gamma.empty() && gamma.top().second < 0) {
             int s = gamma.top().first;
-            int s_gamma = gamma.top().second;
-            if (s == u){
-                inconsistent=true;
+            if (s == u) {
+                inconsistent = true;
                 break;
             }
-            potential[s]+=gamma.top().second;
-            changed[s]=true;
+            potential[s] += gamma.top().second;
+            changed[s] = true;
             gamma.pop();
-            gamma_vec[s]=0;
-			if (!graph.outgoing[s].empty()){
-				for (auto eid : graph.outgoing[s]){
-					assert(eid<graph.edges.size());
-					int t = graph.edges[eid].to;
-					if (!changed[t]){
-						int weight = graph.edges[eid].weight;
-						int t_gamma=min(gamma_vec[t],potential[s]+weight-potential[t]);
-						gamma_vec[t]=t_gamma;
-						if (t_gamma<0){
-							gamma.push(make_pair(t,t_gamma));
-							last_edges[t]=eid;
-						}
-					}
-				}
-			}
-
+            gamma_vec[s] = 0;
+            if (!graph.outgoing[s].empty()) {
+                for (auto eid : graph.outgoing[s]) {
+                    assert(eid < numeric_cast<int>(graph.edges.size()));
+                    int t = graph.edges[eid].to;
+                    if (!changed[t]) {
+                        int weight = graph.edges[eid].weight;
+                        int t_gamma = std::min(gamma_vec[t], potential[s] + weight - potential[t]);
+                        gamma_vec[t] = t_gamma;
+                        if (t_gamma < 0) {
+                            gamma.push(std::make_pair(t, t_gamma));
+                            last_edges[t] = eid;
+                        }
+                    }
+                }
+            }
         }
 
-        if (inconsistent){
-            vector<int> neg_cycle;
-            int begin=v;
+        if (inconsistent) {
+            std::vector<int> neg_cycle;
+            int begin = v;
             neg_cycle.push_back(graph.edges[last_edges[v]].id);
-            int next=graph.edges[last_edges[v]].from;
-            while (begin != next){
+            int next = graph.edges[last_edges[v]].from;
+            while (begin != next) {
                 neg_cycle.push_back(graph.edges[last_edges[next]].id);
                 next = graph.edges[last_edges[next]].from;
             }
@@ -231,135 +236,126 @@ public:
         return {};
     }
 
-    void reset(){
-        this->valid=false;
+    void reset() {
+        this->valid = false;
         this->graph.reset();
         this->potential.clear();
     }
-
 };
 
 class DifferenceLogicPropagator : public Propagator {
 
-private:
+  private:
     struct StackItem {
-        StackItem(uint32_t dl, int si)
-        : decision_level(dl)
-        , trail_index(si) { }
+        StackItem(uint32_t dl, int si) : decision_level(dl), trail_index(si) {}
         uint32_t decision_level;
         int trail_index;
     };
 
     struct State {
-        State(const vector<Edge>& edges):dl_graph(edges){
-        }
-        vector<StackItem> stack;
-        vector<int> edge_trail;
+        State(const std::vector<Edge> &edges) : dl_graph(edges) {}
+        std::vector<StackItem> stack;
+        std::vector<int> edge_trail;
         DifferenceLogicGraph dl_graph;
     };
 
-    vector<State> states;
-    vector<literal_t> edges_to_lit;
-    unordered_map<literal_t, vector<int>> lit_to_edges;
-    vector<Edge> edges;
-    vector<string> vert_map;
-    unordered_map<string, int> vert_map_inv;
+    std::vector<State> states;
+    std::vector<literal_t> edges_to_lit;
+    std::unordered_map<literal_t, std::vector<int>> lit_to_edges;
+    std::vector<Edge> edges;
+    std::vector<std::string> vert_map;
+    std::unordered_map<std::string, int> vert_map_inv;
 
-    int map_vert(string v){
-        auto it=std::find(vert_map.begin(), vert_map.end(), v);
-        if (it != vert_map.end())
-        {
-          return it - vert_map.begin();
+    int map_vert(std::string v) {
+        auto it = std::find(vert_map.begin(), vert_map.end(), v);
+        if (it != vert_map.end()) {
+            return it - vert_map.begin();
         }
         vert_map.emplace_back(v);
-        vert_map_inv[v]=vert_map.size()-1;
-        return vert_map.size()-1;
+        vert_map_inv[v] = vert_map.size() - 1;
+        return vert_map.size() - 1;
     }
 
     void add_edge_atom(PropagateInit &init, TheoryAtom const &atom) {
         int lit = init.solver_literal(atom.literal());
         int weight = 0;
-        string u,v;
-        if (atom.guard().second.arguments().empty()){ //Check if constant is  negated
-            weight=atom.guard().second.number();
-        }
-        else {
-            weight=-atom.guard().second.arguments()[0].number();
+        std::string u, v;
+        if (atom.guard().second.arguments().empty()) { // Check if constant is  negated
+            weight = atom.guard().second.number();
+        } else {
+            weight = -atom.guard().second.arguments()[0].number();
         }
         u = atom.elements()[0].tuple()[0].arguments()[0].to_string();
         v = atom.elements()[0].tuple()[0].arguments()[1].to_string();
         int u_id = map_vert(u);
         int v_id = map_vert(v);
-        Edge edge = Edge(edges.size(),u_id,v_id,weight);
+        Edge edge = Edge(edges.size(), u_id, v_id, weight);
         edges.emplace_back(edge);
         edges_to_lit.emplace_back(lit);
         lit_to_edges[lit].emplace_back(edge.id);
         init.add_watch(lit);
     }
 
-
     void initialize_states(PropagateInit &init) {
-        for (int i = 0; i < init.number_of_threads(); ++i) { states.emplace_back(edges); }
+        for (int i = 0; i < init.number_of_threads(); ++i) {
+            states.emplace_back(edges);
+        }
     }
 
-    vector<int> check_neg_cycle(State &state, int offset){
+    std::vector<int> check_neg_cycle(State &state, int offset) {
         int eid;
-        if (state.dl_graph.is_valid()){
-            eid=state.stack.back().trail_index+offset;
-        }
-        else {
-            eid=0;
+        if (state.dl_graph.is_valid()) {
+            eid = state.stack.back().trail_index + offset;
+        } else {
+            eid = 0;
         }
 
-        vector<int> neg_cycle;
-        for (int n=eid; n<state.edge_trail.size();n++){
-            for (auto &id : lit_to_edges[state.edge_trail[n]]){
-				assert(id < edges.size());
-				//assert(id < state.dl_graph.graph.edges.size());
+        std::vector<int> neg_cycle;
+        for (int n = eid; n < numeric_cast<int>(state.edge_trail.size()); n++) {
+            for (auto &id : lit_to_edges[state.edge_trail[n]]) {
+                assert(id < numeric_cast<int>(edges.size()));
+                // assert(id < state.dl_graph.graph.edges.size());
                 neg_cycle = state.dl_graph.add_edge(id);
-                if (!neg_cycle.empty()){
+                if (!neg_cycle.empty()) {
                     return neg_cycle;
                 }
             }
         }
 
-
+        return {};
     }
 
-    bool check_consistency(PropagateControl &ctl, State &state, int offset){
-        vector<int> neg_cycle = check_neg_cycle(state,offset);
-        if (!neg_cycle.empty()){
-           vector<literal_t> clause;
-           for (auto eid : neg_cycle){
-               clause.emplace_back(-edges_to_lit[eid]);
-           }
-           return ctl.add_clause(clause) && ctl.propagate();
+    bool check_consistency(PropagateControl &ctl, State &state, int offset) {
+        std::vector<int> neg_cycle = check_neg_cycle(state, offset);
+        if (!neg_cycle.empty()) {
+            std::vector<literal_t> clause;
+            for (auto eid : neg_cycle) {
+                clause.emplace_back(-edges_to_lit[eid]);
+            }
+            return ctl.add_clause(clause) && ctl.propagate();
         }
         return true;
     }
 
-public:
+  public:
     DifferenceLogicPropagator() {}
 
     void init(PropagateInit &init) override {
         for (auto atom : init.theory_atoms()) {
             auto term = atom.term();
             if (term.to_string() == "diff") {
-                add_edge_atom(init,atom);
+                add_edge_atom(init, atom);
             }
         }
 
         initialize_states(init);
-
     }
-
-
 
     void propagate(PropagateControl &ctl, LiteralSpan changes) override {
         auto &state = states[ctl.thread_id()];
         uint32_t dl = ctl.assignment().decision_level();
         uint32_t old_dl = 0;
-        if (!state.stack.empty()){
+        if (!state.stack.empty()) {
             old_dl = state.stack.back().decision_level;
         }
         if (state.stack.empty() || old_dl < dl) {
@@ -368,17 +364,17 @@ public:
         for (auto &lit : changes) {
             state.edge_trail.emplace_back(lit);
         }
-        int offset=0;
-        if (!state.stack.empty() && old_dl == dl){
+        int offset = 0;
+        if (!state.stack.empty() && old_dl == dl) {
             offset = state.edge_trail.size() - state.stack.back().trail_index;
         }
-        check_consistency(ctl,state,offset);
+        check_consistency(ctl, state, offset);
 
         return;
-
     }
 
-    void undo(PropagateControl const &ctl , LiteralSpan changes) override {
+    void undo(PropagateControl const &ctl, LiteralSpan changes) override {
+        static_cast<void>(changes);
         auto &state = states[ctl.thread_id()];
         int sid = state.stack.back().trail_index;
         auto ib = state.edge_trail.begin() + sid, ie = state.edge_trail.end();
@@ -389,56 +385,54 @@ public:
 
     void check(PropagateControl &ctl) override {
         auto &state = states[ctl.thread_id()];
-        cout << "Valid assignment found:" << endl;
-        unordered_map<int,int> assignment = state.dl_graph.get_assignment();
-        for ( auto &it : assignment){
-            if (vert_map[it.first]!="0"){
-                cout << vert_map[it.first] << ":" << it.second << " ";
+        std::cout << "Valid assignment found:" << std::endl;
+        std::unordered_map<int, int> assignment = state.dl_graph.get_assignment();
+        for (auto &it : assignment) {
+            if (vert_map[it.first] != "0") {
+                std::cout << vert_map[it.first] << ":" << it.second << " ";
             }
         }
-        cout << endl;
+        std::cout << std::endl;
     }
-
 };
 
-int get_int(string constname, Control &ctl, int def) {
-    Symbol val=ctl.get_const(constname.c_str());
-    if (val.to_string() == constname.c_str()){
+int get_int(std::string constname, Control &ctl, int def) {
+    Symbol val = ctl.get_const(constname.c_str());
+    if (val.to_string() == constname.c_str()) {
         return def;
     }
     return val.number();
 }
 
-int main(int argc, char* argv[]) {
-    Control ctl{{argv+1,argc-2}, nullptr, 20};
-
-    if (argc > 1){
-        string s = argv[argc-1];
+int main(int argc, char *argv[]) {
+    Control ctl{{argv + 1, static_cast<size_t>(argc - 2)}, nullptr, 20};
+    // TODO: configure strict/non-strict mode
+    int c = 0;
+    if (argc > 1) {
+        std::string s = argv[argc - 1];
         size_t pos = 0;
-        string token;
-        while ((pos = s.find(' ')) != string::npos) {
+        std::string token;
+        while ((pos = s.find(' ')) != std::string::npos) {
             token = s.substr(0, pos);
             ctl.load(token.c_str());
             s.erase(0, pos + 1);
         }
         ctl.load(s.c_str());
-        int c = get_int("strict",ctl,0);
+        c = get_int("strict", ctl, 0);
     }
 
     DifferenceLogicPropagator p;
     ctl.register_propagator(p, false);
     ctl.ground({{"base", {}}}, nullptr);
-    int i=0;
+    int i = 0;
     for (auto m : ctl.solve()) {
         i++;
-        cout << "Answer "<<i<<endl;
-        cout << m << endl<< endl;
+        std::cout << "Answer " << i << std::endl;
+        std::cout << m << std::endl << std::endl;
     }
-    if (i==0){
-        cout << "UNSATISFIABLE "<<endl;
-    }
-    else {
-        cout << "SATISFIABLE "<<endl;
+    if (i == 0) {
+        std::cout << "UNSATISFIABLE " << std::endl;
+    } else {
+        std::cout << "SATISFIABLE " << std::endl;
     }
 }
-
