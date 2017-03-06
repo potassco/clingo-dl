@@ -154,7 +154,7 @@ public:
         int d = graph.edges[edge].weight;
         graph.add_edge(edge);
 
-        typedef std::priority_queue<std::pair<int, int>, std::vector<std::pair<int, int>>, PairComp> PairPrioQueue;
+        using PairPrioQueue = std::priority_queue<std::pair<int, int>, std::vector<std::pair<int, int>>, PairComp>;
 
         if (numeric_cast<int>(potential.size()) <= u) {
             potential.resize(u + 1, std::numeric_limits<int>::max());
