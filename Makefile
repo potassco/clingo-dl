@@ -36,7 +36,7 @@ $(TARGET): $(OBJECT) FLAGS
 
 .PHONY: format
 format:
-	clang-format-3.8 -style="{BasedOnStyle: llvm, IndentWidth: 4, SortIncludes: false, ColumnLimit: 999, AccessModifierOffset: -4}" -i $(SOURCE)
+	clang-format-3.8 -style="{BasedOnStyle: llvm, IndentWidth: 4, SortIncludes: false, ColumnLimit: 999, AccessModifierOffset: -4, BreakBeforeBraces: Custom, BraceWrapping: {BeforeElse: true, BeforeCatch: true}, BreakConstructorInitializersBeforeComma: true, AlwaysBreakTemplateDeclarations: true}" -i $(SOURCE)
 
 .PHONY: clean
 clean:

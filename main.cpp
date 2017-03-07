@@ -35,23 +35,28 @@ using namespace Clingo;
 
 namespace Detail {
 
-template <int X> using int_type = std::integral_constant<int, X>;
-template <class T, class S> inline void nc_check(S s, int_type<0>) { // same sign
+template <int X>
+using int_type = std::integral_constant<int, X>;
+template <class T, class S>
+inline void nc_check(S s, int_type<0>) { // same sign
     (void)s;
     assert((std::is_same<T, S>::value) || (s >= std::numeric_limits<T>::min() && s <= std::numeric_limits<T>::max()));
 }
-template <class T, class S> inline void nc_check(S s, int_type<-1>) { // Signed -> Unsigned
+template <class T, class S>
+inline void nc_check(S s, int_type<-1>) { // Signed -> Unsigned
     (void)s;
     assert(s >= 0 && static_cast<S>(static_cast<T>(s)) == s);
 }
-template <class T, class S> inline void nc_check(S s, int_type<1>) { // Unsigned -> Signed
+template <class T, class S>
+inline void nc_check(S s, int_type<1>) { // Unsigned -> Signed
     (void)s;
     assert(!(s > std::numeric_limits<T>::max()));
 }
 
 } // namespace Detail
 
-template <class T, class S> inline T numeric_cast(S s) {
+template <class T, class S>
+inline T numeric_cast(S s) {
     constexpr int sv = int(std::numeric_limits<T>::is_signed) - int(std::numeric_limits<S>::is_signed);
     ::Detail::nc_check<T>(s, ::Detail::int_type<sv>());
     return static_cast<T>(s);
@@ -64,11 +69,15 @@ struct Edge {
     literal_t lit;
 };
 
-template <class K, class V> std::ostream &operator<<(std::ostream &out, std::unordered_map<K, V> const &map);
-template <class T> std::ostream &operator<<(std::ostream &out, std::vector<T> const &vec);
-template <class K, class V> std::ostream &operator<<(std::ostream &out, std::pair<K, V> const &pair);
+template <class K, class V>
+std::ostream &operator<<(std::ostream &out, std::unordered_map<K, V> const &map);
+template <class T>
+std::ostream &operator<<(std::ostream &out, std::vector<T> const &vec);
+template <class K, class V>
+std::ostream &operator<<(std::ostream &out, std::pair<K, V> const &pair);
 
-template <class T> std::ostream &operator<<(std::ostream &out, std::vector<T> const &vec) {
+template <class T>
+std::ostream &operator<<(std::ostream &out, std::vector<T> const &vec) {
     out << "{";
     for (auto &x : vec) {
         out << " " << x;
@@ -77,7 +86,8 @@ template <class T> std::ostream &operator<<(std::ostream &out, std::vector<T> co
     return out;
 }
 
-template <class K, class V> std::ostream &operator<<(std::ostream &out, std::unordered_map<K, V> const &map) {
+template <class K, class V>
+std::ostream &operator<<(std::ostream &out, std::unordered_map<K, V> const &map) {
     using T = std::pair<K, V>;
     std::vector<T> vec;
     vec.assign(map.begin(), map.end());
@@ -86,12 +96,14 @@ template <class K, class V> std::ostream &operator<<(std::ostream &out, std::uno
     return out;
 }
 
-template <class K, class V> std::ostream &operator<<(std::ostream &out, std::pair<K, V> const &pair) {
+template <class K, class V>
+std::ostream &operator<<(std::ostream &out, std::pair<K, V> const &pair) {
     out << "( " << pair.first << " " << pair.second << " )";
     return out;
 }
 
-template <class C> void ensure_index(C &c, size_t index) {
+template <class C>
+void ensure_index(C &c, size_t index) {
     if (index >= c.size()) {
         c.resize(index + 1);
     }
@@ -114,14 +126,15 @@ bool operator<(DifferenceLogicNodeUpdate const &a, DifferenceLogicNodeUpdate con
 
 class DifferenceLogicGraph {
 public:
-    DifferenceLogicGraph(const std::vector<Edge> &edges) : edges_(edges) {}
+    DifferenceLogicGraph(const std::vector<Edge> &edges)
+        : edges_(edges) {}
 
     bool empty() const { return nodes_.empty(); }
 
     std::unordered_map<int, int> get_assignment() const {
         std::unordered_map<int, int> ass;
         int idx = 0;
-        for (auto &&node : nodes_) {
+        for (auto &node : nodes_) {
             if (node.potential != undefined_potential) {
                 ass[idx] = -node.potential;
             }
@@ -131,11 +144,12 @@ public:
     }
 
     std::vector<int> add_edge(int uv_idx) {
-        auto &&uv = edges_[uv_idx];
+        auto &uv = edges_[uv_idx];
 
         // initialize the nodes of the edge to add
         ensure_index(nodes_, std::max(uv.from, uv.to));
-        auto &&u = nodes_[uv.from], &&v = nodes_[uv.to];
+        auto &u = nodes_[uv.from];
+        auto &v = nodes_[uv.to];
         if (u.potential == undefined_potential) {
             u.potential = 0;
         }
@@ -150,8 +164,8 @@ public:
 
         // detect negative cycles
         while (!gamma_.empty() && u.gamma == 0) {
-            int s_idx = gamma_.top().node_idx;
-            auto &&s = nodes_[s_idx];
+            auto s_idx = gamma_.top().node_idx;
+            auto &s = nodes_[s_idx];
             if (!s.changed) {
                 assert(s.gamma == gamma_.top().gamma);
                 s.potential += s.gamma;
@@ -160,8 +174,8 @@ public:
                 changed_.emplace_back(s_idx);
                 for (auto st_idx : s.outgoing) {
                     assert(st_idx < numeric_cast<int>(edges_.size()));
-                    auto &&st = edges_[st_idx];
-                    auto &&t = nodes_[st.to];
+                    auto &st = edges_[st_idx];
+                    auto &t = nodes_[st.to];
                     if (!t.changed) {
                         auto gamma = s.potential + st.weight - t.potential;
                         if (gamma < t.gamma) {
@@ -181,11 +195,12 @@ public:
             neg_cycle.push_back(v.last_edge);
             auto next_idx = edges_[v.last_edge].from;
             while (uv.to != next_idx) {
-                auto &&next = nodes_[next_idx];
+                auto &next = nodes_[next_idx];
                 neg_cycle.push_back(next.last_edge);
                 next_idx = edges_[next.last_edge].from;
             }
-        } else {
+        }
+        else {
             // add the edge to the graph
             u.outgoing.emplace_back(uv_idx);
         }
@@ -214,13 +229,13 @@ private:
 };
 
 struct DLStackItem {
-    DLStackItem(uint32_t dl, int si) : decision_level(dl), trail_index(si) {}
     uint32_t decision_level;
     int trail_index;
 };
 
 struct DLState {
-    DLState(const std::vector<Edge> &edges) : dl_graph(edges) {}
+    DLState(const std::vector<Edge> &edges)
+        : dl_graph(edges) {}
     std::vector<DLStackItem> stack;
     std::vector<int> edge_trail;
     DifferenceLogicGraph dl_graph;
@@ -250,9 +265,9 @@ private:
             old_dl = state.stack.back().decision_level;
         }
         if (state.stack.empty() || old_dl < dl) {
-            state.stack.emplace_back(dl, static_cast<int>(state.edge_trail.size()));
+            state.stack.push_back({dl, numeric_cast<int>(state.edge_trail.size())});
         }
-        for (auto &lit : changes) {
+        for (auto lit : changes) {
             state.edge_trail.emplace_back(lit);
         }
         int offset = 0;
@@ -267,7 +282,7 @@ private:
     void undo(PropagateControl const &ctl, LiteralSpan changes) override {
         static_cast<void>(changes);
         auto &state = states_[ctl.thread_id()];
-        int sid = state.stack.back().trail_index;
+        auto sid = state.stack.back().trail_index;
         auto ib = state.edge_trail.begin() + sid, ie = state.edge_trail.end();
         state.edge_trail.erase(ib, ie);
         state.stack.pop_back();
@@ -278,7 +293,7 @@ private:
         auto &state = states_[ctl.thread_id()];
         std::cout << "Valid assignment found:" << std::endl;
         std::unordered_map<int, int> assignment = state.dl_graph.get_assignment();
-        for (auto &it : assignment) {
+        for (auto it : assignment) {
             if (vert_map_[it.first].get() != "0") {
                 std::cout << vert_map_[it.first].get() << ":" << it.second << " ";
             }
@@ -299,12 +314,13 @@ private:
         int weight = 0;
         if (atom.guard().second.arguments().empty()) { // Check if constant is  negated
             weight = atom.guard().second.number();
-        } else {
+        }
+        else {
             weight = -atom.guard().second.arguments()[0].number();
         }
-        int u_id = map_vert(atom.elements()[0].tuple()[0].arguments()[0].to_string());
-        int v_id = map_vert(atom.elements()[0].tuple()[0].arguments()[1].to_string());
-        int id = edges_.size();
+        auto u_id = map_vert(atom.elements()[0].tuple()[0].arguments()[0].to_string());
+        auto v_id = map_vert(atom.elements()[0].tuple()[0].arguments()[1].to_string());
+        auto id = numeric_cast<int>(edges_.size());
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
         init.add_watch(lit);
@@ -317,14 +333,8 @@ private:
     }
 
     bool check_consistency(PropagateControl &ctl, DLState &state, int offset) {
-        int eid;
-        if (!state.dl_graph.empty()) {
-            eid = state.stack.back().trail_index + offset;
-        } else {
-            eid = 0;
-        }
-
-        for (int n = eid; n < numeric_cast<int>(state.edge_trail.size()); n++) {
+        int eid = !state.dl_graph.empty() ? state.stack.back().trail_index + offset : 0;
+        for (int n = eid, e = numeric_cast<int>(state.edge_trail.size()); n < e; n++) {
             auto lit = state.edge_trail[n];
             for (auto it = lit_to_edges_.find(lit), ie = lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
                 auto neg_cycle = state.dl_graph.add_edge(it->second);
@@ -361,7 +371,7 @@ int get_int(std::string constname, Control &ctl, int def) {
 }
 
 int main(int argc, char *argv[]) {
-    char **argb = argv + 1, **arge = argb;
+    auto argb = argv + 1, arge = argb;
     for (; *argb; ++argb, ++arge) {
         if (std::strcmp(*argb, "--") == 0) {
             ++argb;
@@ -369,7 +379,7 @@ int main(int argc, char *argv[]) {
         }
     }
     Control ctl{{argb, numeric_cast<size_t>(argv + argc - argb)}, nullptr, 20};
-    for (char **arg = argv + 1; arg != arge; ++arg) {
+    for (auto arg = argv + 1; arg != arge; ++arg) {
         ctl.load(*arg);
     }
     // TODO: configure strict/non-strict mode
@@ -386,7 +396,8 @@ int main(int argc, char *argv[]) {
     }
     if (i == 0) {
         std::cout << "UNSATISFIABLE " << std::endl;
-    } else {
+    }
+    else {
         std::cout << "SATISFIABLE " << std::endl;
     }
 }
