@@ -381,17 +381,15 @@ int get_int(std::string constname, Control &ctl, int def) {
 }
 
 int main(int argc, char *argv[]) {
-    char **argv2 = argv + 1;
-    int argc2 = argc - 1;
-    for (; *argv2; ++argv2, --argc2) {
-        if (std::strcmp(*argv2, "--") == 0) {
-            ++argv2;
-            --argc2;
+    char **argb = argv + 1, **arge = argb;
+    for (; *argb; ++argb, ++arge) {
+        if (std::strcmp(*argb, "--") == 0) {
+            ++argb;
             break;
         }
     }
-    Control ctl{{argv2, numeric_cast<size_t>(argc2)}, nullptr, 20};
-    for (char **arg = argv + 1; arg != argv + (argc - argc2 - 1); ++arg) {
+    Control ctl{{argb, numeric_cast<size_t>(argv + argc - argb)}, nullptr, 20};
+    for (char **arg = argv + 1; arg != arge; ++arg) {
         ctl.load(*arg);
     }
     // TODO: configure strict/non-strict mode
