@@ -153,16 +153,11 @@ public:
             return {};
         }
 
-        v.gamma = u.potential + uv.weight - v.potential;
-        if (v.gamma >= 0) {
-            return {};
-        } else {
-            v.last_edge = uv_idx;
-        }
-
         while (!gamma_.empty()) { gamma_.pop(); }
+        v.gamma = u.potential + uv.weight - v.potential;
         if (v.gamma < 0) {
             gamma_.push(std::make_pair(uv.to, v.gamma));
+            v.last_edge = uv_idx;
         }
 
         bool inconsistent = false;
@@ -202,7 +197,7 @@ public:
             neg_cycle.push_back(v.last_edge);
             auto next_idx = edges_[v.last_edge].from;
             while (uv.to != next_idx) {
-                auto next = nodes_[next_idx];
+                auto &&next = nodes_[next_idx];
                 neg_cycle.push_back(next.last_edge);
                 next_idx = edges_[next.last_edge].from;
             }
