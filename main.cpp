@@ -98,7 +98,7 @@ void ensure_index(C &c, size_t index) {
     }
 }
 
-constexpr int undefined_potential = std::numeric_limits<int>::max();
+constexpr int undefined_potential = std::numeric_limits<int>::min();
 struct DifferenceLogicNode {
     std::vector<int> outgoing;
     int potential = undefined_potential;
@@ -107,24 +107,21 @@ struct DifferenceLogicNode {
     bool changed = false;
 };
 
-class DLPairComp {
-public:
-    // Note: reverse == true is never used
-    DLPairComp(bool reverse = false) : reverse(reverse) { }
-    bool operator()(const std::pair<int, int> &lhs, const std::pair<int, int> &rhs) const {
-        return reverse ? lhs.second < rhs.second : lhs.second > rhs.second;
-    }
-private:
-    bool reverse;
+struct DifferenceLogicNodeUpdate {
+    int node_idx;
+    int gamma;
 };
+bool operator<(DifferenceLogicNodeUpdate const &a, DifferenceLogicNodeUpdate const &b) {
+    return a.gamma > b.gamma;
+}
 
 class DifferenceLogicGraph {
 public:
     DifferenceLogicGraph(const std::vector<Edge> &edges) : edges_(edges) {}
 
-    bool is_valid() { return valid_; }
+    bool empty() const { return nodes_.empty(); }
 
-    std::unordered_map<int, int> get_assignment() {
+    std::unordered_map<int, int> get_assignment() const {
         std::unordered_map<int, int> ass;
         int idx = 0;
         for (auto &&node : nodes_) {
@@ -139,61 +136,51 @@ public:
     std::vector<int> add_edge(int uv_idx) {
         auto &&uv = edges_[uv_idx];
 
+        // initialize the nodes of the edge to add
         ensure_index(nodes_, std::max(uv.from, uv.to));
         auto &&u = nodes_[uv.from], &&v = nodes_[uv.to];
         if (u.potential == undefined_potential) {
             u.potential = 0;
         }
-        u.outgoing.emplace_back(uv_idx);
         if (v.potential == undefined_potential) {
-            v.potential = u.potential + uv.weight;
+            v.potential = 0;
         }
-        if (!valid_) {
-            valid_ = true;
-            return {};
-        }
-
-        while (!gamma_.empty()) { gamma_.pop(); }
         v.gamma = u.potential + uv.weight - v.potential;
         if (v.gamma < 0) {
-            gamma_.push(std::make_pair(uv.to, v.gamma));
+            gamma_.push({uv.to, v.gamma});
             v.last_edge = uv_idx;
         }
 
-        bool inconsistent = false;
-
-        while (!gamma_.empty()) {
-            int s_idx = gamma_.top().first;
-            if (s_idx == uv.from) {
-                inconsistent = true;
-                break;
-            }
+        // detect negative cycles
+        while (!gamma_.empty() && u.gamma == 0) {
+            int s_idx = gamma_.top().node_idx;
             auto &&s = nodes_[s_idx];
-            s.potential += gamma_.top().second;
-            s.changed = true;
-            changed_.emplace_back(s_idx);
-            gamma_.pop();
-            s.gamma = 0;
-            for (auto st_idx : s.outgoing) {
-                assert(st_idx < numeric_cast<int>(edges_.size()));
-                auto &&st = edges_[st_idx];
-                auto &&t = nodes_[st.to];
-                if (!t.changed) {
-                    t.gamma = std::min(t.gamma, s.potential + st.weight - t.potential);
-                    if (t.gamma < 0) {
-                        gamma_.push(std::make_pair(st.to, t.gamma));
-                        t.last_edge = st_idx;
+            if (!s.changed) {
+                assert(s.gamma == gamma_.top().gamma);
+                s.potential += s.gamma;
+                s.gamma = 0;
+                s.changed = true;
+                changed_.emplace_back(s_idx);
+                for (auto st_idx : s.outgoing) {
+                    assert(st_idx < numeric_cast<int>(edges_.size()));
+                    auto &&st = edges_[st_idx];
+                    auto &&t = nodes_[st.to];
+                    if (!t.changed) {
+                        auto gamma = s.potential + st.weight - t.potential;
+                        if (gamma < t.gamma) {
+                            t.gamma = gamma;
+                            gamma_.push({st.to, t.gamma});
+                            t.last_edge = st_idx;
+                        }
                     }
                 }
             }
+            gamma_.pop();
         }
-        for (auto x : changed_) {
-            nodes_[x].changed = false;
-        }
-        changed_.clear();
 
         std::vector<int> neg_cycle;
-        if (inconsistent) {
+        if (u.gamma < 0) {
+            // gather the edges in the negative cycle
             neg_cycle.push_back(v.last_edge);
             auto next_idx = edges_[v.last_edge].from;
             while (uv.to != next_idx) {
@@ -202,22 +189,34 @@ public:
                 next_idx = edges_[next.last_edge].from;
             }
         }
+        else {
+            // add the edge to the graph
+            u.outgoing.emplace_back(uv_idx);
+        }
+
+        // reset gamma and changed flags
+        v.gamma = 0;
+        while (!gamma_.empty()) {
+            nodes_[gamma_.top().node_idx].gamma = 0;
+            gamma_.pop();
+        }
+        for (auto x : changed_) {
+            nodes_[x].changed = false;
+        }
+        changed_.clear();
+
         return neg_cycle;
     }
 
     void reset() {
-        valid_ = false;
         nodes_.clear();
     }
 
 private:
-    using PairPrioQueue = std::priority_queue<std::pair<int, int>, std::vector<std::pair<int, int>>, DLPairComp>;
-
-    PairPrioQueue gamma_;
+    std::priority_queue<DifferenceLogicNodeUpdate> gamma_;
     std::vector<int> changed_;
     const std::vector<Edge> &edges_;
     std::vector<DifferenceLogicNode> nodes_;
-    bool valid_ = false;
 };
 
 struct DLStackItem {
@@ -331,7 +330,7 @@ public:
 
     std::vector<int> check_neg_cycle(DLState &state, int offset) {
         int eid;
-        if (state.dl_graph.is_valid()) {
+        if (!state.dl_graph.empty()) {
             eid = state.stack.back().trail_index + offset;
         } else {
             eid = 0;
