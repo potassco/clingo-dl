@@ -58,8 +58,7 @@ template <class T, class S> inline T numeric_cast(S s) {
 }
 
 struct Edge {
-    Edge(int i, int x, int y, int k) : id(i), from(x), to(y), weight(k) {}
-    int id;
+    Edge(int x, int y, int k) :from(x), to(y), weight(k) {}
     int from;
     int to;
     int weight;
@@ -200,12 +199,11 @@ public:
 
         std::vector<int> neg_cycle;
         if (inconsistent) {
-            // TODO: what exactly is id???
-            neg_cycle.push_back(edges_[v.last_edge].id);
+            neg_cycle.push_back(v.last_edge);
             auto next_idx = edges_[v.last_edge].from;
             while (uv.to != next_idx) {
                 auto next = nodes_[next_idx];
-                neg_cycle.push_back(edges_[next.last_edge].id);
+                neg_cycle.push_back(next.last_edge);
                 next_idx = edges_[next.last_edge].from;
             }
         }
@@ -322,10 +320,11 @@ public:
         v = atom.elements()[0].tuple()[0].arguments()[1].to_string();
         int u_id = map_vert(u);
         int v_id = map_vert(v);
-        Edge edge = Edge(edges.size(), u_id, v_id, weight);
+        int id = edges.size();
+        Edge edge = Edge(u_id, v_id, weight);
         edges.emplace_back(edge);
         edges_to_lit.emplace_back(lit);
-        lit_to_edges[lit].emplace_back(edge.id);
+        lit_to_edges[lit].emplace_back(id);
         init.add_watch(lit);
     }
 
