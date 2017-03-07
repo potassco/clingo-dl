@@ -58,10 +58,10 @@ template <class T, class S> inline T numeric_cast(S s) {
 }
 
 struct Edge {
-    Edge(int x, int y, int k) :from(x), to(y), weight(k) {}
     int from;
     int to;
     int weight;
+    literal_t lit;
 };
 
 template <class K, class V> std::ostream &operator<<(std::ostream &out, std::unordered_map<K, V> const &map);
@@ -91,8 +91,7 @@ template <class K, class V> std::ostream &operator<<(std::ostream &out, std::pai
     return out;
 }
 
-template <class C>
-void ensure_index(C &c, size_t index) {
+template <class C> void ensure_index(C &c, size_t index) {
     if (index >= c.size()) {
         c.resize(index + 1);
     }
@@ -111,9 +110,7 @@ struct DifferenceLogicNodeUpdate {
     int node_idx;
     int gamma;
 };
-bool operator<(DifferenceLogicNodeUpdate const &a, DifferenceLogicNodeUpdate const &b) {
-    return a.gamma > b.gamma;
-}
+bool operator<(DifferenceLogicNodeUpdate const &a, DifferenceLogicNodeUpdate const &b) { return a.gamma > b.gamma; }
 
 class DifferenceLogicGraph {
 public:
@@ -188,8 +185,7 @@ public:
                 neg_cycle.push_back(next.last_edge);
                 next_idx = edges_[next.last_edge].from;
             }
-        }
-        else {
+        } else {
             // add the edge to the graph
             u.outgoing.emplace_back(uv_idx);
         }
@@ -208,9 +204,7 @@ public:
         return neg_cycle;
     }
 
-    void reset() {
-        nodes_.clear();
-    }
+    void reset() { nodes_.clear(); }
 
 private:
     std::priority_queue<DifferenceLogicNodeUpdate> gamma_;
@@ -236,6 +230,7 @@ class DifferenceLogicPropagator : public Propagator {
 public:
     DifferenceLogicPropagator() {}
 
+private:
     void init(PropagateInit &init) override {
         for (auto atom : init.theory_atoms()) {
             auto term = atom.term();
@@ -248,7 +243,7 @@ public:
     }
 
     void propagate(PropagateControl &ctl, LiteralSpan changes) override {
-        auto &state = states[ctl.thread_id()];
+        auto &state = states_[ctl.thread_id()];
         uint32_t dl = ctl.assignment().decision_level();
         uint32_t old_dl = 0;
         if (!state.stack.empty()) {
@@ -271,7 +266,7 @@ public:
 
     void undo(PropagateControl const &ctl, LiteralSpan changes) override {
         static_cast<void>(changes);
-        auto &state = states[ctl.thread_id()];
+        auto &state = states_[ctl.thread_id()];
         int sid = state.stack.back().trail_index;
         auto ib = state.edge_trail.begin() + sid, ie = state.edge_trail.end();
         state.edge_trail.erase(ib, ie);
@@ -280,55 +275,48 @@ public:
     }
 
     void check(PropagateControl &ctl) override {
-        auto &state = states[ctl.thread_id()];
+        auto &state = states_[ctl.thread_id()];
         std::cout << "Valid assignment found:" << std::endl;
         std::unordered_map<int, int> assignment = state.dl_graph.get_assignment();
         for (auto &it : assignment) {
-            if (vert_map[it.first] != "0") {
-                std::cout << vert_map[it.first] << ":" << it.second << " ";
+            if (vert_map_[it.first].get() != "0") {
+                std::cout << vert_map_[it.first].get() << ":" << it.second << " ";
             }
         }
         std::cout << std::endl;
     }
 
     int map_vert(std::string v) {
-        auto it = std::find(vert_map.begin(), vert_map.end(), v);
-        if (it != vert_map.end()) {
-            return it - vert_map.begin();
+        auto ret = vert_map_inv_.emplace(std::move(v), vert_map_.size());
+        if (ret.second) {
+            vert_map_.emplace_back(ret.first->first);
         }
-        vert_map.emplace_back(v);
-        vert_map_inv[v] = vert_map.size() - 1;
-        return vert_map.size() - 1;
+        return ret.first->second;
     }
 
     void add_edge_atom(PropagateInit &init, TheoryAtom const &atom) {
         int lit = init.solver_literal(atom.literal());
         int weight = 0;
-        std::string u, v;
         if (atom.guard().second.arguments().empty()) { // Check if constant is  negated
             weight = atom.guard().second.number();
         } else {
             weight = -atom.guard().second.arguments()[0].number();
         }
-        u = atom.elements()[0].tuple()[0].arguments()[0].to_string();
-        v = atom.elements()[0].tuple()[0].arguments()[1].to_string();
-        int u_id = map_vert(u);
-        int v_id = map_vert(v);
-        int id = edges.size();
-        Edge edge = Edge(u_id, v_id, weight);
-        edges.emplace_back(edge);
-        edges_to_lit.emplace_back(lit);
-        lit_to_edges[lit].emplace_back(id);
+        int u_id = map_vert(atom.elements()[0].tuple()[0].arguments()[0].to_string());
+        int v_id = map_vert(atom.elements()[0].tuple()[0].arguments()[1].to_string());
+        int id = edges_.size();
+        edges_.push_back({u_id, v_id, weight, lit});
+        lit_to_edges_.emplace(lit, id);
         init.add_watch(lit);
     }
 
     void initialize_states(PropagateInit &init) {
         for (int i = 0; i < init.number_of_threads(); ++i) {
-            states.emplace_back(edges);
+            states_.emplace_back(edges_);
         }
     }
 
-    std::vector<int> check_neg_cycle(DLState &state, int offset) {
+    bool check_consistency(PropagateControl &ctl, DLState &state, int offset) {
         int eid;
         if (!state.dl_graph.empty()) {
             eid = state.stack.back().trail_index + offset;
@@ -336,40 +324,32 @@ public:
             eid = 0;
         }
 
-        std::vector<int> neg_cycle;
         for (int n = eid; n < numeric_cast<int>(state.edge_trail.size()); n++) {
-            for (auto &id : lit_to_edges[state.edge_trail[n]]) {
-                assert(id < numeric_cast<int>(edges.size()));
-                // assert(id < state.dl_graph.graph.edges.size());
-                neg_cycle = state.dl_graph.add_edge(id);
+            auto lit = state.edge_trail[n];
+            for (auto it = lit_to_edges_.find(lit), ie = lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
+                auto neg_cycle = state.dl_graph.add_edge(it->second);
                 if (!neg_cycle.empty()) {
-                    return neg_cycle;
+                    std::vector<literal_t> clause;
+                    for (auto eid : neg_cycle) {
+                        clause.emplace_back(-edges_[eid].lit);
+                    }
+                    if (!ctl.add_clause(clause) || !ctl.propagate()) {
+                        return false;
+                    }
+                    assert(false && "must not happen");
                 }
             }
         }
 
-        return {};
-    }
-
-    bool check_consistency(PropagateControl &ctl, DLState &state, int offset) {
-        std::vector<int> neg_cycle = check_neg_cycle(state, offset);
-        if (!neg_cycle.empty()) {
-            std::vector<literal_t> clause;
-            for (auto eid : neg_cycle) {
-                clause.emplace_back(-edges_to_lit[eid]);
-            }
-            return ctl.add_clause(clause) && ctl.propagate();
-        }
         return true;
     }
 
 private:
-    std::vector<DLState> states;
-    std::vector<literal_t> edges_to_lit;
-    std::unordered_map<literal_t, std::vector<int>> lit_to_edges;
-    std::vector<Edge> edges;
-    std::vector<std::string> vert_map;
-    std::unordered_map<std::string, int> vert_map_inv;
+    std::vector<DLState> states_;
+    std::unordered_multimap<literal_t, int> lit_to_edges_;
+    std::vector<Edge> edges_;
+    std::vector<std::reference_wrapper<const std::string>> vert_map_;
+    std::unordered_map<std::string, int> vert_map_inv_;
 };
 
 int get_int(std::string constname, Control &ctl, int def) {
