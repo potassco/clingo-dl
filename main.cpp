@@ -406,7 +406,7 @@ int main(int argc, char *argv[]) {
                 break;
             }
         }
-        Control ctl{{argb, numeric_cast<size_t>(argv + argc - argb)}, nullptr, 20};
+        Control ctl{{argb, numeric_cast<size_t>(argv + argc - argb)}};
         ctl.add("base", {}, R"(#theory dl {
         term{};
         constant {- : 1, unary};
@@ -421,8 +421,8 @@ int main(int argc, char *argv[]) {
         // int c = get_int("strict", ctl, 0);
 
         DifferenceLogicPropagator p{stats};
-        ctl.register_propagator(p, false);
-        ctl.ground({{"base", {}}}, nullptr);
+        ctl.register_propagator(p);
+        ctl.ground({{"base", {}}});
         int i = 0;
         for (auto m : ctl.solve()) {
             i++;
