@@ -30,6 +30,8 @@
 #include <vector>
 #include <queue>
 #include <limits>
+#include <chrono>
+#include <iomanip>
 
 using namespace Clingo;
 
@@ -108,6 +110,20 @@ void ensure_index(C &c, size_t index) {
         c.resize(index + 1);
     }
 }
+
+using Duration = std::chrono::duration<double>;
+
+class Timer {
+public:
+    Timer(Duration &elapsed)
+        : elapsed_(elapsed)
+        , start_(std::chrono::steady_clock::now()) {}
+    ~Timer() { elapsed_ += std::chrono::steady_clock::now() - start_; }
+
+private:
+    Duration &elapsed_;
+    std::chrono::time_point<std::chrono::steady_clock> start_;
+};
 
 constexpr int undefined_potential = std::numeric_limits<int>::min();
 struct DifferenceLogicNode {
@@ -233,9 +249,23 @@ struct DLStackItem {
     int trail_index;
 };
 
+struct DLStats {
+    Duration time_propagate = Duration{0};
+    Duration time_check = Duration{0};
+    Duration time_undo = Duration{0};
+};
+
+struct Stats {
+    Duration time_total = Duration{0};
+    Duration time_init = Duration{0};
+    std::vector<DLStats> dl_stats;
+};
+
 struct DLState {
-    DLState(const std::vector<Edge> &edges)
-        : dl_graph(edges) {}
+    DLState(DLStats &stats, const std::vector<Edge> &edges)
+        : stats(stats)
+        , dl_graph(edges) {}
+    DLStats &stats;
     std::vector<DLStackItem> stack;
     std::vector<int> edge_trail;
     DifferenceLogicGraph dl_graph;
@@ -243,10 +273,24 @@ struct DLState {
 
 class DifferenceLogicPropagator : public Propagator {
 public:
-    DifferenceLogicPropagator() {}
+    DifferenceLogicPropagator(Stats &stats)
+        : stats_(stats) {}
+
+    void print_assignment(int thread) {
+        auto &state = states_[thread];
+        std::cout << "with assignment:\n";
+        std::unordered_map<int, int> assignment = state.dl_graph.get_assignment();
+        for (auto it : assignment) {
+            if (vert_map_[it.first].get() != "0") {
+                std::cout << vert_map_[it.first].get() << ":" << it.second << " ";
+            }
+        }
+        std::cout << "\n";
+    }
 
 private:
     void init(PropagateInit &init) override {
+        Timer t{stats_.time_init};
         for (auto atom : init.theory_atoms()) {
             auto term = atom.term();
             if (term.to_string() == "diff") {
@@ -259,6 +303,7 @@ private:
 
     void propagate(PropagateControl &ctl, LiteralSpan changes) override {
         auto &state = states_[ctl.thread_id()];
+        Timer t{state.stats.time_propagate};
         uint32_t dl = ctl.assignment().decision_level();
         uint32_t old_dl = 0;
         if (!state.stack.empty()) {
@@ -282,6 +327,7 @@ private:
     void undo(PropagateControl const &ctl, LiteralSpan changes) override {
         static_cast<void>(changes);
         auto &state = states_[ctl.thread_id()];
+        Timer t{state.stats.time_undo};
         auto sid = state.stack.back().trail_index;
         auto ib = state.edge_trail.begin() + sid, ie = state.edge_trail.end();
         state.edge_trail.erase(ib, ie);
@@ -291,14 +337,7 @@ private:
 
     void check(PropagateControl &ctl) override {
         auto &state = states_[ctl.thread_id()];
-        std::cout << "Valid assignment found:" << std::endl;
-        std::unordered_map<int, int> assignment = state.dl_graph.get_assignment();
-        for (auto it : assignment) {
-            if (vert_map_[it.first].get() != "0") {
-                std::cout << vert_map_[it.first].get() << ":" << it.second << " ";
-            }
-        }
-        std::cout << std::endl;
+        Timer t{state.stats.time_check};
     }
 
     int map_vert(std::string v) {
@@ -327,8 +366,9 @@ private:
     }
 
     void initialize_states(PropagateInit &init) {
+        stats_.dl_stats.resize(init.number_of_threads());
         for (int i = 0; i < init.number_of_threads(); ++i) {
-            states_.emplace_back(edges_);
+            states_.emplace_back(stats_.dl_stats[i], edges_);
         }
     }
 
@@ -360,6 +400,8 @@ private:
     std::vector<Edge> edges_;
     std::vector<std::reference_wrapper<const std::string>> vert_map_;
     std::unordered_map<std::string, int> vert_map_inv_;
+    std::unordered_map<int, int> assignment_;
+    Stats &stats_;
 };
 
 int get_int(std::string constname, Control &ctl, int def) {
@@ -371,40 +413,58 @@ int get_int(std::string constname, Control &ctl, int def) {
 }
 
 int main(int argc, char *argv[]) {
-    auto argb = argv + 1, arge = argb;
-    for (; *argb; ++argb, ++arge) {
-        if (std::strcmp(*argb, "--") == 0) {
-            ++argb;
-            break;
+    Stats stats;
+    { Timer t{stats.time_total};
+        auto argb = argv + 1, arge = argb;
+        for (; *argb; ++argb, ++arge) {
+            if (std::strcmp(*argb, "--") == 0) {
+                ++argb;
+                break;
+            }
+        }
+        Control ctl{{argb, numeric_cast<size_t>(argv + argc - argb)}, nullptr, 20};
+        ctl.add("base", {}, R"(#theory dl {
+        term{};
+        constant {- : 1, unary};
+        diff_term {- : 1, binary, left};
+        &diff/0 : diff_term, {<=}, constant, any;
+        &show_assignment/0 : term, directive
+    }.)");
+        for (auto arg = argv + 1; arg != arge; ++arg) {
+            ctl.load(*arg);
+        }
+        // TODO: configure strict/non-strict mode
+        // int c = get_int("strict", ctl, 0);
+
+        DifferenceLogicPropagator p{stats};
+        ctl.register_propagator(p, false);
+        ctl.ground({{"base", {}}}, nullptr);
+        int i = 0;
+        for (auto m : ctl.solve()) {
+            i++;
+            std::cout << "Answer " << i << "\n";
+            std::cout << m << "\n";
+            p.print_assignment(m.context().thread_id());
+
+        }
+        if (i == 0) {
+            std::cout << "UNSATISFIABLE\n";
+        }
+        else {
+            std::cout << "SATISFIABLE\n";
         }
     }
-    Control ctl{{argb, numeric_cast<size_t>(argv + argc - argb)}, nullptr, 20};
-    ctl.add("base", {}, R"(#theory dl {
-    term{};
-    constant {- : 1, unary};
-    diff_term {- : 1, binary, left};
-    &diff/0 : diff_term, {<=}, constant, any;
-    &show_assignment/0 : term, directive
-}.)");
-    for (auto arg = argv + 1; arg != arge; ++arg) {
-        ctl.load(*arg);
-    }
-    // TODO: configure strict/non-strict mode
-    // int c = get_int("strict", ctl, 0);
 
-    DifferenceLogicPropagator p;
-    ctl.register_propagator(p, false);
-    ctl.ground({{"base", {}}}, nullptr);
-    int i = 0;
-    for (auto m : ctl.solve()) {
-        i++;
-        std::cout << "Answer " << i << std::endl;
-        std::cout << m << std::endl << std::endl;
-    }
-    if (i == 0) {
-        std::cout << "UNSATISFIABLE " << std::endl;
-    }
-    else {
-        std::cout << "SATISFIABLE " << std::endl;
+    std::cout << "total: " << stats.time_total.count() << "s\n";
+    std::cout << "  init: " << stats.time_init.count() << "s\n";
+    int thread = 0;
+    for (auto &stat : stats.dl_stats) {
+        std::cout << "  total[" << thread << "]: ";
+        std::cout << (stat.time_undo + stat.time_check + stat.time_propagate).count() << "s\n";
+        std::cout << "    propagate: " << stat.time_propagate.count() << "s\n";
+        std::cout << "    undo     : " << stat.time_undo.count() << "s\n";
+        std::cout << "    check    : " << stat.time_check.count() << "s\n";
+        ++thread;
     }
 }
+
