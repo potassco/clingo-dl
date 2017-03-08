@@ -379,6 +379,13 @@ int main(int argc, char *argv[]) {
         }
     }
     Control ctl{{argb, numeric_cast<size_t>(argv + argc - argb)}, nullptr, 20};
+    ctl.add("base", {}, R"(#theory dl {
+    term{};
+    constant {- : 1, unary};
+    diff_term {- : 1, binary, left};
+    &diff/0 : diff_term, {<=}, constant, any;
+    &show_assignment/0 : term, directive
+}.)");
     for (auto arg = argv + 1; arg != arge; ++arg) {
         ctl.load(*arg);
     }
