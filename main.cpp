@@ -147,8 +147,12 @@ public:
 
     bool empty() const { return nodes_.empty(); }
 
-    int node_value_defined(int idx) const { return nodes_[idx].potential != undefined_potential; }
-    int node_value(int idx) const { return -nodes_[idx].potential; }
+    int node_value_defined(int idx) const {
+        return nodes_[idx].potential != undefined_potential;
+    }
+    int node_value(int idx) const {
+        return -nodes_[idx].potential;
+    }
 
     std::vector<int> add_edge(int uv_idx) {
         auto &uv = edges_[uv_idx];
@@ -280,6 +284,8 @@ public:
     }
 
 private:
+    // initialization
+
     void init(PropagateInit &init) override {
         Timer t{stats_.time_init};
         for (auto atom : init.theory_atoms()) {
@@ -289,31 +295,6 @@ private:
             }
         }
         initialize_states(init);
-    }
-
-    void propagate(PropagateControl &ctl, LiteralSpan changes) override {
-        auto &state = states_[ctl.thread_id()];
-        Timer t{state.stats.time_propagate};
-        for (auto lit : changes) {
-            state.edge_trail.emplace_back(lit);
-        }
-        check_consistency(ctl, state);
-    }
-
-    void undo(PropagateControl const &ctl, LiteralSpan changes) override {
-        auto &state = states_[ctl.thread_id()];
-        Timer t{state.stats.time_undo};
-        state.edge_trail.resize(state.edge_trail.size() - changes.size());
-        state.propagated = 0;
-        state.dl_graph.reset();
-    }
-
-    int map_vert(std::string v) {
-        auto ret = vert_map_inv_.emplace(std::move(v), vert_map_.size());
-        if (ret.second) {
-            vert_map_.emplace_back(ret.first->first);
-        }
-        return ret.first->second;
     }
 
     void add_edge_atom(PropagateInit &init, TheoryAtom const &atom) {
@@ -333,11 +314,31 @@ private:
         init.add_watch(lit);
     }
 
+
+    int map_vert(std::string v) {
+        auto ret = vert_map_inv_.emplace(std::move(v), vert_map_.size());
+        if (ret.second) {
+            vert_map_.emplace_back(ret.first->first);
+        }
+        return ret.first->second;
+    }
+
     void initialize_states(PropagateInit &init) {
         stats_.dl_stats.resize(init.number_of_threads());
         for (int i = 0; i < init.number_of_threads(); ++i) {
             states_.emplace_back(stats_.dl_stats[i], edges_);
         }
+    }
+
+    // propagation
+
+    void propagate(PropagateControl &ctl, LiteralSpan changes) override {
+        auto &state = states_[ctl.thread_id()];
+        Timer t{state.stats.time_propagate};
+        for (auto lit : changes) {
+            state.edge_trail.emplace_back(lit);
+        }
+        check_consistency(ctl, state);
     }
 
     bool check_consistency(PropagateControl &ctl, DLState &state) {
@@ -361,6 +362,16 @@ private:
         return true;
     }
 
+    // undo
+
+    void undo(PropagateControl const &ctl, LiteralSpan changes) override {
+        auto &state = states_[ctl.thread_id()];
+        Timer t{state.stats.time_undo};
+        state.edge_trail.resize(state.edge_trail.size() - changes.size());
+        state.propagated = 0;
+        state.dl_graph.reset();
+    }
+
 private:
     std::vector<DLState> states_;
     std::unordered_multimap<literal_t, int> lit_to_edges_;
@@ -380,8 +391,7 @@ int get_int(std::string constname, Control &ctl, int def) {
 
 int main(int argc, char *argv[]) {
     Stats stats;
-    {
-        Timer t{stats.time_total};
+    { Timer t{stats.time_total};
         auto argb = argv + 1, arge = argb;
         for (; *argb; ++argb, ++arge) {
             if (std::strcmp(*argb, "--") == 0) {
@@ -412,6 +422,7 @@ int main(int argc, char *argv[]) {
             std::cout << "Answer " << i << "\n";
             std::cout << m << "\n";
             p.print_assignment(m.context().thread_id());
+
         }
         if (i == 0) {
             std::cout << "UNSATISFIABLE\n";
@@ -432,3 +443,4 @@ int main(int argc, char *argv[]) {
         ++thread;
     }
 }
+
