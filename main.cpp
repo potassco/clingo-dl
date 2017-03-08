@@ -147,12 +147,8 @@ public:
 
     bool empty() const { return nodes_.empty(); }
 
-    int node_value_defined(int idx) const {
-        return nodes_[idx].potential != undefined_potential;
-    }
-    int node_value(int idx) const {
-        return -nodes_[idx].potential;
-    }
+    int node_value_defined(int idx) const { return nodes_[idx].potential != undefined_potential; }
+    int node_value(int idx) const { return -nodes_[idx].potential; }
 
     std::vector<int> add_edge(int uv_idx) {
         auto &uv = edges_[uv_idx];
@@ -384,7 +380,8 @@ int get_int(std::string constname, Control &ctl, int def) {
 
 int main(int argc, char *argv[]) {
     Stats stats;
-    { Timer t{stats.time_total};
+    {
+        Timer t{stats.time_total};
         auto argb = argv + 1, arge = argb;
         for (; *argb; ++argb, ++arge) {
             if (std::strcmp(*argb, "--") == 0) {
@@ -415,7 +412,6 @@ int main(int argc, char *argv[]) {
             std::cout << "Answer " << i << "\n";
             std::cout << m << "\n";
             p.print_assignment(m.context().thread_id());
-
         }
         if (i == 0) {
             std::cout << "UNSATISFIABLE\n";
@@ -436,4 +432,3 @@ int main(int argc, char *argv[]) {
         ++thread;
     }
 }
-
