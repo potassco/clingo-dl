@@ -292,7 +292,6 @@ private:
                 add_edge_atom(init, atom);
             }
         }
-
         initialize_states(init);
     }
 
@@ -303,8 +302,6 @@ private:
             state.edge_trail.emplace_back(lit);
         }
         check_consistency(ctl, state);
-
-        return;
     }
 
     void undo(PropagateControl const &ctl, LiteralSpan changes) override {
