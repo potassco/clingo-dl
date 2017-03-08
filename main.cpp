@@ -125,10 +125,15 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> start_;
 };
 
-constexpr int undefined_potential = std::numeric_limits<int>::min();
 struct DifferenceLogicNode {
+    bool defined() const {
+        return !potential_stack.empty();
+    }
+    int potential() const {
+        return potential_stack.back().second;
+    }
     std::vector<int> outgoing;
-    int potential = undefined_potential;
+    std::vector<std::pair<int,int>> potential_stack; // [(level,potential)]
     int last_edge = 0;
     int gamma = 0;
     bool changed = false;
@@ -147,23 +152,28 @@ public:
 
     bool empty() const { return nodes_.empty(); }
 
-    int node_value_defined(int idx) const { return nodes_[idx].potential != undefined_potential; }
-    int node_value(int idx) const { return -nodes_[idx].potential; }
+    int node_value_defined(int idx) const { return nodes_[idx].defined(); }
+    int node_value(int idx) const { return -nodes_[idx].potential(); }
 
-    std::vector<int> add_edge(int uv_idx) {
+    std::vector<int> add_edge(int level, int uv_idx) {
         auto &uv = edges_[uv_idx];
+
+        // initialize the trail
+        if (changed_trail_.empty() || std::get<0>(changed_trail_.back()) < level) {
+            changed_trail_.emplace_back(level, changed_nodes_.size(), changed_edges_.size());
+        }
 
         // initialize the nodes of the edge to add
         ensure_index(nodes_, std::max(uv.from, uv.to));
         auto &u = nodes_[uv.from];
         auto &v = nodes_[uv.to];
-        if (u.potential == undefined_potential) {
-            u.potential = 0;
+        if (!u.defined()) {
+            set_potential(u, level, 0);
         }
-        if (v.potential == undefined_potential) {
-            v.potential = 0;
+        if (!v.defined()) {
+            set_potential(v, level, 0);
         }
-        v.gamma = u.potential + uv.weight - v.potential;
+        v.gamma = u.potential() + uv.weight - v.potential();
         if (v.gamma < 0) {
             gamma_.push({uv.to, v.gamma});
             v.last_edge = uv_idx;
@@ -175,7 +185,7 @@ public:
             auto &s = nodes_[s_idx];
             if (!s.changed) {
                 assert(s.gamma == gamma_.top().gamma);
-                s.potential += s.gamma;
+                set_potential(s, level, s.potential() + s.gamma);
                 s.gamma = 0;
                 s.changed = true;
                 changed_.emplace_back(s_idx);
@@ -184,7 +194,7 @@ public:
                     auto &st = edges_[st_idx];
                     auto &t = nodes_[st.to];
                     if (!t.changed) {
-                        auto gamma = s.potential + st.weight - t.potential;
+                        auto gamma = s.potential() + st.weight - t.potential();
                         if (gamma < t.gamma) {
                             t.gamma = gamma;
                             gamma_.push({st.to, t.gamma});
@@ -210,6 +220,7 @@ public:
         else {
             // add the edge to the graph
             u.outgoing.emplace_back(uv_idx);
+            changed_edges_.emplace_back(uv.from);
         }
 
         // reset gamma and changed flags
@@ -226,13 +237,39 @@ public:
         return neg_cycle;
     }
 
-    void reset() { nodes_.clear(); }
+    void backtrack() {
+        for (int count = changed_nodes_.size() - std::get<1>(changed_trail_.back()); count > 0; --count) {
+            auto &node = nodes_[changed_nodes_.back()];
+            node.potential_stack.pop_back();
+            changed_nodes_.pop_back();
+        }
+        for (int count = changed_edges_.size() - std::get<2>(changed_trail_.back()); count > 0; --count) {
+            auto &node = nodes_[changed_edges_.back()];
+            node.outgoing.pop_back();
+            changed_edges_.pop_back();
+        }
+        changed_trail_.pop_back();
+    }
+
+private:
+    void set_potential(DifferenceLogicNode &node, int level, int potential) {
+        if (!node.defined() || node.potential_stack.back().first < level) {
+            node.potential_stack.emplace_back(level, potential);
+            changed_nodes_.emplace_back(numeric_cast<int>(&node - nodes_.data()));
+        }
+        else {
+            node.potential_stack.back().second = potential;
+        }
+    }
 
 private:
     std::priority_queue<DifferenceLogicNodeUpdate> gamma_;
     std::vector<int> changed_;
     const std::vector<Edge> &edges_;
     std::vector<DifferenceLogicNode> nodes_;
+    std::vector<int> changed_nodes_;
+    std::vector<int> changed_edges_;
+    std::vector<std::tuple<int, int, int>> changed_trail_;
 };
 
 struct DLStats {
@@ -325,41 +362,31 @@ private:
     void propagate(PropagateControl &ctl, LiteralSpan changes) override {
         auto &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_propagate};
+        auto level = ctl.assignment().decision_level();
         for (auto lit : changes) {
-            state.edge_trail.emplace_back(lit);
-        }
-        check_consistency(ctl, state);
-    }
-
-    bool check_consistency(PropagateControl &ctl, DLState &state) {
-        for (; state.propagated < numeric_cast<int>(state.edge_trail.size()); ++state.propagated) {
-            auto lit = state.edge_trail[state.propagated];
             for (auto it = lit_to_edges_.find(lit), ie = lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
-                auto neg_cycle = state.dl_graph.add_edge(it->second);
+                auto neg_cycle = state.dl_graph.add_edge(level, it->second);
                 if (!neg_cycle.empty()) {
                     std::vector<literal_t> clause;
                     for (auto eid : neg_cycle) {
                         clause.emplace_back(-edges_[eid].lit);
                     }
                     if (!ctl.add_clause(clause) || !ctl.propagate()) {
-                        return false;
+                        return;
                     }
                     assert(false && "must not happen");
                 }
             }
         }
-
-        return true;
     }
 
     // undo
 
     void undo(PropagateControl const &ctl, LiteralSpan changes) override {
+        static_cast<void>(changes);
         auto &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_undo};
-        state.edge_trail.resize(state.edge_trail.size() - changes.size());
-        state.propagated = 0;
-        state.dl_graph.reset();
+        state.dl_graph.backtrack();
     }
 
 private:
