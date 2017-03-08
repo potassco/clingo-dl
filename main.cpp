@@ -147,16 +147,11 @@ public:
 
     bool empty() const { return nodes_.empty(); }
 
-    std::unordered_map<int, int> get_assignment() const {
-        std::unordered_map<int, int> ass;
-        int idx = 0;
-        for (auto &node : nodes_) {
-            if (node.potential != undefined_potential) {
-                ass[idx] = -node.potential;
-            }
-            idx++;
-        }
-        return ass;
+    int node_value_defined(int idx) const {
+        return nodes_[idx].potential != undefined_potential;
+    }
+    int node_value(int idx) const {
+        return -nodes_[idx].potential;
     }
 
     std::vector<int> add_edge(int uv_idx) {
@@ -251,7 +246,6 @@ struct DLStackItem {
 
 struct DLStats {
     Duration time_propagate = Duration{0};
-    Duration time_check = Duration{0};
     Duration time_undo = Duration{0};
 };
 
@@ -276,14 +270,15 @@ public:
     DifferenceLogicPropagator(Stats &stats)
         : stats_(stats) {}
 
-    void print_assignment(int thread) {
+    void print_assignment(int thread) const {
         auto &state = states_[thread];
         std::cout << "with assignment:\n";
-        std::unordered_map<int, int> assignment = state.dl_graph.get_assignment();
-        for (auto it : assignment) {
-            if (vert_map_[it.first].get() != "0") {
-                std::cout << vert_map_[it.first].get() << ":" << it.second << " ";
+        int idx = 0;
+        for (std::string const &name : vert_map_) {
+            if (state.dl_graph.node_value_defined(idx)) {
+                std::cout << name << ":" << state.dl_graph.node_value(idx) << " ";
             }
+            ++idx;
         }
         std::cout << "\n";
     }
@@ -318,11 +313,6 @@ private:
         state.edge_trail.resize(state.edge_trail.size() - changes.size());
         state.propagated = 0;
         state.dl_graph.reset();
-    }
-
-    void check(PropagateControl &ctl) override {
-        auto &state = states_[ctl.thread_id()];
-        Timer t{state.stats.time_check};
     }
 
     int map_vert(std::string v) {
@@ -444,10 +434,9 @@ int main(int argc, char *argv[]) {
     int thread = 0;
     for (auto &stat : stats.dl_stats) {
         std::cout << "  total[" << thread << "]: ";
-        std::cout << (stat.time_undo + stat.time_check + stat.time_propagate).count() << "s\n";
+        std::cout << (stat.time_undo + stat.time_propagate).count() << "s\n";
         std::cout << "    propagate: " << stat.time_propagate.count() << "s\n";
         std::cout << "    undo     : " << stat.time_undo.count() << "s\n";
-        std::cout << "    check    : " << stat.time_check.count() << "s\n";
         ++thread;
     }
 }
