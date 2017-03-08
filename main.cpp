@@ -374,7 +374,6 @@ private:
     std::vector<Edge> edges_;
     std::vector<std::reference_wrapper<const std::string>> vert_map_;
     std::unordered_map<std::string, int> vert_map_inv_;
-    std::unordered_map<int, int> assignment_;
     Stats &stats_;
 };
 
