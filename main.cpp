@@ -126,14 +126,10 @@ private:
 };
 
 struct DifferenceLogicNode {
-    bool defined() const {
-        return !potential_stack.empty();
-    }
-    int potential() const {
-        return potential_stack.back().second;
-    }
+    bool defined() const { return !potential_stack.empty(); }
+    int potential() const { return potential_stack.back().second; }
     std::vector<int> outgoing;
-    std::vector<std::pair<int,int>> potential_stack; // [(level,potential)]
+    std::vector<std::pair<int, int>> potential_stack; // [(level,potential)]
     int last_edge = 0;
     int gamma = 0;
     bool changed = false;
