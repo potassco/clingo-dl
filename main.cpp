@@ -266,9 +266,9 @@ struct DLState {
         : stats(stats)
         , dl_graph(edges) {}
     DLStats &stats;
-    std::vector<DLStackItem> stack;
     std::vector<int> edge_trail;
     DifferenceLogicGraph dl_graph;
+    int propagated = 0;
 };
 
 class DifferenceLogicPropagator : public Propagator {
@@ -304,34 +304,19 @@ private:
     void propagate(PropagateControl &ctl, LiteralSpan changes) override {
         auto &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_propagate};
-        uint32_t dl = ctl.assignment().decision_level();
-        uint32_t old_dl = 0;
-        if (!state.stack.empty()) {
-            old_dl = state.stack.back().decision_level;
-        }
-        if (state.stack.empty() || old_dl < dl) {
-            state.stack.push_back({dl, numeric_cast<int>(state.edge_trail.size())});
-        }
         for (auto lit : changes) {
             state.edge_trail.emplace_back(lit);
         }
-        int offset = 0;
-        if (!state.stack.empty() && old_dl == dl) {
-            offset = state.edge_trail.size() - state.stack.back().trail_index;
-        }
-        check_consistency(ctl, state, offset);
+        check_consistency(ctl, state);
 
         return;
     }
 
     void undo(PropagateControl const &ctl, LiteralSpan changes) override {
-        static_cast<void>(changes);
         auto &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_undo};
-        auto sid = state.stack.back().trail_index;
-        auto ib = state.edge_trail.begin() + sid, ie = state.edge_trail.end();
-        state.edge_trail.erase(ib, ie);
-        state.stack.pop_back();
+        state.edge_trail.resize(state.edge_trail.size() - changes.size());
+        state.propagated = 0;
         state.dl_graph.reset();
     }
 
@@ -372,10 +357,9 @@ private:
         }
     }
 
-    bool check_consistency(PropagateControl &ctl, DLState &state, int offset) {
-        int eid = !state.dl_graph.empty() ? state.stack.back().trail_index + offset : 0;
-        for (int n = eid, e = numeric_cast<int>(state.edge_trail.size()); n < e; n++) {
-            auto lit = state.edge_trail[n];
+    bool check_consistency(PropagateControl &ctl, DLState &state) {
+        for (; state.propagated < numeric_cast<int>(state.edge_trail.size()); ++state.propagated) {
+            auto lit = state.edge_trail[state.propagated];
             for (auto it = lit_to_edges_.find(lit), ie = lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
                 auto neg_cycle = state.dl_graph.add_edge(it->second);
                 if (!neg_cycle.empty()) {
