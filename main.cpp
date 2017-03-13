@@ -291,8 +291,10 @@ struct DLState {
 
 class DifferenceLogicPropagator : public Propagator {
 public:
-    DifferenceLogicPropagator(Stats &stats)
-        : stats_(stats) {}
+    DifferenceLogicPropagator(Stats &stats, int c)
+        : stats_(stats) {
+        strict_ = (bool)c;
+    }
 
     void print_assignment(int thread) const {
         auto &state = states_[thread];
@@ -336,6 +338,12 @@ private:
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
         init.add_watch(lit);
+        if (strict_){
+            auto id = numeric_cast<int>(edges_.size());
+            edges_.push_back({v_id, u_id, -weight-1, -lit});
+            lit_to_edges_.emplace(-lit, id);
+            init.add_watch(-lit);
+        }
     }
 
     int map_vert(std::string v) {
@@ -392,6 +400,7 @@ private:
     std::vector<std::reference_wrapper<const std::string>> vert_map_;
     std::unordered_map<std::string, int> vert_map_inv_;
     Stats &stats_;
+    bool strict_;
 };
 
 int get_int(std::string constname, Control &ctl, int def) {
@@ -424,10 +433,10 @@ int main(int argc, char *argv[]) {
         for (auto arg = argv + 1; arg != arge; ++arg) {
             ctl.load(*arg);
         }
-        // TODO: configure strict/non-strict mode
-        // int c = get_int("strict", ctl, 0);
+        // configure strict/non-strict mode
+        int c = get_int("strict", ctl, 0);
 
-        DifferenceLogicPropagator p{stats};
+        DifferenceLogicPropagator p{stats,c};
         ctl.register_propagator(p);
         ctl.ground({{"base", {}}});
         int i = 0;
