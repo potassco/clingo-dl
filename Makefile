@@ -26,7 +26,7 @@ FLAGS:
 	echo "LDLIBS:=$(LDLIBS)" >> FLAGS
 
 $(TARGET): $(OBJECT) FLAGS
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LDLIBS) -o $@ $(OBJECT)
+	$(CXX) $(CXXFLAGS) -o $@ $(OBJECT) $(LDFLAGS) $(LDLIBS)
 
 .DELETE_ON_ERROR: %.Td
 %.o: %.cpp
