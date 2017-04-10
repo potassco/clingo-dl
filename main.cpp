@@ -32,6 +32,7 @@
 #include <limits>
 #include <chrono>
 #include <iomanip>
+#include <stdlib.h>
 
 using namespace Clingo;
 
@@ -64,10 +65,11 @@ inline T numeric_cast(S s) {
     return static_cast<T>(s);
 }
 
+template <typename T>
 struct Edge {
     int from;
     int to;
-    int weight;
+    T weight;
     literal_t lit;
 };
 
@@ -125,31 +127,35 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> start_;
 };
 
+template <typename T>
 struct DifferenceLogicNode {
     bool defined() const { return !potential_stack.empty(); }
-    int potential() const { return potential_stack.back().second; }
+    T potential() const { return potential_stack.back().second; }
     std::vector<int> outgoing;
-    std::vector<std::pair<int, int>> potential_stack; // [(level,potential)]
+    std::vector<std::pair<int, T>> potential_stack; // [(level,potential)]
     int last_edge = 0;
-    int gamma = 0;
+    T gamma = 0;
     bool changed = false;
 };
 
+template <typename T>
 struct DifferenceLogicNodeUpdate {
     int node_idx;
-    int gamma;
+    T gamma;
 };
-bool operator<(DifferenceLogicNodeUpdate const &a, DifferenceLogicNodeUpdate const &b) { return a.gamma > b.gamma; }
+bool operator<(DifferenceLogicNodeUpdate<int> const &a, DifferenceLogicNodeUpdate<int> const &b) { return a.gamma > b.gamma; }
+bool operator<(DifferenceLogicNodeUpdate<double> const &a, DifferenceLogicNodeUpdate<double> const &b) { return a.gamma > b.gamma; }
 
+template <typename T>
 class DifferenceLogicGraph {
 public:
-    DifferenceLogicGraph(const std::vector<Edge> &edges)
+    DifferenceLogicGraph(const std::vector<Edge<T>> &edges)
         : edges_(edges) {}
 
     bool empty() const { return nodes_.empty(); }
 
     int node_value_defined(int idx) const { return nodes_[idx].defined(); }
-    int node_value(int idx) const { return -nodes_[idx].potential(); }
+    T node_value(int idx) const { return -nodes_[idx].potential(); }
 
     std::vector<int> add_edge(int level, int uv_idx) {
         auto &uv = edges_[uv_idx];
@@ -248,7 +254,7 @@ public:
     }
 
 private:
-    void set_potential(DifferenceLogicNode &node, int level, int potential) {
+    void set_potential(DifferenceLogicNode<T> &node, int level, T potential) {
         if (!node.defined() || node.potential_stack.back().first < level) {
             node.potential_stack.emplace_back(level, potential);
             changed_nodes_.emplace_back(numeric_cast<int>(&node - nodes_.data()));
@@ -259,10 +265,10 @@ private:
     }
 
 private:
-    std::priority_queue<DifferenceLogicNodeUpdate> gamma_;
+    std::priority_queue<DifferenceLogicNodeUpdate<T>> gamma_;
     std::vector<int> changed_;
-    const std::vector<Edge> &edges_;
-    std::vector<DifferenceLogicNode> nodes_;
+    const std::vector<Edge<T>> &edges_;
+    std::vector<DifferenceLogicNode<T>> nodes_;
     std::vector<int> changed_nodes_;
     std::vector<int> changed_edges_;
     std::vector<std::tuple<int, int, int>> changed_trail_;
@@ -279,16 +285,50 @@ struct Stats {
     std::vector<DLStats> dl_stats;
 };
 
+template <typename T>
 struct DLState {
-    DLState(DLStats &stats, const std::vector<Edge> &edges)
+    DLState(DLStats &stats, const std::vector<Edge<T>> &edges)
         : stats(stats)
         , dl_graph(edges) {}
     DLStats &stats;
     std::vector<int> edge_trail;
-    DifferenceLogicGraph dl_graph;
+    DifferenceLogicGraph<T> dl_graph;
     int propagated = 0;
 };
 
+template <typename T> T get_weight(TheoryAtom const &atom);
+template <> int get_weight(TheoryAtom const &atom) {
+    int weight = 0;
+    if (atom.guard().second.arguments().empty()) { // Check if constant is  negated
+        weight = atom.guard().second.number();
+    }
+    else {
+        weight = -atom.guard().second.arguments()[0].number();
+    }
+    return weight;
+}
+template <> double get_weight(TheoryAtom const &atom) {
+    double weight = 0.0;
+    std::string guard = atom.guard().second.to_string();
+
+    std::string::size_type i = guard.find("(");
+    if (i != std::string::npos) {
+       guard.erase(i,i+1);
+    }
+    i = guard.find(")");
+    if (i != std::string::npos) {
+       guard.erase(i,i+1);
+    }
+    i = guard.find('"');
+    while (i != std::string::npos){
+       guard.erase(i,i+1);
+       i = guard.find('"');
+    }
+    weight = std::stod(guard);
+    return weight;
+}
+
+template <typename T>
 class DifferenceLogicPropagator : public Propagator {
 public:
     DifferenceLogicPropagator(Stats &stats, int c)
@@ -298,11 +338,21 @@ public:
 
     void print_assignment(int thread) const {
         auto &state = states_[thread];
-        std::cout << "with assignment:\n";
+        T adjust = 0;
         int idx = 0;
         for (std::string const &name : vert_map_) {
-            if (state.dl_graph.node_value_defined(idx)) {
-                std::cout << name << ":" << state.dl_graph.node_value(idx) << " ";
+            if (name == "0") {
+                adjust = state.dl_graph.node_value(idx);
+                break;
+            }
+            ++idx;
+        }
+
+        std::cout << "with assignment:\n";
+        idx = 0;
+        for (std::string const &name : vert_map_) {
+            if (state.dl_graph.node_value_defined(idx) && name != "0") {
+                std::cout << name << ":" << adjust + state.dl_graph.node_value(idx) << " ";
             }
             ++idx;
         }
@@ -323,15 +373,10 @@ private:
         initialize_states(init);
     }
 
+
     void add_edge_atom(PropagateInit &init, TheoryAtom const &atom) {
         int lit = init.solver_literal(atom.literal());
-        int weight = 0;
-        if (atom.guard().second.arguments().empty()) { // Check if constant is  negated
-            weight = atom.guard().second.number();
-        }
-        else {
-            weight = -atom.guard().second.arguments()[0].number();
-        }
+        T weight = get_weight<T>(atom);
         auto u_id = map_vert(atom.elements()[0].tuple()[0].arguments()[0].to_string());
         auto v_id = map_vert(atom.elements()[0].tuple()[0].arguments()[1].to_string());
         auto id = numeric_cast<int>(edges_.size());
@@ -394,9 +439,9 @@ private:
     }
 
 private:
-    std::vector<DLState> states_;
+    std::vector<DLState<T>> states_;
     std::unordered_multimap<literal_t, int> lit_to_edges_;
-    std::vector<Edge> edges_;
+    std::vector<Edge<T>> edges_;
     std::vector<std::reference_wrapper<const std::string>> vert_map_;
     std::unordered_map<std::string, int> vert_map_inv_;
     Stats &stats_;
@@ -409,6 +454,27 @@ int get_int(std::string constname, Control &ctl, int def) {
         return def;
     }
     return val.number();
+}
+
+template <typename T>
+void solve(Stats &stats, Control &ctl, int c){
+    DifferenceLogicPropagator<T> p{stats,c};
+    ctl.register_propagator(p);
+    ctl.ground({{"base", {}}});
+    int i = 0;
+    for (auto m : ctl.solve()) {
+        i++;
+        std::cout << "Answer " << i << "\n";
+        std::cout << m << "\n";
+        p.print_assignment(m.context().thread_id());
+    }
+    if (i == 0) {
+        std::cout << "UNSATISFIABLE\n";
+    }
+    else {
+        std::cout << "SATISFIABLE\n";
+    }
+
 }
 
 int main(int argc, char *argv[]) {
@@ -436,22 +502,20 @@ int main(int argc, char *argv[]) {
         // configure strict/non-strict mode
         int c = get_int("strict", ctl, 0);
 
-        DifferenceLogicPropagator p{stats,c};
-        ctl.register_propagator(p);
-        ctl.ground({{"base", {}}});
-        int i = 0;
-        for (auto m : ctl.solve()) {
-            i++;
-            std::cout << "Answer " << i << "\n";
-            std::cout << m << "\n";
-            p.print_assignment(m.context().thread_id());
-        }
-        if (i == 0) {
-            std::cout << "UNSATISFIABLE\n";
+        // configure IDL/RDL mode
+        int rdl = get_int("rdl", ctl, 0);
+
+        if (rdl>0){
+            if (c>0){
+                std::cout << "Real difference logic not available with strict semantics!" << std::endl;
+                exit(EXIT_FAILURE);
+            }
+            solve<double>(stats,ctl,c);
         }
         else {
-            std::cout << "SATISFIABLE\n";
+            solve<int>(stats,ctl,c);
         }
+
     }
 
     std::cout << "total: " << stats.time_total.count() << "s\n";
