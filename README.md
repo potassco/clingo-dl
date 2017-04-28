@@ -12,7 +12,7 @@ Usage
 Example
 -------
 
-    ./propagator open_shop_dl.lp tai4_4_1.lp -- -c n=132
+    ./propagator encoding-dl.lp tai4_4_1.lp -- -c n=132
 
 Development
 -----------

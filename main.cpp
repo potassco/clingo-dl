@@ -466,7 +466,7 @@ void solve(Stats &stats, Control &ctl, int c){
         i++;
         std::cout << "Answer " << i << "\n";
         std::cout << m << "\n";
-        p.print_assignment(m.context().thread_id());
+        p.print_assignment(m.thread_id());
     }
     if (i == 0) {
         std::cout << "UNSATISFIABLE\n";
