@@ -242,6 +242,20 @@ public:
         return neg_cycle;
     }
 
+    void dijkstra() {
+        // put start node into queue
+        // set cost of node to 0
+        // while queue is not empty
+        //     take node with least cost out of queue
+        //     put not yet visited neighbors into queue if
+        //       the node has not been reached yet, or
+        //       the cost to reach them is smaller than what is already in the queue (decrease key)
+        //       we do not have to set a parent because in the end we are only interested in the costs!
+        //
+        // can use the same trick to workaround the missing decrease key function in the stl as in add_edge
+        // ideally we would implement our own binary heap (not that difficult actually)
+    }
+
     void backtrack() {
         for (int count = changed_nodes_.size() - std::get<1>(changed_trail_.back()); count > 0; --count) {
             auto &node = nodes_[changed_nodes_.back()];
