@@ -143,8 +143,11 @@ struct DifferenceLogicNodeUpdate {
     int node_idx;
     T gamma;
 };
-bool operator<(DifferenceLogicNodeUpdate<int> const &a, DifferenceLogicNodeUpdate<int> const &b) { return a.gamma > b.gamma; }
-bool operator<(DifferenceLogicNodeUpdate<double> const &a, DifferenceLogicNodeUpdate<double> const &b) { return a.gamma > b.gamma; }
+
+template <class T>
+bool operator<(DifferenceLogicNodeUpdate<T> const &a, DifferenceLogicNodeUpdate<T> const &b) {
+    return a.gamma > b.gamma;
+}
 
 template <typename T>
 class DifferenceLogicGraph {
@@ -296,8 +299,10 @@ struct DLState {
     int propagated = 0;
 };
 
-template <typename T> T get_weight(TheoryAtom const &atom);
-template <> int get_weight(TheoryAtom const &atom) {
+template <typename T>
+T get_weight(TheoryAtom const &atom);
+template <>
+int get_weight(TheoryAtom const &atom) {
     int weight = 0;
     if (atom.guard().second.arguments().empty()) { // Check if constant is  negated
         weight = atom.guard().second.number();
@@ -307,22 +312,23 @@ template <> int get_weight(TheoryAtom const &atom) {
     }
     return weight;
 }
-template <> double get_weight(TheoryAtom const &atom) {
+template <>
+double get_weight(TheoryAtom const &atom) {
     double weight = 0.0;
     std::string guard = atom.guard().second.to_string();
 
     std::string::size_type i = guard.find("(");
     if (i != std::string::npos) {
-       guard.erase(i,i+1);
+        guard.erase(i, i + 1);
     }
     i = guard.find(")");
     if (i != std::string::npos) {
-       guard.erase(i,i+1);
+        guard.erase(i, i + 1);
     }
     i = guard.find('"');
-    while (i != std::string::npos){
-       guard.erase(i,i+1);
-       i = guard.find('"');
+    while (i != std::string::npos) {
+        guard.erase(i, i + 1);
+        i = guard.find('"');
     }
     weight = std::stod(guard);
     return weight;
@@ -331,10 +337,9 @@ template <> double get_weight(TheoryAtom const &atom) {
 template <typename T>
 class DifferenceLogicPropagator : public Propagator {
 public:
-    DifferenceLogicPropagator(Stats &stats, int c)
-        : stats_(stats) {
-        strict_ = (bool)c;
-    }
+    DifferenceLogicPropagator(Stats &stats, bool strict)
+        : stats_(stats)
+        , strict_(strict) {}
 
     void print_assignment(int thread) const {
         auto &state = states_[thread];
@@ -373,7 +378,6 @@ private:
         initialize_states(init);
     }
 
-
     void add_edge_atom(PropagateInit &init, TheoryAtom const &atom) {
         int lit = init.solver_literal(atom.literal());
         T weight = get_weight<T>(atom);
@@ -383,9 +387,9 @@ private:
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
         init.add_watch(lit);
-        if (strict_){
+        if (strict_) {
             auto id = numeric_cast<int>(edges_.size());
-            edges_.push_back({v_id, u_id, -weight-1, -lit});
+            edges_.push_back({v_id, u_id, -weight - 1, -lit});
             lit_to_edges_.emplace(-lit, id);
             init.add_watch(-lit);
         }
@@ -457,8 +461,8 @@ int get_int(std::string constname, Control &ctl, int def) {
 }
 
 template <typename T>
-void solve(Stats &stats, Control &ctl, int c){
-    DifferenceLogicPropagator<T> p{stats,c};
+void solve(Stats &stats, Control &ctl, bool strict) {
+    DifferenceLogicPropagator<T> p{stats, strict};
     ctl.register_propagator(p);
     ctl.ground({{"base", {}}});
     int i = 0;
@@ -474,7 +478,6 @@ void solve(Stats &stats, Control &ctl, int c){
     else {
         std::cout << "SATISFIABLE\n";
     }
-
 }
 
 int main(int argc, char *argv[]) {
@@ -500,22 +503,20 @@ int main(int argc, char *argv[]) {
             ctl.load(*arg);
         }
         // configure strict/non-strict mode
-        int c = get_int("strict", ctl, 0);
-
+        auto strict = get_int("strict", ctl, 0) != 0;
         // configure IDL/RDL mode
-        int rdl = get_int("rdl", ctl, 0);
+        auto rdl = get_int("rdl", ctl, 0) != 0;
 
-        if (rdl>0){
-            if (c>0){
+        if (rdl) {
+            if (strict) {
                 std::cout << "Real difference logic not available with strict semantics!" << std::endl;
                 exit(EXIT_FAILURE);
             }
-            solve<double>(stats,ctl,c);
+            solve<double>(stats, ctl, strict);
         }
         else {
-            solve<int>(stats,ctl,c);
+            solve<int>(stats, ctl, strict);
         }
-
     }
 
     std::cout << "total: " << stats.time_total.count() << "s\n";
