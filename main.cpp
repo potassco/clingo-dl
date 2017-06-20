@@ -303,35 +303,15 @@ template <typename T>
 T get_weight(TheoryAtom const &atom);
 template <>
 int get_weight(TheoryAtom const &atom) {
-    int weight = 0;
-    if (atom.guard().second.arguments().empty()) { // Check if constant is  negated
-        weight = atom.guard().second.number();
-    }
-    else {
-        weight = -atom.guard().second.arguments()[0].number();
-    }
-    return weight;
+    return atom.guard().second.arguments().empty() ? atom.guard().second.number() : -atom.guard().second.arguments()[0].number();
 }
 template <>
 double get_weight(TheoryAtom const &atom) {
-    double weight = 0.0;
+    static const std::string chars = "()\"";
+    // TODO: why not simply atom.guard().second.name();
     std::string guard = atom.guard().second.to_string();
-
-    std::string::size_type i = guard.find("(");
-    if (i != std::string::npos) {
-        guard.erase(i, i + 1);
-    }
-    i = guard.find(")");
-    if (i != std::string::npos) {
-        guard.erase(i, i + 1);
-    }
-    i = guard.find('"');
-    while (i != std::string::npos) {
-        guard.erase(i, i + 1);
-        i = guard.find('"');
-    }
-    weight = std::stod(guard);
-    return weight;
+    guard.erase(std::remove_if(guard.begin(), guard.end(), [](char c) { return chars.find(c) != std::string::npos; }), guard.end());
+    return std::stod(guard);
 }
 
 template <typename T>
