@@ -132,6 +132,7 @@ struct DifferenceLogicNode {
     bool defined() const { return !potential_stack.empty(); }
     T potential() const { return potential_stack.back().second; }
     std::vector<int> outgoing;
+    std::vector<int> incoming;
     std::vector<std::pair<int, T>> potential_stack; // [(level,potential)]
     int last_edge = 0;
     T gamma = 0;
@@ -153,7 +154,12 @@ template <typename T>
 class DifferenceLogicGraph {
 public:
     DifferenceLogicGraph(const std::vector<Edge<T>> &edges)
-        : edges_(edges) {}
+        : edges_(edges)
+        , offset_active_edges_(0) {
+        for (int i = 0; i < numeric_cast<int>(edges_.size()); ++i) {
+            active_edges_.emplace_back(i);
+        }
+    }
 
     bool empty() const { return nodes_.empty(); }
 
@@ -165,7 +171,7 @@ public:
 
         // initialize the trail
         if (changed_trail_.empty() || std::get<0>(changed_trail_.back()) < level) {
-            changed_trail_.emplace_back(level, changed_nodes_.size(), changed_edges_.size());
+            changed_trail_.emplace_back(level, changed_nodes_.size(), changed_edges_.size(), offset_active_edges_);
         }
 
         // initialize the nodes of the edge to add
@@ -225,7 +231,8 @@ public:
         else {
             // add the edge to the graph
             u.outgoing.emplace_back(uv_idx);
-            changed_edges_.emplace_back(uv.from);
+            v.incoming.emplace_back(uv_idx);
+            changed_edges_.emplace_back(uv_idx);
         }
 
         // reset gamma and changed flags
@@ -242,18 +249,61 @@ public:
         return neg_cycle;
     }
 
-    void dijkstra() {
-        // put start node into queue
-        // set cost of node to 0
-        // while queue is not empty
-        //     take node with least cost out of queue
-        //     put not yet visited neighbors into queue if
-        //       the node has not been reached yet, or
-        //       the cost to reach them is smaller than what is already in the queue (decrease key)
-        //       we do not have to set a parent because in the end we are only interested in the costs!
-        //
-        // can use the same trick to workaround the missing decrease key function in the stl as in add_edge
-        // ideally we would implement our own binary heap (not that difficult actually)
+    void propagate(int xy_idx) {
+        // these maps are of course completely unnecessary
+        // the costs can be stored in the nodes as well
+        // also the changed flags from the algorithm above can be reused!
+        // then there is also the relevancy criterion described in the paper
+        std::unordered_map<int, T> costsFrom, costsTo;
+        dijkstra(costsFrom, xy_idx, [](Edge<T> const &edge) { return edge.from; }, [](Edge<T> const &edge) { return edge.to; }, [](DifferenceLogicNode<T> const &node) { return node.outgoing; });
+        dijkstra(costsTo, xy_idx, [](Edge<T> const &edge) { return edge.to; }, [](Edge<T> const &edge) { return edge.from; }, [](DifferenceLogicNode<T> const &node) { return node.incoming; });
+        offset_active_edges_ = std::partition(active_edges_.begin() + offset_active_edges_, active_edges_.end(), [&](int uv_idx) {
+            auto &uv = edges_[uv_idx];
+            auto u_it = costsFrom.find(uv.to), v_it = costsTo.find(uv.from);
+            if (u_it != costsFrom.end() && v_it != costsTo.end()) {
+                auto a = u_it->second + nodes_[uv.to].potential() - nodes_[edges_[xy_idx].to].potential();
+                auto b = v_it->second + nodes_[edges_[xy_idx].from].potential() - nodes_[uv.from].potential();
+                auto d = a + b + edges_[xy_idx].weight;
+                if (d <= uv.weight) {
+                    // TODO: just a check if the calculation was correct
+                    //       in strict mode the constraint could be propagated
+                    //       in non-strict mode the only thing that can be done
+                    //       is to ignore inactive edges during propagation
+                    //       another point is to come up with a good reason in strict mode
+                    //       probably the constraints on the shortest path can be used as a reason
+                    //       (currently the dijkstra below does not store the shortest paths but this is easy to add)
+                    auto cycle = add_edge(std::numeric_limits<int>::max(), uv_idx);
+                    if (!cycle.empty()) { throw std::runtime_error("edge is implied but lead to a conflict :("); }
+                    backtrack();
+                    return true;
+                }
+            }
+            return false;
+        }) - active_edges_.begin();
+    }
+    template <class From, class To, class Out>
+    void dijkstra(std::unordered_map<int, T> &costs, int uv_idx, From from, To to, Out getOut) {
+        auto &uv = edges_[uv_idx];
+        std::priority_queue<DifferenceLogicNodeUpdate<T>> queue;
+        queue.push({to(uv), 0});
+        costs[from(uv)] = 0;
+        while (!queue.empty()) {
+            auto top = queue.top();
+            if (top.gamma == costs[top.node_idx]) {
+                auto &u = nodes_[top.node_idx];
+                for (auto &uv_idx : getOut(u)) {
+                    auto &uv = edges_[uv_idx];
+                    auto v_it = costs.find(to(uv));
+                    auto gamma = top.gamma + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
+                    assert(gamma >= 0);
+                    if (v_it == costs.end() || gamma < v_it->second) {
+                        queue.push({to(uv), gamma});
+                        costs[to(uv)] = gamma;
+                    }
+                }
+            }
+            queue.pop();
+        }
     }
 
     void backtrack() {
@@ -263,10 +313,12 @@ public:
             changed_nodes_.pop_back();
         }
         for (int count = changed_edges_.size() - std::get<2>(changed_trail_.back()); count > 0; --count) {
-            auto &node = nodes_[changed_edges_.back()];
-            node.outgoing.pop_back();
+            auto &edge = edges_[changed_edges_.back()];
+            nodes_[edge.from].outgoing.pop_back();
+            nodes_[edge.to].incoming.pop_back();
             changed_edges_.pop_back();
         }
+        offset_active_edges_ = std::get<3>(changed_trail_.back());
         changed_trail_.pop_back();
     }
 
@@ -285,10 +337,12 @@ private:
     std::priority_queue<DifferenceLogicNodeUpdate<T>> gamma_;
     std::vector<int> changed_;
     const std::vector<Edge<T>> &edges_;
+    std::vector<int> active_edges_;
     std::vector<DifferenceLogicNode<T>> nodes_;
     std::vector<int> changed_nodes_;
     std::vector<int> changed_edges_;
-    std::vector<std::tuple<int, int, int>> changed_trail_;
+    std::vector<std::tuple<int, int, int, int>> changed_trail_;
+    int offset_active_edges_;
 };
 
 struct DLStats {
@@ -422,6 +476,9 @@ private:
                         return;
                     }
                     assert(false && "must not happen");
+                }
+                else {
+                    state.dl_graph.propagate(it->second);
                 }
             }
         }
