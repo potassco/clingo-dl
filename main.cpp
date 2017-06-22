@@ -286,6 +286,9 @@ struct Stats {
     Duration time_total = Duration{0};
     Duration time_init = Duration{0};
     std::vector<DLStats> dl_stats;
+    int64_t conflicts{0};
+    int64_t choices{0};
+    int64_t restarts{0};
 };
 
 template <typename T>
@@ -497,6 +500,10 @@ int main(int argc, char *argv[]) {
         else {
             solve<int>(stats, ctl, strict);
         }
+        auto solvers = ctl.statistics()["solving"]["solvers"];
+        stats.choices = solvers["choices"];
+        stats.conflicts = solvers["conflicts"];
+        stats.restarts = solvers["restarts"];
     }
 
     std::cout << "total: " << stats.time_total.count() << "s\n";
@@ -509,4 +516,7 @@ int main(int argc, char *argv[]) {
         std::cout << "    undo     : " << stat.time_undo.count() << "s\n";
         ++thread;
     }
+    std::cout << "conflicts: " << stats.conflicts << "\n";
+    std::cout << "choices  : " << stats.choices << "\n";
+    std::cout << "restarts : " << stats.restarts << "\n";
 }
