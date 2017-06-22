@@ -356,10 +356,11 @@ public:
                 auto &u = nodes_[top.node_idx];
                 for (auto &uv_idx : getOut(u)) {
                     auto &uv = edges_[uv_idx];
-                    auto ux_it = costs.find(to(uv));
+                    auto v_it = costs.find(to(uv));
+                    // NOTE: explicitely using uv.from and uv.to is intended here
                     auto gamma = top.gamma + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
                     assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
-                    if (ux_it == costs.end() || gamma < ux_it->second) {
+                    if (v_it == costs.end() || gamma < v_it->second) {
                         queue.push({to(uv), gamma});
                         costs[to(uv)] = gamma;
                     }
