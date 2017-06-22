@@ -157,8 +157,9 @@ public:
         : edges_(edges)
         , offset_active_edges_(0) {
         for (int i = 0; i < numeric_cast<int>(edges_.size()); ++i) {
-            active_edges_.emplace_back(i);
+            edge_partition_.emplace_back(i);
         }
+        active_edges_.resize(edge_partition_.size(), true);
     }
 
     bool empty() const { return nodes_.empty(); }
@@ -166,11 +167,16 @@ public:
     int node_value_defined(int idx) const { return nodes_[idx].defined(); }
     T node_value(int idx) const { return -nodes_[idx].potential(); }
 
+    bool edge_is_active(int edge_idx) const {
+        return active_edges_[edge_idx];
+    }
+
     std::vector<int> add_edge(int level, int uv_idx) {
         auto &uv = edges_[uv_idx];
 
         // initialize the trail
         if (changed_trail_.empty() || std::get<0>(changed_trail_.back()) < level) {
+            assert(changed_trail_.empty() || std::get<3>(changed_trail_.back()) <= offset_active_edges_);
             changed_trail_.emplace_back(level, changed_nodes_.size(), changed_edges_.size(), offset_active_edges_);
         }
 
@@ -227,12 +233,24 @@ public:
                 neg_cycle.push_back(next.last_edge);
                 next_idx = edges_[next.last_edge].from;
             }
+#ifdef CROSSCHECK
+            T weight = 0;
+            for (auto &edge_idx : neg_cycle) {
+                weight += edges_[edge_idx].weight;
+            }
+            assert(weight < 0);
+#endif
         }
         else {
             // add the edge to the graph
             u.outgoing.emplace_back(uv_idx);
             v.incoming.emplace_back(uv_idx);
             changed_edges_.emplace_back(uv_idx);
+#ifdef CROSSCHECK
+            // TODO: just a check that will throw if there is a cycle
+            std::unordered_map<int, T> costs;
+            bellman_ford(costs, uv.from);
+#endif
         }
 
         // reset gamma and changed flags
@@ -249,54 +267,99 @@ public:
         return neg_cycle;
     }
 
-    void propagate(int xy_idx) {
+    bool propagate(int xy_idx, Clingo::PropagateControl &ctl) {
+        bool ret = true;
         // these maps are of course completely unnecessary
         // the costs can be stored in the nodes as well
         // also the changed flags from the algorithm above can be reused!
         // then there is also the relevancy criterion described in the paper
-        std::unordered_map<int, T> costsFrom, costsTo;
-        dijkstra(costsFrom, xy_idx, [](Edge<T> const &edge) { return edge.from; }, [](Edge<T> const &edge) { return edge.to; }, [](DifferenceLogicNode<T> const &node) { return node.outgoing; });
-        dijkstra(costsTo, xy_idx, [](Edge<T> const &edge) { return edge.to; }, [](Edge<T> const &edge) { return edge.from; }, [](DifferenceLogicNode<T> const &node) { return node.incoming; });
-        offset_active_edges_ = std::partition(active_edges_.begin() + offset_active_edges_, active_edges_.end(), [&](int uv_idx) {
+        auto &xy = edges_[xy_idx];
+        auto &x = nodes_[xy.from];
+        auto &y = nodes_[xy.to];
+        std::unordered_map<int, T> costs_from_y, costs_to_x;
+        dijkstra(costs_from_y, xy.to, [](Edge<T> const &edge) { return edge.to; }, [](DifferenceLogicNode<T> const &node) { return node.outgoing; });
+        dijkstra(costs_to_x, xy.from, [](Edge<T> const &edge) { return edge.from; }, [](DifferenceLogicNode<T> const &node) { return node.incoming; });
+        offset_active_edges_ = std::partition(edge_partition_.begin() + offset_active_edges_, edge_partition_.end(), [&](int uv_idx) {
+            if (uv_idx == xy_idx) {
+                active_edges_[xy_idx] = false;
+                return true;
+            }
+            assert(edge_is_active(uv_idx));
             auto &uv = edges_[uv_idx];
-            auto u_it = costsFrom.find(uv.to), v_it = costsTo.find(uv.from);
-            if (u_it != costsFrom.end() && v_it != costsTo.end()) {
-                auto a = u_it->second + nodes_[uv.to].potential() - nodes_[edges_[xy_idx].to].potential();
-                auto b = v_it->second + nodes_[edges_[xy_idx].from].potential() - nodes_[uv.from].potential();
-                auto d = a + b + edges_[xy_idx].weight;
+            auto yv_it = costs_from_y.find(uv.to), ux_it = costs_to_x.find(uv.from);
+            auto &u = nodes_[uv.from];
+            auto &v = nodes_[uv.to];
+            if (yv_it != costs_from_y.end() && ux_it != costs_to_x.end()) {
+                auto a = ux_it->second + x.potential() - u.potential();
+                auto b = yv_it->second + v.potential() - y.potential();
+                auto d = a + b + xy.weight;
+#ifdef CROSSCHECK
+                std::unordered_map<int, T> bf_costs_from_u, bf_costs_from_y;
+                bellman_ford(bf_costs_from_u, uv.from);
+                bellman_ford(bf_costs_from_y, xy.to);
+                auto aa = bf_costs_from_u.find(xy.from);
+                assert (aa != bf_costs_from_u.end());
+                assert(aa->second == a);
+                auto bb = bf_costs_from_y.find(uv.to);
+                assert (bb != bf_costs_from_u.end());
+                assert(bb->second == b);
+#endif
+
                 if (d <= uv.weight) {
-                    // TODO: just a check if the calculation was correct
-                    //       in strict mode the constraint could be propagated
-                    //       in non-strict mode the only thing that can be done
-                    //       is to ignore inactive edges during propagation
-                    //       another point is to come up with a good reason in strict mode
-                    //       probably the constraints on the shortest path can be used as a reason
-                    //       (currently the dijkstra below does not store the shortest paths but this is easy to add)
+                    active_edges_[uv_idx] = false;
+#ifdef CROSSCHECK
                     auto cycle = add_edge(std::numeric_limits<int>::max(), uv_idx);
-                    if (!cycle.empty()) { throw std::runtime_error("edge is implied but lead to a conflict :("); }
                     backtrack();
+                    if (!cycle.empty()) { throw std::runtime_error("edge is implied but lead to a conflict :("); }
+#endif
                     return true;
                 }
             }
+            yv_it = costs_from_y.find(uv.from), ux_it = costs_to_x.find(uv.to);
+            if (yv_it != costs_from_y.end() && ux_it != costs_to_x.end()) {
+                auto a = ux_it->second + x.potential() - v.potential();
+                auto b = yv_it->second + u.potential() - y.potential();
+                auto d = a + b + xy.weight;
+                if (d <= -uv.weight - 1) {
+                    active_edges_[uv_idx] = false;
+                    // TODO: the cycle can be obtained from the dijkstra too
+                    auto cycle = add_edge(std::numeric_limits<int>::max(), uv_idx);
+                    backtrack();
+                    assert (!cycle.empty());
+                    std::vector<literal_t> clause;
+                    for (auto eid : cycle) {
+                        clause.emplace_back(-edges_[eid].lit);
+                    }
+                    ret = ret && ctl.add_clause(clause) && ctl.propagate();
+                    return true;
+                }
+#ifdef CROSSCHECK
+                else {
+                    auto cycle = add_edge(std::numeric_limits<int>::max(), uv_idx);
+                    backtrack();
+                    if (!cycle.empty()) { throw std::runtime_error("edge should not cause a conflict!"); }
+                }
+#endif
+            }
             return false;
-        }) - active_edges_.begin();
+        }) - edge_partition_.begin();
+        return ret;
     }
-    template <class From, class To, class Out>
-    void dijkstra(std::unordered_map<int, T> &costs, int uv_idx, From from, To to, Out getOut) {
-        auto &uv = edges_[uv_idx];
+    template <class To, class Out>
+    void dijkstra(std::unordered_map<int, T> &costs, int source, To to, Out getOut) {
         std::priority_queue<DifferenceLogicNodeUpdate<T>> queue;
-        queue.push({to(uv), 0});
-        costs[from(uv)] = 0;
+        queue.push({source, 0});
+        costs[source] = 0;
         while (!queue.empty()) {
             auto top = queue.top();
             if (top.gamma == costs[top.node_idx]) {
                 auto &u = nodes_[top.node_idx];
                 for (auto &uv_idx : getOut(u)) {
                     auto &uv = edges_[uv_idx];
-                    auto v_it = costs.find(to(uv));
+                    auto ux_it = costs.find(to(uv));
                     auto gamma = top.gamma + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
-                    assert(gamma >= 0);
-                    if (v_it == costs.end() || gamma < v_it->second) {
+                    assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
+                    if (ux_it == costs.end() || gamma < ux_it->second) {
                         queue.push({to(uv), gamma});
                         costs[to(uv)] = gamma;
                     }
@@ -305,6 +368,45 @@ public:
             queue.pop();
         }
     }
+
+#ifdef CROSSCHECK
+    void bellman_ford(std::unordered_map<int, T> &costs, int source) {
+        costs[source] = 0;
+        int nodes = 0;
+        for (auto &node : nodes_) {
+            if (node.defined()) {
+                ++nodes;
+            }
+        }
+        for (int i = 0; i < nodes; ++i) {
+            for (auto &uv_idx : changed_edges_) {
+                auto &uv = edges_[uv_idx];
+                auto u_cost = costs.find(uv.from);
+                if (u_cost != costs.end()) {
+                    auto v_cost = costs.find(uv.to);
+                    auto dist = u_cost->second + uv.weight;
+                    if (v_cost == costs.end()) {
+                        costs[uv.to] = dist;
+                    }
+                    else if (dist < v_cost->second) {
+                        v_cost->second = dist;
+                    }
+                }
+            }
+        }
+        for (auto &uv_idx : changed_edges_) {
+            auto &uv = edges_[uv_idx];
+            auto u_cost = costs.find(uv.from);
+            if (u_cost != costs.end()) {
+                auto v_cost = costs.find(uv.to);
+                auto dist = u_cost->second + uv.weight;
+                if (dist < v_cost->second) {
+                    throw std::runtime_error("there is a negative cycle!!!");
+                }
+            }
+        }
+    }
+#endif
 
     void backtrack() {
         for (int count = changed_nodes_.size() - std::get<1>(changed_trail_.back()); count > 0; --count) {
@@ -318,7 +420,10 @@ public:
             nodes_[edge.to].incoming.pop_back();
             changed_edges_.pop_back();
         }
-        offset_active_edges_ = std::get<3>(changed_trail_.back());
+        for (; offset_active_edges_ > std::get<3>(changed_trail_.back()); --offset_active_edges_) {
+            active_edges_[edge_partition_[offset_active_edges_ - 1]] = true;
+        }
+        assert(offset_active_edges_ == std::get<3>(changed_trail_.back()));
         changed_trail_.pop_back();
     }
 
@@ -337,7 +442,8 @@ private:
     std::priority_queue<DifferenceLogicNodeUpdate<T>> gamma_;
     std::vector<int> changed_;
     const std::vector<Edge<T>> &edges_;
-    std::vector<int> active_edges_;
+    std::vector<int> edge_partition_;
+    std::vector<bool> active_edges_;
     std::vector<DifferenceLogicNode<T>> nodes_;
     std::vector<int> changed_nodes_;
     std::vector<int> changed_edges_;
@@ -354,6 +460,9 @@ struct Stats {
     Duration time_total = Duration{0};
     Duration time_init = Duration{0};
     std::vector<DLStats> dl_stats;
+    int64_t conflicts{0};
+    int64_t choices{0};
+    int64_t restarts{0};
 };
 
 template <typename T>
@@ -464,21 +573,27 @@ private:
         auto &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_propagate};
         auto level = ctl.assignment().decision_level();
-        for (auto lit : changes) {
+        // NOTE: vector copy only because clasp bug
+        //       can only be triggered with propagation
+        for (auto lit : std::vector<Clingo::literal_t>(changes.begin(), changes.end())) {
             for (auto it = lit_to_edges_.find(lit), ie = lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
-                auto neg_cycle = state.dl_graph.add_edge(level, it->second);
-                if (!neg_cycle.empty()) {
-                    std::vector<literal_t> clause;
-                    for (auto eid : neg_cycle) {
-                        clause.emplace_back(-edges_[eid].lit);
+                if (state.dl_graph.edge_is_active(it->second)) {
+                    auto neg_cycle = state.dl_graph.add_edge(level, it->second);
+                    if (!neg_cycle.empty()) {
+                        std::vector<literal_t> clause;
+                        for (auto eid : neg_cycle) {
+                            clause.emplace_back(-edges_[eid].lit);
+                        }
+                        if (!ctl.add_clause(clause) || !ctl.propagate()) {
+                            return;
+                        }
+                        assert(false && "must not happen");
                     }
-                    if (!ctl.add_clause(clause) || !ctl.propagate()) {
-                        return;
+                    else {
+                        if (!state.dl_graph.propagate(it->second, ctl)) {
+                            return;
+                        }
                     }
-                    assert(false && "must not happen");
-                }
-                else {
-                    state.dl_graph.propagate(it->second);
                 }
             }
         }
@@ -486,8 +601,8 @@ private:
 
     // undo
 
-    void undo(PropagateControl const &ctl, LiteralSpan changes) override {
-        static_cast<void>(changes);
+void undo(PropagateControl const &ctl, LiteralSpan changes) override {
+    static_cast<void>(changes);
         auto &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_undo};
         state.dl_graph.backtrack();
@@ -568,6 +683,10 @@ int main(int argc, char *argv[]) {
         else {
             solve<int>(stats, ctl, strict);
         }
+        auto solvers = ctl.statistics()["solving"]["solvers"];
+        stats.choices = solvers["choices"];
+        stats.conflicts = solvers["conflicts"];
+        stats.restarts = solvers["restarts"];
     }
 
     std::cout << "total: " << stats.time_total.count() << "s\n";
@@ -580,4 +699,7 @@ int main(int argc, char *argv[]) {
         std::cout << "    undo     : " << stat.time_undo.count() << "s\n";
         ++thread;
     }
+    std::cout << "conflicts: " << stats.conflicts << "\n";
+    std::cout << "choices  : " << stats.choices << "\n";
+    std::cout << "restarts : " << stats.restarts << "\n";
 }
