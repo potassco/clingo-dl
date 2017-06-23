@@ -507,9 +507,10 @@ double get_weight(TheoryAtom const &atom) {
 template <typename T>
 class DifferenceLogicPropagator : public Propagator {
 public:
-    DifferenceLogicPropagator(Stats &stats, bool strict)
+    DifferenceLogicPropagator(Stats &stats, bool strict, bool propagate)
         : stats_(stats)
-        , strict_(strict) {}
+        , strict_(strict)
+        , propagate_(propagate) { }
 
     void print_assignment(int thread) const {
         auto &state = states_[thread];
@@ -603,7 +604,7 @@ private:
                         }
                         assert(false && "must not happen");
                     }
-                    else {
+                    else if (propagate_) {
                         if (!state.dl_graph.propagate(it->second, ctl)) {
                             return;
                         }
@@ -630,6 +631,7 @@ private:
     std::unordered_map<std::string, int> vert_map_inv_;
     Stats &stats_;
     bool strict_;
+    bool propagate_;
 };
 
 int get_int(std::string constname, Control &ctl, int def) {
@@ -641,8 +643,8 @@ int get_int(std::string constname, Control &ctl, int def) {
 }
 
 template <typename T>
-void solve(Stats &stats, Control &ctl, bool strict) {
-    DifferenceLogicPropagator<T> p{stats, strict};
+void solve(Stats &stats, Control &ctl, bool strict, bool propagate) {
+    DifferenceLogicPropagator<T> p{stats, strict, propagate};
     ctl.register_propagator(p);
     ctl.ground({{"base", {}}});
     int i = 0;
@@ -679,8 +681,14 @@ int main(int argc, char *argv[]) {
     &diff/0 : diff_term, {<=}, constant, any;
     &show_assignment/0 : term, directive
 }.)");
+        bool propagate = false;
         for (auto arg = argv + 1; arg != arge; ++arg) {
-            ctl.load(*arg);
+            if (std::strcmp(*arg, "-p") == 0) {
+                propagate = true;
+            }
+            else {
+                ctl.load(*arg);
+            }
         }
         // configure strict/non-strict mode
         auto strict = get_int("strict", ctl, 0) != 0;
@@ -692,10 +700,10 @@ int main(int argc, char *argv[]) {
                 std::cout << "Real difference logic not available with strict semantics!" << std::endl;
                 exit(EXIT_FAILURE);
             }
-            solve<double>(stats, ctl, strict);
+            solve<double>(stats, ctl, strict, propagate);
         }
         else {
-            solve<int>(stats, ctl, strict);
+            solve<int>(stats, ctl, strict, propagate);
         }
         auto solvers = ctl.statistics()["solving"]["solvers"];
         stats.choices = solvers["choices"];
