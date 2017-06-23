@@ -136,27 +136,24 @@ struct DifferenceLogicNode {
     std::vector<int> outgoing;
     std::vector<int> incoming;
     std::vector<std::pair<int, T>> potential_stack; // [(level,potential)]
-    T gamma = 0;
-    T cost_from = 0; // could be merged with gamma
+    T cost_from = 0;
     T cost_to = 0;
-    int last_edge = 0;
-    int path_from = 0; // could be merged with last edge
+    int path_from = 0;
     int path_to = 0;
-    bool changed = false;
-    bool visited = false;
-    bool visited_from = false; // could be merged with visited
+    bool visited_from = false;
     bool visited_to = false;
+    bool changed = false;
 };
 
 template <typename T>
 struct DifferenceLogicNodeUpdate {
     int node_idx;
-    T gamma;
+    T cost;
 };
 
 template <class T>
 bool operator<(DifferenceLogicNodeUpdate<T> const &a, DifferenceLogicNodeUpdate<T> const &b) {
-    return a.gamma > b.gamma;
+    return a.cost > b.cost;
 }
 
 template <class T, class Container = std::vector<T>, class Compare = std::less<typename Container::value_type>>
@@ -198,11 +195,11 @@ public:
     std::vector<int> add_edge(int uv_idx) {
 #ifdef CROSSCHECK
         for (auto &node : nodes_) {
-            assert(visited_.empty());
+            assert(visited_from_.empty());
             assert(!node.visited);
         }
 #endif
-        assert(gamma_.empty());
+        assert(costs_.empty());
         int level = current_decision_level_();
         auto &uv = edges_[uv_idx];
 
@@ -212,39 +209,39 @@ public:
         auto &v = nodes_[uv.to];
         if (!u.defined()) { set_potential(u, level, 0); }
         if (!v.defined()) { set_potential(v, level, 0); }
-        v.gamma = u.potential() + uv.weight - v.potential();
-        if (v.gamma < 0) {
-            gamma_.push({uv.to, v.gamma});
-            visited_.emplace_back(uv.to);
-            v.visited = true;
+        v.cost_from = u.potential() + uv.weight - v.potential();
+        if (v.cost_from < 0) {
+            costs_.push({uv.to, v.cost_from});
+            visited_from_.emplace_back(uv.to);
+            v.visited_from = true;
             v.changed = false;
-            v.last_edge = uv_idx;
+            v.path_from = uv_idx;
         }
 
         // detect negative cycles
-        while (!gamma_.empty() && !u.visited) {
-            auto s_idx = gamma_.top().node_idx;
+        while (!costs_.empty() && !u.visited_from) {
+            auto s_idx = costs_.top().node_idx;
             auto &s = nodes_[s_idx];
-            assert(s.visited);
-            assert(s.changed || s.gamma == gamma_.top().gamma);
-            gamma_.pop();
+            assert(s.visited_from);
+            assert(s.changed || s.cost_from == costs_.top().cost);
+            costs_.pop();
             if (!s.changed) {
-                set_potential(s, level, s.potential() + s.gamma);
+                set_potential(s, level, s.potential() + s.cost_from);
                 s.changed = true;
                 for (auto st_idx : s.outgoing) {
                     assert(st_idx < numeric_cast<int>(edges_.size()));
                     auto &st = edges_[st_idx];
                     auto &t = nodes_[st.to];
-                    if (!t.visited || !t.changed) {
-                        auto gamma = s.potential() + st.weight - t.potential();
-                        if (gamma < (t.visited ? t.gamma : 0)) {
-                            assert(gamma < 0);
-                            gamma_.push({st.to, gamma});
-                            visited_.emplace_back(st.to);
-                            t.visited = true;
+                    if (!t.visited_from || !t.changed) {
+                        auto c = s.potential() + st.weight - t.potential();
+                        if (c < (t.visited_from ? t.cost_from : 0)) {
+                            assert(c < 0);
+                            costs_.push({st.to, c});
+                            visited_from_.emplace_back(st.to);
+                            t.visited_from = true;
                             t.changed = false;
-                            t.last_edge = st_idx;
-                            t.gamma = gamma;
+                            t.path_from = st_idx;
+                            t.cost_from = c;
                         }
                     }
                 }
@@ -252,14 +249,14 @@ public:
         }
 
         std::vector<int> neg_cycle;
-        if (u.visited) {
+        if (u.visited_from) {
             // gather the edges in the negative cycle
-            neg_cycle.push_back(v.last_edge);
-            auto next_idx = edges_[v.last_edge].from;
+            neg_cycle.push_back(v.path_from);
+            auto next_idx = edges_[v.path_from].from;
             while (uv.to != next_idx) {
                 auto &next = nodes_[next_idx];
-                neg_cycle.push_back(next.last_edge);
-                next_idx = edges_[next.last_edge].from;
+                neg_cycle.push_back(next.path_from);
+                next_idx = edges_[next.path_from].from;
             }
 #ifdef CROSSCHECK
             T weight = 0;
@@ -281,9 +278,9 @@ public:
         }
 
         // reset visited flags
-        for (auto &x : visited_) { nodes_[x].visited = false; }
-        visited_.clear();
-        gamma_.clear();
+        for (auto &x : visited_from_) { nodes_[x].visited_from = false; }
+        visited_from_.clear();
+        costs_.clear();
 
         return neg_cycle;
     }
@@ -413,15 +410,15 @@ public:
         }
 #endif
         auto &source = nodes_[source_idx];
-        gamma_.push({source_idx, 0});
+        costs_.push({source_idx, 0});
         visited_set.push_back(source_idx);
         visited(source) = true;
         source.changed = false;
         cost(source) = 0;
         path(source) = -1;
-        while (!gamma_.empty()) {
-            auto top = gamma_.top();
-            gamma_.pop();
+        while (!costs_.empty()) {
+            auto top = costs_.top();
+            costs_.pop();
             auto &u = nodes_[top.node_idx];
             if (!u.changed) {
                 u.changed = true;
@@ -430,14 +427,14 @@ public:
                     auto &v = nodes_[to(uv)];
                     if (!visited(v) || !v.changed) {
                         // NOTE: explicitely using uv.from and uv.to is intended here
-                        auto gamma = top.gamma + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
+                        auto c = top.cost + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
                         assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
-                        if (!visited(v) || gamma < cost(v)) {
-                            gamma_.push({to(uv), gamma});
+                        if (!visited(v) || c < cost(v)) {
+                            costs_.push({to(uv), c});
                             visited_set.push_back(to(uv));
                             visited(v) = true;
                             v.changed = false;
-                            cost(v) = gamma;
+                            cost(v) = c;
                             path(v) = uv_idx;
                         }
                     }
@@ -523,11 +520,10 @@ private:
     }
 
 private:
-    priority_queue<DifferenceLogicNodeUpdate<T>> gamma_;
-    std::vector<int> visited_;
-    std::vector<int> visited_from_; // could be merged with visited
+    priority_queue<DifferenceLogicNodeUpdate<T>> costs_;
+    std::vector<int> visited_from_;
     std::vector<int> visited_to_;
-    const std::vector<Edge<T>> &edges_;
+    std::vector<Edge<T>> const &edges_;
     std::vector<int> edge_partition_;
     std::vector<bool> active_edges_;
     std::vector<DifferenceLogicNode<T>> nodes_;
