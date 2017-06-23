@@ -138,7 +138,11 @@ struct DifferenceLogicNode {
     std::vector<std::pair<int, T>> potential_stack; // [(level,potential)]
     int last_edge = 0;
     T gamma = 0;
+    T cost_from = 0; // could be merged with gamma if the visited flag is used in the first algorithm too
+    T cost_to = 0;
     bool changed = false;
+    bool visited_from = false;
+    bool visited_to = false;
 };
 
 template <typename T>
@@ -280,9 +284,18 @@ public:
         auto &xy = edges_[xy_idx];
         auto &x = nodes_[xy.from];
         auto &y = nodes_[xy.to];
-        std::unordered_map<int, T> costs_from_y, costs_to_x;
-        dijkstra(costs_from_y, xy.to, [](Edge<T> const &edge) { return edge.to; }, [](DifferenceLogicNode<T> const &node) { return node.outgoing; });
-        dijkstra(costs_to_x, xy.from, [](Edge<T> const &edge) { return edge.from; }, [](DifferenceLogicNode<T> const &node) { return node.incoming; });
+        dijkstra(xy.to,
+            visited_from_,
+            [](DifferenceLogicNode<T> &u) -> T& { return u.cost_from; },
+            [](Edge<T> const &edge) { return edge.to; },
+            [](DifferenceLogicNode<T> const &node) -> decltype(node.outgoing) const & { return node.outgoing; },
+            [](DifferenceLogicNode<T> &u) -> bool& { return u.visited_from; });
+        dijkstra(xy.from,
+            visited_to_,
+            [](DifferenceLogicNode<T> &u) -> T& { return u.cost_to; },
+            [](Edge<T> const &edge) { return edge.from; },
+            [](DifferenceLogicNode<T> const &node) -> decltype(node.incoming) { return node.incoming; },
+            [](DifferenceLogicNode<T> &u) -> bool& { return u.visited_to; });
         offset_active_edges_ = std::partition(edge_partition_.begin() + offset_active_edges_, edge_partition_.end(), [&](int uv_idx) {
             if (uv_idx == xy_idx) {
                 active_edges_[xy_idx] = false;
@@ -290,12 +303,11 @@ public:
             }
             assert(edge_is_active(uv_idx));
             auto &uv = edges_[uv_idx];
-            auto yv_it = costs_from_y.find(uv.to), ux_it = costs_to_x.find(uv.from);
             auto &u = nodes_[uv.from];
             auto &v = nodes_[uv.to];
-            if (yv_it != costs_from_y.end() && ux_it != costs_to_x.end()) {
-                auto a = ux_it->second + x.potential() - u.potential();
-                auto b = yv_it->second + v.potential() - y.potential();
+            if (v.visited_from && u.visited_to) {
+                auto a = u.cost_to + x.potential() - u.potential();
+                auto b = v.cost_from + v.potential() - y.potential();
                 auto d = a + b + xy.weight;
 #ifdef CROSSCHECK
                 std::unordered_map<int, T> bf_costs_from_u, bf_costs_from_y;
@@ -320,10 +332,9 @@ public:
                     return true;
                 }
             }
-            yv_it = costs_from_y.find(uv.from), ux_it = costs_to_x.find(uv.to);
-            if (yv_it != costs_from_y.end() && ux_it != costs_to_x.end()) {
-                auto a = ux_it->second + x.potential() - v.potential();
-                auto b = yv_it->second + u.potential() - y.potential();
+            if (u.visited_from && v.visited_to) {
+                auto a = v.cost_to + x.potential() - v.potential();
+                auto b = u.cost_from + u.potential() - y.potential();
                 auto d = a + b + xy.weight;
                 if (d <= -uv.weight - 1) {
                     active_edges_[uv_idx] = false;
@@ -350,31 +361,48 @@ public:
             }
             return false;
         }) - edge_partition_.begin();
+        for (auto &x : visited_from_) { nodes_[x].visited_from = false; }
+        for (auto &x : visited_to_) { nodes_[x].visited_to = false; }
+        visited_from_.clear();
+        visited_to_.clear();
         return ret;
     }
-    template <class To, class Out>
-    void dijkstra(std::unordered_map<int, T> &costs, int source, To to, Out getOut) {
+    template <class Cost, class To, class Out, class Visited>
+    void dijkstra(int source_idx, std::vector<int> &visited_set, Cost cost, To to, Out out, Visited visited) {
         std::priority_queue<DifferenceLogicNodeUpdate<T>> queue;
-        queue.push({source, 0});
-        costs[source] = 0;
+        auto &source = nodes_[source_idx];
+        queue.push({source_idx, 0});
+        visited_set.push_back(source_idx);
+        visited(source) = true;
+        cost(source) = 0;
         while (!queue.empty()) {
             auto top = queue.top();
-            if (top.gamma == costs[top.node_idx]) {
-                auto &u = nodes_[top.node_idx];
-                for (auto &uv_idx : getOut(u)) {
+            auto &u = nodes_[top.node_idx];
+            if (!u.changed) {
+                u.changed = true;
+                changed_.emplace_back(top.node_idx);
+                for (auto &uv_idx : out(u)) {
                     auto &uv = edges_[uv_idx];
-                    auto v_it = costs.find(to(uv));
-                    // NOTE: explicitely using uv.from and uv.to is intended here
-                    auto gamma = top.gamma + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
-                    assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
-                    if (v_it == costs.end() || gamma < v_it->second) {
-                        queue.push({to(uv), gamma});
-                        costs[to(uv)] = gamma;
+                    auto &v = nodes_[to(uv)];
+                    if (!v.changed) {
+                        // NOTE: explicitely using uv.from and uv.to is intended here
+                        auto gamma = top.gamma + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
+                        assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
+                        if (!visited(v) || gamma < cost(v)) {
+                            queue.push({to(uv), gamma});
+                            visited_set.push_back(to(uv));
+                            visited(v) = true;
+                            cost(v) = gamma;
+                        }
                     }
                 }
             }
             queue.pop();
         }
+        for (auto &x : changed_) {
+            nodes_[x].changed = false;
+        }
+        changed_.clear();
     }
 
 #ifdef CROSSCHECK
@@ -454,6 +482,8 @@ private:
 private:
     std::priority_queue<DifferenceLogicNodeUpdate<T>> gamma_;
     std::vector<int> changed_;
+    std::vector<int> visited_from_;
+    std::vector<int> visited_to_;
     const std::vector<Edge<T>> &edges_;
     std::vector<int> edge_partition_;
     std::vector<bool> active_edges_;
