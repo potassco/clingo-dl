@@ -34,6 +34,8 @@
 #include <iomanip>
 #include <stdlib.h>
 
+//#define CROSSCHECK
+
 using namespace Clingo;
 
 namespace Detail {
@@ -171,24 +173,26 @@ public:
         return active_edges_[edge_idx];
     }
 
-    std::vector<int> add_edge(int level, int uv_idx) {
-        auto &uv = edges_[uv_idx];
-
+    void ensure_decision_level(int level) {
         // initialize the trail
         if (changed_trail_.empty() || std::get<0>(changed_trail_.back()) < level) {
             assert(changed_trail_.empty() || std::get<3>(changed_trail_.back()) <= offset_active_edges_);
             changed_trail_.emplace_back(level, changed_nodes_.size(), changed_edges_.size(), offset_active_edges_);
         }
+    }
+
+    std::vector<int> add_edge(int uv_idx) {
+        auto &uv = edges_[uv_idx];
 
         // initialize the nodes of the edge to add
         ensure_index(nodes_, std::max(uv.from, uv.to));
         auto &u = nodes_[uv.from];
         auto &v = nodes_[uv.to];
         if (!u.defined()) {
-            set_potential(u, level, 0);
+            set_potential(u, current_decision_level_(), 0);
         }
         if (!v.defined()) {
-            set_potential(v, level, 0);
+            set_potential(v, current_decision_level_(), 0);
         }
         v.gamma = u.potential() + uv.weight - v.potential();
         if (v.gamma < 0) {
@@ -202,7 +206,7 @@ public:
             auto &s = nodes_[s_idx];
             if (!s.changed) {
                 assert(s.gamma == gamma_.top().gamma);
-                set_potential(s, level, s.potential() + s.gamma);
+                set_potential(s, current_decision_level_(), s.potential() + s.gamma);
                 s.gamma = 0;
                 s.changed = true;
                 changed_.emplace_back(s_idx);
@@ -308,7 +312,8 @@ public:
                 if (d <= uv.weight) {
                     active_edges_[uv_idx] = false;
 #ifdef CROSSCHECK
-                    auto cycle = add_edge(std::numeric_limits<int>::max(), uv_idx);
+                    ensure_decision_level(std::numeric_limits<int>::max());
+                    auto cycle = add_edge(uv_idx);
                     backtrack();
                     if (!cycle.empty()) { throw std::runtime_error("edge is implied but lead to a conflict :("); }
 #endif
@@ -323,7 +328,8 @@ public:
                 if (d <= -uv.weight - 1) {
                     active_edges_[uv_idx] = false;
                     // TODO: the cycle can be obtained from the dijkstra too
-                    auto cycle = add_edge(std::numeric_limits<int>::max(), uv_idx);
+                    ensure_decision_level(std::numeric_limits<int>::max());
+                    auto cycle = add_edge(uv_idx);
                     backtrack();
                     assert (!cycle.empty());
                     std::vector<literal_t> clause;
@@ -335,7 +341,8 @@ public:
                 }
 #ifdef CROSSCHECK
                 else {
-                    auto cycle = add_edge(std::numeric_limits<int>::max(), uv_idx);
+                    ensure_decision_level(std::numeric_limits<int>::max());
+                    auto cycle = add_edge(uv_idx);
                     backtrack();
                     if (!cycle.empty()) { throw std::runtime_error("edge should not cause a conflict!"); }
                 }
@@ -437,6 +444,11 @@ private:
         else {
             node.potential_stack.back().second = potential;
         }
+    }
+
+    int current_decision_level_() {
+        assert(!changed_trail_.empty());
+        return std::get<0>(changed_trail_.back());
     }
 
 private:
@@ -574,12 +586,13 @@ private:
         auto &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_propagate};
         auto level = ctl.assignment().decision_level();
+        state.dl_graph.ensure_decision_level(level);
         // NOTE: vector copy only because clasp bug
         //       can only be triggered with propagation
         for (auto lit : std::vector<Clingo::literal_t>(changes.begin(), changes.end())) {
             for (auto it = lit_to_edges_.find(lit), ie = lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
                 if (state.dl_graph.edge_is_active(it->second)) {
-                    auto neg_cycle = state.dl_graph.add_edge(level, it->second);
+                    auto neg_cycle = state.dl_graph.add_edge(it->second);
                     if (!neg_cycle.empty()) {
                         std::vector<literal_t> clause;
                         for (auto eid : neg_cycle) {
