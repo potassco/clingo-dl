@@ -136,10 +136,12 @@ struct DifferenceLogicNode {
     std::vector<int> outgoing;
     std::vector<int> incoming;
     std::vector<std::pair<int, T>> potential_stack; // [(level,potential)]
-    int last_edge = 0;
     T gamma = 0;
     T cost_from = 0; // could be merged with gamma
     T cost_to = 0;
+    int last_edge = 0;
+    int path_from = 0; // could be merged with last edge
+    int path_to = 0;
     bool changed = false;
     bool visited = false;
     bool visited_from = false; // could be merged with visited
@@ -274,7 +276,7 @@ public:
             changed_edges_.emplace_back(uv_idx);
 #ifdef CROSSCHECK
             // TODO: just a check that will throw if there is a cycle
-            bellman_ford(uv.from);
+            bellman_ford(changed_edges_, uv.from);
 #endif
         }
 
@@ -300,12 +302,14 @@ public:
             [](DifferenceLogicNode<T> &u) -> T& { return u.cost_from; },
             [](Edge<T> const &edge) { return edge.to; },
             [](DifferenceLogicNode<T> const &node) -> decltype(node.outgoing) const & { return node.outgoing; },
+            [](DifferenceLogicNode<T> &node) -> int & { return node.path_from; },
             [](DifferenceLogicNode<T> &u) -> bool& { return u.visited_from; });
         dijkstra(xy.from,
             visited_to_,
             [](DifferenceLogicNode<T> &u) -> T& { return u.cost_to; },
             [](Edge<T> const &edge) { return edge.from; },
             [](DifferenceLogicNode<T> const &node) -> decltype(node.incoming) { return node.incoming; },
+            [](DifferenceLogicNode<T> &node) -> int & { return node.path_to; },
             [](DifferenceLogicNode<T> &u) -> bool& { return u.visited_to; });
         offset_active_edges_ = std::partition(edge_partition_.begin() + offset_active_edges_, edge_partition_.end(), [&](int uv_idx) {
             if (uv_idx == xy_idx) {
@@ -321,8 +325,8 @@ public:
                 auto b = v.cost_from + v.potential() - y.potential();
                 auto d = a + b + xy.weight;
 #ifdef CROSSCHECK
-                auto bf_costs_from_u = bellman_ford(uv.from);
-                auto bf_costs_from_y = bellman_ford(xy.to);
+                auto bf_costs_from_u = bellman_ford(changed_edges_, uv.from);
+                auto bf_costs_from_y = bellman_ford(changed_edges_, xy.to);
                 auto aa = bf_costs_from_u.find(xy.from);
                 assert (aa != bf_costs_from_u.end());
                 assert(aa->second == a);
@@ -334,10 +338,11 @@ public:
                 if (d <= uv.weight) {
                     active_edges_[uv_idx] = false;
 #ifdef CROSSCHECK
-                    ensure_decision_level(std::numeric_limits<int>::max());
-                    auto cycle = add_edge(uv_idx);
-                    backtrack();
-                    if (!cycle.empty()) { throw std::runtime_error("edge is implied but lead to a conflict :("); }
+                    auto edges = changed_edges_;
+                    edges.emplace_back(uv_idx);
+                    // NOTE: throws if there is a cycle
+                    try         { bellman_ford(changed_edges_, uv.from); }
+                    catch (...) { assert(false && "edge is implied but lead to a conflict :("); }
 #endif
                     return true;
                 }
@@ -348,24 +353,46 @@ public:
                 auto d = a + b + xy.weight;
                 if (d <= -uv.weight - 1) {
                     active_edges_[uv_idx] = false;
-                    // TODO: the cycle can be obtained from the dijkstra too
-                    ensure_decision_level(std::numeric_limits<int>::max());
-                    auto cycle = add_edge(uv_idx);
-                    backtrack();
-                    assert (!cycle.empty());
+                    // could be skipped if uv.lit is already true
+#ifdef CROSSCHECK
+                    T sum = uv.weight + xy.weight;
+#endif
                     std::vector<literal_t> clause;
-                    for (auto eid : cycle) {
-                        clause.emplace_back(-edges_[eid].lit);
+                    clause.push_back(-uv.lit);
+                    clause.push_back(-xy.lit);
+                    // forward
+                    for (auto next_edge_idx = u.path_from; next_edge_idx >= 0; ) {
+                        auto &next_edge = edges_[next_edge_idx];
+                        auto &next_node = nodes_[next_edge.from];
+                        clause.push_back(-next_edge.lit);
+#ifdef CROSSCHECK
+                        sum+= next_edge.weight;
+#endif
+                        next_edge_idx = next_node.path_from;
                     }
+                    // backward
+                    for (auto next_edge_idx = v.path_to; next_edge_idx >= 0; ) {
+                        auto &next_edge = edges_[next_edge_idx];
+                        auto &next_node = nodes_[next_edge.to];
+                        clause.push_back(-next_edge.lit);
+#ifdef CROSSCHECK
+                        sum+= next_edge.weight;
+#endif
+                        next_edge_idx = next_node.path_to;
+                    }
+#ifdef CROSSCHECK
+                    assert(sum < 0);
+#endif
                     ret = ret && ctl.add_clause(clause) && ctl.propagate();
                     return true;
                 }
 #ifdef CROSSCHECK
                 else {
-                    ensure_decision_level(std::numeric_limits<int>::max());
-                    auto cycle = add_edge(uv_idx);
-                    backtrack();
-                    if (!cycle.empty()) { throw std::runtime_error("edge should not cause a conflict!"); }
+                    auto edges = changed_edges_;
+                    edges.emplace_back(uv_idx);
+                    // NOTE: throws if there is a cycle
+                    try         { bellman_ford(changed_edges_, uv.from); }
+                    catch (...) { assert(false && "edge must not cause a conflict"); }
                 }
 #endif
             }
@@ -377,8 +404,8 @@ public:
         visited_to_.clear();
         return ret;
     }
-    template <class Cost, class To, class Out, class Visited>
-    void dijkstra(int source_idx, std::vector<int> &visited_set, Cost cost, To to, Out out, Visited visited) {
+    template <class Cost, class To, class Out, class Path, class Visited>
+    void dijkstra(int source_idx, std::vector<int> &visited_set, Cost cost, To to, Out out, Path path, Visited visited) {
 #ifdef CROSSCHECK
         for (auto &node : nodes_) {
             assert(visited_set.empty());
@@ -391,6 +418,7 @@ public:
         visited(source) = true;
         source.changed = false;
         cost(source) = 0;
+        path(source) = -1;
         while (!gamma_.empty()) {
             auto top = gamma_.top();
             gamma_.pop();
@@ -410,6 +438,7 @@ public:
                             visited(v) = true;
                             v.changed = false;
                             cost(v) = gamma;
+                            path(v) = uv_idx;
                         }
                     }
                 }
@@ -418,7 +447,7 @@ public:
     }
 
 #ifdef CROSSCHECK
-    std::unordered_map<int, T> bellman_ford(int source) {
+    std::unordered_map<int, T> bellman_ford(std::vector<int> const &edges, int source) {
         std::unordered_map<int, T> costs;
         costs[source] = 0;
         int nodes = 0;
@@ -428,7 +457,7 @@ public:
             }
         }
         for (int i = 0; i < nodes; ++i) {
-            for (auto &uv_idx : changed_edges_) {
+            for (auto &uv_idx : edges) {
                 auto &uv = edges_[uv_idx];
                 auto u_cost = costs.find(uv.from);
                 if (u_cost != costs.end()) {
@@ -443,7 +472,7 @@ public:
                 }
             }
         }
-        for (auto &uv_idx : changed_edges_) {
+        for (auto &uv_idx : edges) {
             auto &uv = edges_[uv_idx];
             auto u_cost = costs.find(uv.from);
             if (u_cost != costs.end()) {
