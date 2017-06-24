@@ -28,7 +28,6 @@
 #include <algorithm>
 #include <iterator>
 #include <vector>
-#include <queue>
 #include <limits>
 #include <chrono>
 #include <iomanip>
@@ -136,9 +135,6 @@ public:
         auto i = m.offset(item) = heap_.size();
         heap_.push_back(item);
         decrease(m, i);
-#ifdef CROSSCHECK
-        check_heap_(m);
-#endif
     }
     template <class M>
     int pop(M &m) {
@@ -151,9 +147,6 @@ public:
             increase(m, 0);
         }
         else { heap_.pop_back(); }
-#ifdef CROSSCHECK
-        check_heap_(m);
-#endif
         return ret;
     }
 
@@ -167,9 +160,6 @@ public:
             }
             else { break; }
         }
-#ifdef CROSSCHECK
-        check_heap_(m);
-#endif
     }
     template <class M>
     void increase(M &m, int i) {
@@ -192,9 +182,6 @@ public:
             }
             break;
         }
-#ifdef CROSSCHECK
-        check_heap_(m);
-#endif
     }
     int size() {
         return heap_.size();
@@ -206,22 +193,12 @@ public:
         heap_.clear();
     }
 private:
-#ifdef CROSSCHECK
-    template <class M>
-    void check_heap_(M &m) {
-        for (int i = 1, e = heap_.size(); i < e; ++i) {
-            assert(m.cost(heap_[parent_(i)]) <= m.cost(heap_[i]));
-            assert(i == m.offset(heap_[i]));
-        }
-    }
-#endif
     template <class M>
     void swap_(M &m, int i, int j) {
         m.offset(heap_[j]) = i;
         m.offset(heap_[i]) = j;
         std::swap(heap_[i], heap_[j]);
     }
-private:
     int left_(int offset) {
         return 2 * offset + 1;
     }
@@ -269,25 +246,6 @@ struct DifferenceLogicNode {
     int path_to = 0;
     bool visited_from = false;
     bool visited_to = false;
-    bool changed = false;
-};
-
-template <typename T>
-struct DifferenceLogicNodeUpdate {
-    int node_idx;
-    T cost;
-};
-
-template <class T>
-bool operator<(DifferenceLogicNodeUpdate<T> const &a, DifferenceLogicNodeUpdate<T> const &b) {
-    return a.cost > b.cost;
-}
-
-template <class T, class Container = std::vector<T>, class Compare = std::less<typename Container::value_type>>
-class priority_queue : public std::priority_queue<T, Container, Compare> {
-public:
-    using std::priority_queue<T, Container, Compare>::priority_queue;
-    void clear() { std::priority_queue<T, Container, Compare>::c.clear(); }
 };
 
 template <typename T>
@@ -346,7 +304,6 @@ public:
             costs_heap_.push(m, uv.to);
             visited_from_.emplace_back(uv.to);
             v.visited_from = true;
-            v.changed = false;
             v.path_from = uv_idx;
         }
 
@@ -355,27 +312,22 @@ public:
             auto s_idx = costs_heap_.pop(m);
             auto &s = nodes_[s_idx];
             assert(s.visited_from);
-            assert(!s.changed);
             set_potential(s, level, s.potential() + s.cost_from);
-            s.changed = true;
             for (auto st_idx : s.outgoing) {
                 assert(st_idx < numeric_cast<int>(edges_.size()));
                 auto &st = edges_[st_idx];
                 auto &t = nodes_[st.to];
-                if (!t.visited_from || !t.changed) {
-                    auto c = s.potential() + st.weight - t.potential();
-                    if (c < (t.visited_from ? t.cost_from : 0)) {
-                        assert(c < 0);
-                        t.path_from = st_idx;
-                        t.cost_from = c;
-                        if (!t.visited_from) {
-                            t.visited_from = true;
-                            t.changed = false;
-                            visited_from_.emplace_back(st.to);
-                            costs_heap_.push(m, st.to);
-                        }
-                        else { costs_heap_.decrease(m, m.offset(st.to)); }
+                auto c = s.potential() + st.weight - t.potential();
+                if (c < (t.visited_from ? t.cost_from : 0)) {
+                    assert(c < 0);
+                    t.path_from = st_idx;
+                    t.cost_from = c;
+                    if (!t.visited_from) {
+                        t.visited_from = true;
+                        visited_from_.emplace_back(st.to);
+                        costs_heap_.push(m, st.to);
                     }
+                    else { costs_heap_.decrease(m, m.offset(st.to)); }
                 }
             }
         }
@@ -419,10 +371,7 @@ public:
 
     bool propagate(int xy_idx, Clingo::PropagateControl &ctl) {
         bool ret = true;
-        // these maps are of course completely unnecessary
-        // the costs can be stored in the nodes as well
-        // also the changed flags from the algorithm above can be reused!
-        // then there is also the relevancy criterion described in the paper
+        // TODO: implement relevancy criterion from paper
         auto &xy = edges_[xy_idx];
         auto &x = nodes_[xy.from];
         auto &y = nodes_[xy.to];
