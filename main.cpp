@@ -129,6 +129,132 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> start_;
 };
 
+class BinaryHeap {
+public:
+    template <class M>
+    void push(M &m, int item) {
+        auto i = m.offset(item) = heap_.size();
+        heap_.push_back(item);
+        decrease(m, i);
+#ifdef CROSSCHECK
+        check_heap_(m);
+#endif
+    }
+    template <class M>
+    int pop(M &m) {
+        assert(!heap_.empty());
+        auto ret = heap_[0];
+        if (heap_.size() > 1) {
+            heap_[0] = heap_.back();
+            m.offset(heap_[0]) = 0;
+            heap_.pop_back();
+            increase(m, 0);
+        }
+        else { heap_.pop_back(); }
+#ifdef CROSSCHECK
+        check_heap_(m);
+#endif
+        return ret;
+    }
+
+    template <class M>
+    void decrease(M &m, int i) {
+        while (i > 0) {
+            int p = parent_(i);
+            if (m.cost(heap_[p]) > m.cost(heap_[i])) {
+                swap_(m, i, p);
+                i = p;
+            }
+            else { break; }
+        }
+#ifdef CROSSCHECK
+        check_heap_(m);
+#endif
+    }
+    template <class M>
+    void increase(M &m, int i) {
+        for (int p = i, l = left_(p), s = numeric_cast<int>(heap_.size()); l < s; l = left_(p)) {
+            int r = right_(p);
+            if (r < s) {
+                if (m.cost(heap_[l]) > m.cost(heap_[r])) {
+                    if (m.cost(heap_[p]) > m.cost(heap_[r])) {
+                        swap_(m, p, r);
+                        p = r;
+                        continue;
+                    }
+                }
+            }
+            if (m.cost(heap_[p]) > m.cost(heap_[l])) {
+                swap_(m, p, l);
+                p = l;
+                continue;
+
+            }
+            break;
+        }
+#ifdef CROSSCHECK
+        check_heap_(m);
+#endif
+    }
+    int size() {
+        return heap_.size();
+    }
+    bool empty() {
+        return heap_.empty();
+    }
+    void clear() {
+        heap_.clear();
+    }
+private:
+#ifdef CROSSCHECK
+    template <class M>
+    void check_heap_(M &m) {
+        for (int i = 1, e = heap_.size(); i < e; ++i) {
+            assert(m.cost(heap_[parent_(i)]) <= m.cost(heap_[i]));
+            assert(i == m.offset(heap_[i]));
+        }
+    }
+#endif
+    template <class M>
+    void swap_(M &m, int i, int j) {
+        m.offset(heap_[j]) = i;
+        m.offset(heap_[i]) = j;
+        std::swap(heap_[i], heap_[j]);
+    }
+private:
+    int left_(int offset) {
+        return 2 * offset + 1;
+    }
+    int right_(int offset) {
+        return left_(offset) + 1;
+    }
+    int parent_(int offset) {
+        return (offset - 1) / 2;
+    }
+private:
+    std::vector<int> heap_;
+};
+
+template <class T, class P>
+struct HeapFromM {
+    int &offset(int idx)           { return static_cast<P*>(this)->nodes_[idx].offset; }
+    T &cost(int idx)               { return static_cast<P*>(this)->nodes_[idx].cost_from; }
+    int to(int idx)                { return static_cast<P*>(this)->edges_[idx].to; }
+    std::vector<int> &out(int idx) { return static_cast<P*>(this)->nodes_[idx].outgoing; }
+    int &path(int idx)             { return static_cast<P*>(this)->nodes_[idx].path_from; }
+    bool &visited(int idx)         { return static_cast<P*>(this)->nodes_[idx].visited_from; }
+};
+
+template <class T, class P>
+struct HeapToM {
+    int &offset(int idx)           { return static_cast<P*>(this)->nodes_[idx].offset; }
+    T &cost(int idx)               { return static_cast<P*>(this)->nodes_[idx].cost_to; }
+    int to(int idx)                { return static_cast<P*>(this)->edges_[idx].from; }
+    std::vector<int> &out(int idx) { return static_cast<P*>(this)->nodes_[idx].incoming; }
+    int &path(int idx)             { return static_cast<P*>(this)->nodes_[idx].path_to; }
+    bool &visited(int idx)         { return static_cast<P*>(this)->nodes_[idx].visited_to; }
+};
+
 template <typename T>
 struct DifferenceLogicNode {
     bool defined() const { return !potential_stack.empty(); }
@@ -138,6 +264,7 @@ struct DifferenceLogicNode {
     std::vector<std::pair<int, T>> potential_stack; // [(level,potential)]
     T cost_from = 0;
     T cost_to = 0;
+    int offset = 0;
     int path_from = 0;
     int path_to = 0;
     bool visited_from = false;
@@ -164,7 +291,11 @@ public:
 };
 
 template <typename T>
-class DifferenceLogicGraph {
+class DifferenceLogicGraph : private HeapToM<T, DifferenceLogicGraph<T>>, private HeapFromM<T, DifferenceLogicGraph<T>> {
+    using HTM = HeapToM<T, DifferenceLogicGraph<T>>;
+    using HFM = HeapFromM<T, DifferenceLogicGraph<T>>;
+    friend struct HeapToM<T, DifferenceLogicGraph<T>>;
+    friend struct HeapFromM<T, DifferenceLogicGraph<T>>;
 public:
     DifferenceLogicGraph(const std::vector<Edge<T>> &edges)
         : edges_(edges)
@@ -195,13 +326,14 @@ public:
     std::vector<int> add_edge(int uv_idx) {
 #ifdef CROSSCHECK
         for (auto &node : nodes_) {
-            assert(visited_from_.empty());
-            assert(!node.visited);
+            assert(!node.visited_from);
         }
 #endif
+        assert(visited_from_.empty());
         assert(costs_.empty());
         int level = current_decision_level_();
         auto &uv = edges_[uv_idx];
+        auto &m = *static_cast<HFM*>(this);
 
         // initialize the nodes of the edge to add
         ensure_index(nodes_, std::max(uv.from, uv.to));
@@ -212,6 +344,7 @@ public:
         v.cost_from = u.potential() + uv.weight - v.potential();
         if (v.cost_from < 0) {
             costs_.push({uv.to, v.cost_from});
+            //costs2_.push(m, uv.to);
             visited_from_.emplace_back(uv.to);
             v.visited_from = true;
             v.changed = false;
@@ -294,20 +427,8 @@ public:
         auto &xy = edges_[xy_idx];
         auto &x = nodes_[xy.from];
         auto &y = nodes_[xy.to];
-        dijkstra(xy.to,
-            visited_from_,
-            [](DifferenceLogicNode<T> &u) -> T& { return u.cost_from; },
-            [](Edge<T> const &edge) { return edge.to; },
-            [](DifferenceLogicNode<T> const &node) -> decltype(node.outgoing) const & { return node.outgoing; },
-            [](DifferenceLogicNode<T> &node) -> int & { return node.path_from; },
-            [](DifferenceLogicNode<T> &u) -> bool& { return u.visited_from; });
-        dijkstra(xy.from,
-            visited_to_,
-            [](DifferenceLogicNode<T> &u) -> T& { return u.cost_to; },
-            [](Edge<T> const &edge) { return edge.from; },
-            [](DifferenceLogicNode<T> const &node) -> decltype(node.incoming) { return node.incoming; },
-            [](DifferenceLogicNode<T> &node) -> int & { return node.path_to; },
-            [](DifferenceLogicNode<T> &u) -> bool& { return u.visited_to; });
+        dijkstra(xy.to, visited_from_, *static_cast<HFM*>(this));
+        dijkstra(xy.from, visited_to_, *static_cast<HTM*>(this));
         offset_active_edges_ = std::partition(edge_partition_.begin() + offset_active_edges_, edge_partition_.end(), [&](int uv_idx) {
             if (uv_idx == xy_idx) {
                 active_edges_[xy_idx] = false;
@@ -401,43 +522,31 @@ public:
         visited_to_.clear();
         return ret;
     }
-    template <class Cost, class To, class Out, class Path, class Visited>
-    void dijkstra(int source_idx, std::vector<int> &visited_set, Cost cost, To to, Out out, Path path, Visited visited) {
-#ifdef CROSSCHECK
-        for (auto &node : nodes_) {
-            assert(visited_set.empty());
-            assert(!visited(node));
-        }
-#endif
-        auto &source = nodes_[source_idx];
-        costs_.push({source_idx, 0});
+    template <class M>
+    void dijkstra(int source_idx, std::vector<int> &visited_set, M &m) {
+        assert(visited_set.empty() && costs2_.empty());
+        costs2_.push(m, source_idx);
         visited_set.push_back(source_idx);
-        visited(source) = true;
-        source.changed = false;
-        cost(source) = 0;
-        path(source) = -1;
-        while (!costs_.empty()) {
-            auto top = costs_.top();
-            costs_.pop();
-            auto &u = nodes_[top.node_idx];
-            if (!u.changed) {
-                u.changed = true;
-                for (auto &uv_idx : out(u)) {
-                    auto &uv = edges_[uv_idx];
-                    auto &v = nodes_[to(uv)];
-                    if (!visited(v) || !v.changed) {
-                        // NOTE: explicitely using uv.from and uv.to is intended here
-                        auto c = top.cost + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
-                        assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
-                        if (!visited(v) || c < cost(v)) {
-                            costs_.push({to(uv), c});
-                            visited_set.push_back(to(uv));
-                            visited(v) = true;
-                            v.changed = false;
-                            cost(v) = c;
-                            path(v) = uv_idx;
-                        }
+        m.visited(source_idx) = true;
+        m.cost(source_idx) = 0;
+        m.path(source_idx) = -1;
+        while (!costs2_.empty()) {
+            auto u_idx = costs2_.pop(m);
+            for (auto &uv_idx : m.out(u_idx)) {
+                auto &uv = edges_[uv_idx];
+                auto v_idx = m.to(uv_idx);
+                // NOTE: explicitely using uv.from and uv.to is intended here
+                auto c = m.cost(u_idx) + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
+                assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
+                if (!m.visited(v_idx) || c < m.cost(v_idx)) {
+                    m.cost(v_idx) = c;
+                    m.path(v_idx) = uv_idx;
+                    if (!m.visited(v_idx)) {
+                        visited_set.push_back(m.to(uv_idx));
+                        m.visited(v_idx) = true;
+                        costs2_.push(m, v_idx);
                     }
+                    else { costs2_.decrease(m, m.offset(v_idx)); }
                 }
             }
         }
@@ -521,6 +630,7 @@ private:
 
 private:
     priority_queue<DifferenceLogicNodeUpdate<T>> costs_;
+    BinaryHeap costs2_;
     std::vector<int> visited_from_;
     std::vector<int> visited_to_;
     std::vector<Edge<T>> const &edges_;
