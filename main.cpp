@@ -330,7 +330,7 @@ public:
         }
 #endif
         assert(visited_from_.empty());
-        assert(costs_.empty());
+        assert(costs_heap_.empty());
         int level = current_decision_level_();
         auto &uv = edges_[uv_idx];
         auto &m = *static_cast<HFM*>(this);
@@ -343,8 +343,7 @@ public:
         if (!v.defined()) { set_potential(v, level, 0); }
         v.cost_from = u.potential() + uv.weight - v.potential();
         if (v.cost_from < 0) {
-            costs_.push({uv.to, v.cost_from});
-            //costs2_.push(m, uv.to);
+            costs_heap_.push(m, uv.to);
             visited_from_.emplace_back(uv.to);
             v.visited_from = true;
             v.changed = false;
@@ -352,30 +351,30 @@ public:
         }
 
         // detect negative cycles
-        while (!costs_.empty() && !u.visited_from) {
-            auto s_idx = costs_.top().node_idx;
+        while (!costs_heap_.empty() && !u.visited_from) {
+            auto s_idx = costs_heap_.pop(m);
             auto &s = nodes_[s_idx];
             assert(s.visited_from);
-            assert(s.changed || s.cost_from == costs_.top().cost);
-            costs_.pop();
-            if (!s.changed) {
-                set_potential(s, level, s.potential() + s.cost_from);
-                s.changed = true;
-                for (auto st_idx : s.outgoing) {
-                    assert(st_idx < numeric_cast<int>(edges_.size()));
-                    auto &st = edges_[st_idx];
-                    auto &t = nodes_[st.to];
-                    if (!t.visited_from || !t.changed) {
-                        auto c = s.potential() + st.weight - t.potential();
-                        if (c < (t.visited_from ? t.cost_from : 0)) {
-                            assert(c < 0);
-                            costs_.push({st.to, c});
-                            visited_from_.emplace_back(st.to);
+            assert(!s.changed);
+            set_potential(s, level, s.potential() + s.cost_from);
+            s.changed = true;
+            for (auto st_idx : s.outgoing) {
+                assert(st_idx < numeric_cast<int>(edges_.size()));
+                auto &st = edges_[st_idx];
+                auto &t = nodes_[st.to];
+                if (!t.visited_from || !t.changed) {
+                    auto c = s.potential() + st.weight - t.potential();
+                    if (c < (t.visited_from ? t.cost_from : 0)) {
+                        assert(c < 0);
+                        t.path_from = st_idx;
+                        t.cost_from = c;
+                        if (!t.visited_from) {
                             t.visited_from = true;
                             t.changed = false;
-                            t.path_from = st_idx;
-                            t.cost_from = c;
+                            visited_from_.emplace_back(st.to);
+                            costs_heap_.push(m, st.to);
                         }
+                        else { costs_heap_.decrease(m, m.offset(st.to)); }
                     }
                 }
             }
@@ -413,7 +412,7 @@ public:
         // reset visited flags
         for (auto &x : visited_from_) { nodes_[x].visited_from = false; }
         visited_from_.clear();
-        costs_.clear();
+        costs_heap_.clear();
 
         return neg_cycle;
     }
@@ -524,14 +523,14 @@ public:
     }
     template <class M>
     void dijkstra(int source_idx, std::vector<int> &visited_set, M &m) {
-        assert(visited_set.empty() && costs2_.empty());
-        costs2_.push(m, source_idx);
+        assert(visited_set.empty() && costs_heap_.empty());
+        costs_heap_.push(m, source_idx);
         visited_set.push_back(source_idx);
         m.visited(source_idx) = true;
         m.cost(source_idx) = 0;
         m.path(source_idx) = -1;
-        while (!costs2_.empty()) {
-            auto u_idx = costs2_.pop(m);
+        while (!costs_heap_.empty()) {
+            auto u_idx = costs_heap_.pop(m);
             for (auto &uv_idx : m.out(u_idx)) {
                 auto &uv = edges_[uv_idx];
                 auto v_idx = m.to(uv_idx);
@@ -544,9 +543,9 @@ public:
                     if (!m.visited(v_idx)) {
                         visited_set.push_back(m.to(uv_idx));
                         m.visited(v_idx) = true;
-                        costs2_.push(m, v_idx);
+                        costs_heap_.push(m, v_idx);
                     }
-                    else { costs2_.decrease(m, m.offset(v_idx)); }
+                    else { costs_heap_.decrease(m, m.offset(v_idx)); }
                 }
             }
         }
@@ -629,8 +628,7 @@ private:
     }
 
 private:
-    priority_queue<DifferenceLogicNodeUpdate<T>> costs_;
-    BinaryHeap costs2_;
+    BinaryHeap costs_heap_;
     std::vector<int> visited_from_;
     std::vector<int> visited_to_;
     std::vector<Edge<T>> const &edges_;
