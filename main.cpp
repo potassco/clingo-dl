@@ -22,6 +22,7 @@
 #include <iostream>
 #include <string>
 #include <map>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 #include <sstream>
@@ -73,6 +74,48 @@ struct Edge {
     int to;
     T weight;
     literal_t lit;
+};
+
+template <class T>
+struct EdgeLessFrom {
+    bool operator()(int a_idx, int b_idx) const {
+        if (a_idx < 0)  {
+            assert(b_idx >= 0);
+            return -a_idx - 1 <= (*edges)[b_idx].to;
+        }
+        if (b_idx < 0)  {
+            assert(a_idx >= 0);
+            return (*edges)[a_idx].to < -b_idx - 1;
+        }
+        auto &a = (*edges)[a_idx];
+        auto &b = (*edges)[b_idx];
+        if (a.to != b.to)         { return a.to < b.to; }
+        if (a.from != b.from)     { return a.from < b.from; }
+        if (a.weight != b.weight) { return a.weight < b.weight; }
+        return a.lit < b.lit;
+    }
+    std::vector<Edge<T>> const *edges;
+};
+
+template <class T>
+struct EdgeLessTo {
+    bool operator()(int a_idx, int b_idx) const {
+        if (a_idx < 0)  {
+            assert(b_idx >= 0);
+            return -a_idx - 1 <= (*edges)[b_idx].from;
+        }
+        if (b_idx < 0)  {
+            assert(a_idx >= 0);
+            return (*edges)[a_idx].from < -b_idx - 1;
+        }
+        auto &a = (*edges)[a_idx];
+        auto &b = (*edges)[b_idx];
+        if (a.from != b.from)     { return a.from < b.from; }
+        if (a.to != b.to)         { return a.to < b.to; }
+        if (a.weight != b.weight) { return a.weight < b.weight; }
+        return a.lit < b.lit;
+    }
+    std::vector<Edge<T>> const *edges;
 };
 
 template <class K, class V>
@@ -278,10 +321,14 @@ class DifferenceLogicGraph : private HeapToM<T, DifferenceLogicGraph<T>>, privat
 public:
     DifferenceLogicGraph(DLStats &stats, const std::vector<Edge<T>> &edges)
         : edges_(edges)
-        , stats_(stats)
-        , offset_active_edges_(0) {
+        , candidate_from_(EdgeLessFrom<T>{&edges})
+        , candidate_to_(EdgeLessTo<T>{&edges})
+        , stats_(stats) {
         for (int i = 0; i < numeric_cast<int>(edges_.size()); ++i) {
             edge_partition_.emplace_back(i);
+            candidate_from_.insert(i);
+            candidate_to_.insert(i);
+            ensure_index(nodes_, std::max(edges_[i].from, edges_[i].to));
         }
         active_edges_.resize(edge_partition_.size(), true);
     }
@@ -298,8 +345,7 @@ public:
     void ensure_decision_level(int level) {
         // initialize the trail
         if (changed_trail_.empty() || std::get<0>(changed_trail_.back()) < level) {
-            assert(changed_trail_.empty() || std::get<3>(changed_trail_.back()) <= offset_active_edges_);
-            changed_trail_.emplace_back(level, changed_nodes_.size(), changed_edges_.size(), offset_active_edges_);
+            changed_trail_.emplace_back(level, changed_nodes_.size(), changed_edges_.size(), inactive_.size());
         }
     }
 
@@ -318,7 +364,6 @@ public:
         auto &m = *static_cast<HFM*>(this);
 
         // initialize the nodes of the edge to add
-        ensure_index(nodes_, std::max(uv.from, uv.to));
         auto &u = nodes_[uv.from];
         auto &v = nodes_[uv.to];
         if (!u.defined()) { set_potential(u, level, 0); }
@@ -380,7 +425,7 @@ public:
             v.incoming.emplace_back(uv_idx);
             changed_edges_.emplace_back(uv_idx);
 #ifdef CROSSCHECK
-            // TODO: just a check that will throw if there is a cycle
+            // NOTE: just a check that will throw if there is a cycle
             bellman_ford(changed_edges_, uv.from);
 #endif
         }
@@ -394,6 +439,13 @@ public:
     }
 
     bool propagate(int xy_idx, Clingo::PropagateControl &ctl) {
+        static int props = 0;
+        ++props;
+        assert(candidate_from_.size() == candidate_to_.size());
+        assert(candidate_from_.size() + inactive_.size() == edges_.size());
+        candidate_from_.erase(xy_idx);
+        candidate_to_.erase(xy_idx);
+        inactive_.push_back(xy_idx);
         bool ret = true;
         auto &xy = edges_[xy_idx];
         auto &x = nodes_[xy.from];
@@ -406,100 +458,123 @@ public:
             dijkstra(xy.to, visited_to_, *static_cast<HTM*>(this));
         }
 
-        // TODO: partition wastes time looping over unrelevant edges
-        //       the paper suggests to use a counter based approach
-        //       counting how many edges there are with relevant incoming and outgoing nodes
-        //       the algorithm already maintains a list of visited nodes which has to be traversed anyway
-        //       and contains a subset of the relevant nodes
-        //       this just means that the graph of non-active constraints has to be stored in adjaceny list form, too
-        //       the partition can then be applied to relevant adjacency lists only
-        offset_active_edges_ = std::partition(edge_partition_.begin() + offset_active_edges_, edge_partition_.end(), [&](int uv_idx) {
-            if (uv_idx == xy_idx) {
-                active_edges_[xy_idx] = false;
-                return true;
-            }
-            assert(edge_is_active(uv_idx));
-            auto &uv = edges_[uv_idx];
-            auto &u = nodes_[uv.from];
-            auto &v = nodes_[uv.to];
-            if (v.relevant_from && u.relevant_to) {
-                auto a = u.cost_to + y.potential() - u.potential();
-                auto b = v.cost_from + v.potential() - x.potential();
-                auto d = a + b - xy.weight;
+        // TODO: this does not exploit the in out/degrees of the two sets properly
+        //         the active graph should maintain a degree for each node
+        //         in dijkstra's algorithm the degrees of relevant nodes can then be summed up
+        //       I might want to template this to get all the annoying ifs away
+        //       it is probably better to switch to arrays here than use sets
+        //         only the deletion in the opposite adjacency list is a little tricky
+        //         but can be done in amortized constant time by simply only deleting when passing over the array
+        //         this needs a second set of active edges
+        bool from = visited_from_.size() < visited_to_.size();
+        for (auto &node : from ? visited_from_ : visited_to_) {
+            if (from ? nodes_[node].relevant_from : nodes_[node].relevant_to) {
+                auto lower = (from ? candidate_from_.lower_bound(-node-1) : candidate_to_.lower_bound(-node-1));
+                while (lower != (from ? candidate_from_.end() : candidate_to_.end()) && (from ? edges_[*lower].to : edges_[*lower].from) == node) {
+                    auto uv_idx = *lower;
+                    auto &uv = edges_[uv_idx];
+                    auto &u = nodes_[uv.from];
+                    auto &v = nodes_[uv.to];
+                    ++lower;
+                    assert (!from ? u.relevant_to : v.relevant_from);
+                    if (from ? u.relevant_to : v.relevant_from) {
+                        assert(v.relevant_from && u.relevant_to);
+                        auto a = u.cost_to + y.potential() - u.potential();
+                        auto b = v.cost_from + v.potential() - x.potential();
+                        auto d = a + b - xy.weight;
 #ifdef CROSSCHECK
-                auto bf_costs_from_u = bellman_ford(changed_edges_, uv.from);
-                auto bf_costs_from_x = bellman_ford(changed_edges_, xy.from);
-                auto aa = bf_costs_from_u.find(xy.to);
-                assert (aa != bf_costs_from_u.end());
-                assert(aa->second == a);
-                auto bb = bf_costs_from_x.find(uv.to);
-                assert (bb != bf_costs_from_u.end());
-                assert(bb->second == b);
+                        auto bf_costs_from_u = bellman_ford(changed_edges_, uv.from);
+                        auto bf_costs_from_x = bellman_ford(changed_edges_, xy.from);
+                        auto aa = bf_costs_from_u.find(xy.to);
+                        assert (aa != bf_costs_from_u.end());
+                        assert(aa->second == a);
+                        auto bb = bf_costs_from_x.find(uv.to);
+                        assert (bb != bf_costs_from_u.end());
+                        assert(bb->second == b);
 #endif
+                        if (d <= uv.weight) {
+                            active_edges_[uv_idx] = false;
+#ifdef CROSSCHECK
+                            auto edges = changed_edges_;
+                            edges.emplace_back(uv_idx);
+                            // NOTE: throws if there is a cycle
+                            try         { bellman_ford(changed_edges_, uv.from); }
+                            catch (...) { assert(false && "edge is implied but lead to a conflict :("); }
+#endif
+                            candidate_from_.erase(uv_idx);
+                            candidate_to_.erase(uv_idx);
+                            inactive_.push_back(uv_idx);
+                        }
+                    }
+                }
+                lower = (from ? candidate_to_.lower_bound(-node-1) : candidate_from_.lower_bound(-node-1));
+                while (lower != (from ? candidate_to_.end() : candidate_from_.end()) && (from ? edges_[*lower].from : edges_[*lower].to) == node) {
+                    auto uv_idx = *lower;
+                    auto &uv = edges_[uv_idx];
+                    auto &u = nodes_[uv.from];
+                    auto &v = nodes_[uv.to];
+                    ++lower;
+                    assert (!from ? v.relevant_to : u.relevant_from);
+                    if (from ? v.relevant_to : u.relevant_from) {
+                        assert(u.relevant_from && v.relevant_to);
+                        auto a = v.cost_to + y.potential() - v.potential();
+                        auto b = u.cost_from + u.potential() - x.potential();
+                        auto d = a + b - xy.weight;
+                        if (d < -uv.weight) {
+                            if (!ctl.assignment().is_false(uv.lit)) {
+#ifdef CROSSCHECK
+                                T sum = uv.weight - xy.weight;
+#endif
+                                std::vector<literal_t> clause;
+                                clause.push_back(-uv.lit);
+                                // forward
+                                for (auto next_edge_idx = u.path_from; next_edge_idx >= 0; ) {
+                                    auto &next_edge = edges_[next_edge_idx];
+                                    auto &next_node = nodes_[next_edge.from];
+                                    clause.push_back(-next_edge.lit);
+#ifdef CROSSCHECK
+                                    sum+= next_edge.weight;
+#endif
+                                    next_edge_idx = next_node.path_from;
+                                }
+                                // backward
+                                for (auto next_edge_idx = v.path_to; next_edge_idx >= 0; ) {
+                                    auto &next_edge = edges_[next_edge_idx];
+                                    auto &next_node = nodes_[next_edge.to];
+                                    clause.push_back(-next_edge.lit);
+#ifdef CROSSCHECK
+                                    sum+= next_edge.weight;
+#endif
+                                    next_edge_idx = next_node.path_to;
+                                }
+#ifdef CROSSCHECK
+                                assert(sum < 0);
+#endif
+                                if (!(ret = ctl.add_clause(clause) && ctl.propagate())) {
+                                    break;
+                                }
+                            }
+                            active_edges_[uv_idx] = false;
+                            candidate_from_.erase(uv_idx);
+                            candidate_to_.erase(uv_idx);
+                            inactive_.push_back(uv_idx);
+                        }
+#ifdef CROSSCHECK
+                        else {
+                            auto edges = changed_edges_;
+                            edges.emplace_back(uv_idx);
+                            // NOTE: throws if there is a cycle
+                            try         { bellman_ford(changed_edges_, uv.from); }
+                            catch (...) { assert(false && "edge must not cause a conflict"); }
+                        }
+#endif
+                    }
+                }
 
-                if (d <= uv.weight) {
-                    active_edges_[uv_idx] = false;
-#ifdef CROSSCHECK
-                    auto edges = changed_edges_;
-                    edges.emplace_back(uv_idx);
-                    // NOTE: throws if there is a cycle
-                    try         { bellman_ford(changed_edges_, uv.from); }
-                    catch (...) { assert(false && "edge is implied but lead to a conflict :("); }
-#endif
-                    return true;
-                }
             }
-            if (u.relevant_from && v.relevant_to) {
-                auto a = v.cost_to + y.potential() - v.potential();
-                auto b = u.cost_from + u.potential() - x.potential();
-                auto d = a + b - xy.weight;
-                if (d < -uv.weight) {
-                    active_edges_[uv_idx] = false;
-                    // could be skipped if uv.lit is already true
-#ifdef CROSSCHECK
-                    T sum = uv.weight - xy.weight;
-#endif
-                    std::vector<literal_t> clause;
-                    clause.push_back(-uv.lit);
-                    // forward
-                    for (auto next_edge_idx = u.path_from; next_edge_idx >= 0; ) {
-                        auto &next_edge = edges_[next_edge_idx];
-                        auto &next_node = nodes_[next_edge.from];
-                        clause.push_back(-next_edge.lit);
-#ifdef CROSSCHECK
-                        sum+= next_edge.weight;
-#endif
-                        next_edge_idx = next_node.path_from;
-                    }
-                    // backward
-                    for (auto next_edge_idx = v.path_to; next_edge_idx >= 0; ) {
-                        auto &next_edge = edges_[next_edge_idx];
-                        auto &next_node = nodes_[next_edge.to];
-                        clause.push_back(-next_edge.lit);
-#ifdef CROSSCHECK
-                        sum+= next_edge.weight;
-#endif
-                        next_edge_idx = next_node.path_to;
-                    }
-#ifdef CROSSCHECK
-                    assert(sum < 0);
-#endif
-                    // TODO: it is a waste of time to continue here because a backtrack is in order anyway
-                    ret = ret && ctl.add_clause(clause) && ctl.propagate();
-                    return true;
-                }
-#ifdef CROSSCHECK
-                else {
-                    auto edges = changed_edges_;
-                    edges.emplace_back(uv_idx);
-                    // NOTE: throws if there is a cycle
-                    try         { bellman_ford(changed_edges_, uv.from); }
-                    catch (...) { assert(false && "edge must not cause a conflict"); }
-                }
-#endif
-            }
-            return false;
-        }) - edge_partition_.begin();
+            if (!ret) { break; }
+        }
+
         for (auto &x : visited_from_) {
             nodes_[x].visited_from = false;
             nodes_[x].relevant_from = false;
@@ -620,10 +695,13 @@ public:
             nodes_[edge.to].incoming.pop_back();
             changed_edges_.pop_back();
         }
-        for (; offset_active_edges_ > std::get<3>(changed_trail_.back()); --offset_active_edges_) {
-            active_edges_[edge_partition_[offset_active_edges_ - 1]] = true;
+        int n = std::get<3>(changed_trail_.back());
+        for (auto i = inactive_.begin() + n, e = inactive_.end(); i < e; ++i) {
+            active_edges_[*i] = true;
+            candidate_from_.insert(*i);
+            candidate_to_.insert(*i);
         }
-        assert(offset_active_edges_ == std::get<3>(changed_trail_.back()));
+        inactive_.resize(n);
         changed_trail_.pop_back();
     }
 
@@ -654,8 +732,10 @@ private:
     std::vector<int> changed_nodes_;
     std::vector<int> changed_edges_;
     std::vector<std::tuple<int, int, int, int>> changed_trail_;
+    std::set<int, EdgeLessFrom<T>> candidate_from_;
+    std::set<int, EdgeLessTo<T>> candidate_to_;
+    std::vector<int> inactive_;
     DLStats &stats_;
-    int offset_active_edges_;
 };
 
 struct Stats {
