@@ -417,7 +417,7 @@ public:
                 auto a = v.cost_to + x.potential() - v.potential();
                 auto b = u.cost_from + u.potential() - y.potential();
                 auto d = a + b + xy.weight;
-                if (d <= -uv.weight - 1) {
+                if (d < -uv.weight) {
                     active_edges_[uv_idx] = false;
                     // could be skipped if uv.lit is already true
 #ifdef CROSSCHECK
