@@ -128,6 +128,7 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> start_;
 };
 
+// NOTE: according to papers 4-ary heaps perform best for dijkstra
 class BinaryHeap {
 public:
     template <class M>
@@ -166,15 +167,15 @@ public:
         for (int p = i, l = left_(p), s = numeric_cast<int>(heap_.size()); l < s; l = left_(p)) {
             int r = right_(p);
             if (r < s) {
-                if (m.cost(heap_[l]) > m.cost(heap_[r])) {
-                    if (m.cost(heap_[p]) > m.cost(heap_[r])) {
+                if (less_(m, r, l)) {
+                    if (less_(m, r, p)) {
                         swap_(m, p, r);
                         p = r;
                         continue;
                     }
                 }
             }
-            if (m.cost(heap_[p]) > m.cost(heap_[l])) {
+            if (less_(m, l, p)) {
                 swap_(m, p, l);
                 p = l;
                 continue;
@@ -208,6 +209,13 @@ private:
     int parent_(int offset) {
         return (offset - 1) / 2;
     }
+    template <class M>
+    bool less_(M &m, int a, int b) {
+        a = heap_[a], b = heap_[b];
+        auto ca = m.cost(a), cb = m.cost(b);
+        return ca < cb || (ca == cb && m.relevant(a) < m.relevant(b));
+    }
+
 private:
     std::vector<int> heap_;
 };
@@ -217,9 +225,11 @@ struct HeapFromM {
     int &offset(int idx)           { return static_cast<P*>(this)->nodes_[idx].offset; }
     T &cost(int idx)               { return static_cast<P*>(this)->nodes_[idx].cost_from; }
     int to(int idx)                { return static_cast<P*>(this)->edges_[idx].to; }
+    int from(int idx)              { return static_cast<P*>(this)->edges_[idx].from; }
     std::vector<int> &out(int idx) { return static_cast<P*>(this)->nodes_[idx].outgoing; }
     int &path(int idx)             { return static_cast<P*>(this)->nodes_[idx].path_from; }
     bool &visited(int idx)         { return static_cast<P*>(this)->nodes_[idx].visited_from; }
+    bool &relevant(int idx)        { return static_cast<P*>(this)->nodes_[idx].relevant_from; }
 };
 
 template <class T, class P>
@@ -227,9 +237,11 @@ struct HeapToM {
     int &offset(int idx)           { return static_cast<P*>(this)->nodes_[idx].offset; }
     T &cost(int idx)               { return static_cast<P*>(this)->nodes_[idx].cost_to; }
     int to(int idx)                { return static_cast<P*>(this)->edges_[idx].from; }
+    int from(int idx)              { return static_cast<P*>(this)->edges_[idx].to; }
     std::vector<int> &out(int idx) { return static_cast<P*>(this)->nodes_[idx].incoming; }
     int &path(int idx)             { return static_cast<P*>(this)->nodes_[idx].path_to; }
     bool &visited(int idx)         { return static_cast<P*>(this)->nodes_[idx].visited_to; }
+    bool &relevant(int idx)        { return static_cast<P*>(this)->nodes_[idx].relevant_to; }
 };
 
 template <typename T>
@@ -244,8 +256,16 @@ struct DifferenceLogicNode {
     int offset = 0;
     int path_from = 0;
     int path_to = 0;
+    bool relevant_from = false;
+    bool relevant_to = false;
     bool visited_from = false;
     bool visited_to = false;
+};
+
+struct DLStats {
+    Duration time_propagate = Duration{0};
+    Duration time_undo = Duration{0};
+    Duration time_dijkstra = Duration{0};
 };
 
 template <typename T>
@@ -255,8 +275,9 @@ class DifferenceLogicGraph : private HeapToM<T, DifferenceLogicGraph<T>>, privat
     friend struct HeapToM<T, DifferenceLogicGraph<T>>;
     friend struct HeapFromM<T, DifferenceLogicGraph<T>>;
 public:
-    DifferenceLogicGraph(const std::vector<Edge<T>> &edges)
+    DifferenceLogicGraph(DLStats &stats, const std::vector<Edge<T>> &edges)
         : edges_(edges)
+        , stats_(stats)
         , offset_active_edges_(0) {
         for (int i = 0; i < numeric_cast<int>(edges_.size()); ++i) {
             edge_partition_.emplace_back(i);
@@ -291,6 +312,8 @@ public:
         assert(costs_heap_.empty());
         int level = current_decision_level_();
         auto &uv = edges_[uv_idx];
+        // NOTE: would be more efficient if relevant would return statically false here
+        //       for the compiler to make comparison cheaper
         auto &m = *static_cast<HFM*>(this);
 
         // initialize the nodes of the edge to add
@@ -371,12 +394,24 @@ public:
 
     bool propagate(int xy_idx, Clingo::PropagateControl &ctl) {
         bool ret = true;
-        // TODO: implement relevancy criterion from paper
         auto &xy = edges_[xy_idx];
         auto &x = nodes_[xy.from];
         auto &y = nodes_[xy.to];
-        dijkstra(xy.to, visited_from_, *static_cast<HFM*>(this));
-        dijkstra(xy.from, visited_to_, *static_cast<HTM*>(this));
+        x.relevant_to = true;
+        y.relevant_from = true;
+        {
+            Timer t{stats_.time_dijkstra};
+            dijkstra(xy.from, visited_from_, *static_cast<HFM*>(this));
+            dijkstra(xy.to, visited_to_, *static_cast<HTM*>(this));
+        }
+
+        // TODO: partition wastes time looping over unrelevant edges
+        //       the paper suggests to use a counter based approach
+        //       counting how many edges there are with relevant incoming and outgoing nodes
+        //       the algorithm already maintains a list of visited nodes which has to be traversed anyway
+        //       and contains a subset of the relevant nodes
+        //       this just means that the graph of non-active constraints has to be stored in adjaceny list form, too
+        //       the partition can then be applied to relevant adjacency lists only
         offset_active_edges_ = std::partition(edge_partition_.begin() + offset_active_edges_, edge_partition_.end(), [&](int uv_idx) {
             if (uv_idx == xy_idx) {
                 active_edges_[xy_idx] = false;
@@ -386,17 +421,17 @@ public:
             auto &uv = edges_[uv_idx];
             auto &u = nodes_[uv.from];
             auto &v = nodes_[uv.to];
-            if (v.visited_from && u.visited_to) {
-                auto a = u.cost_to + x.potential() - u.potential();
-                auto b = v.cost_from + v.potential() - y.potential();
-                auto d = a + b + xy.weight;
+            if (v.relevant_from && u.relevant_to) {
+                auto a = u.cost_to + y.potential() - u.potential();
+                auto b = v.cost_from + v.potential() - x.potential();
+                auto d = a + b - xy.weight;
 #ifdef CROSSCHECK
                 auto bf_costs_from_u = bellman_ford(changed_edges_, uv.from);
-                auto bf_costs_from_y = bellman_ford(changed_edges_, xy.to);
-                auto aa = bf_costs_from_u.find(xy.from);
+                auto bf_costs_from_x = bellman_ford(changed_edges_, xy.from);
+                auto aa = bf_costs_from_u.find(xy.to);
                 assert (aa != bf_costs_from_u.end());
                 assert(aa->second == a);
-                auto bb = bf_costs_from_y.find(uv.to);
+                auto bb = bf_costs_from_x.find(uv.to);
                 assert (bb != bf_costs_from_u.end());
                 assert(bb->second == b);
 #endif
@@ -413,19 +448,18 @@ public:
                     return true;
                 }
             }
-            if (u.visited_from && v.visited_to) {
-                auto a = v.cost_to + x.potential() - v.potential();
-                auto b = u.cost_from + u.potential() - y.potential();
-                auto d = a + b + xy.weight;
+            if (u.relevant_from && v.relevant_to) {
+                auto a = v.cost_to + y.potential() - v.potential();
+                auto b = u.cost_from + u.potential() - x.potential();
+                auto d = a + b - xy.weight;
                 if (d < -uv.weight) {
                     active_edges_[uv_idx] = false;
                     // could be skipped if uv.lit is already true
 #ifdef CROSSCHECK
-                    T sum = uv.weight + xy.weight;
+                    T sum = uv.weight - xy.weight;
 #endif
                     std::vector<literal_t> clause;
                     clause.push_back(-uv.lit);
-                    clause.push_back(-xy.lit);
                     // forward
                     for (auto next_edge_idx = u.path_from; next_edge_idx >= 0; ) {
                         auto &next_edge = edges_[next_edge_idx];
@@ -449,6 +483,7 @@ public:
 #ifdef CROSSCHECK
                     assert(sum < 0);
 #endif
+                    // TODO: it is a waste of time to continue here because a backtrack is in order anyway
                     ret = ret && ctl.add_clause(clause) && ctl.propagate();
                     return true;
                 }
@@ -464,14 +499,23 @@ public:
             }
             return false;
         }) - edge_partition_.begin();
-        for (auto &x : visited_from_) { nodes_[x].visited_from = false; }
-        for (auto &x : visited_to_) { nodes_[x].visited_to = false; }
+        for (auto &x : visited_from_) {
+            nodes_[x].visited_from = false;
+            nodes_[x].relevant_from = false;
+        }
+        for (auto &x : visited_to_) {
+            nodes_[x].visited_to = false;
+            nodes_[x].relevant_to = false;
+        }
         visited_from_.clear();
         visited_to_.clear();
         return ret;
     }
     template <class M>
     void dijkstra(int source_idx, std::vector<int> &visited_set, M &m) {
+        // TODO: the paper argues that the SSSP algorithm in "Shortest path algorithms: Engineering aspects" are faster
+        //       than a simple dijkstra. Maybe there are even better ones nowadays.
+        int relevant = 0;
         assert(visited_set.empty() && costs_heap_.empty());
         costs_heap_.push(m, source_idx);
         visited_set.push_back(source_idx);
@@ -480,6 +524,12 @@ public:
         m.path(source_idx) = -1;
         while (!costs_heap_.empty()) {
             auto u_idx = costs_heap_.pop(m);
+            auto tu = m.path(u_idx);
+            if (tu >= 0 && m.relevant(m.from(tu))) {
+                m.relevant(u_idx) = true;
+                --relevant; // just removed a relevant edge from the queue
+            }
+            bool relevant_u = m.relevant(u_idx);
             for (auto &uv_idx : m.out(u_idx)) {
                 auto &uv = edges_[uv_idx];
                 auto v_idx = m.to(uv_idx);
@@ -488,14 +538,30 @@ public:
                 assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
                 if (!m.visited(v_idx) || c < m.cost(v_idx)) {
                     m.cost(v_idx) = c;
-                    m.path(v_idx) = uv_idx;
                     if (!m.visited(v_idx)) {
+                        // node v contributes an edge with a relevant source
+                        if (relevant_u) { ++relevant; }
                         visited_set.push_back(m.to(uv_idx));
                         m.visited(v_idx) = true;
                         costs_heap_.push(m, v_idx);
                     }
-                    else { costs_heap_.decrease(m, m.offset(v_idx)); }
+                    else {
+                        if (m.relevant(m.from(m.path(v_idx)))) {
+                            // node v no longer contributes a relevant edge
+                            if (!relevant_u) { --relevant; }
+                        }
+                        // node v contributes a relevant edge now
+                        else if (relevant_u) { ++relevant; }
+                        costs_heap_.decrease(m, m.offset(v_idx));
+                    }
+                    m.path(v_idx) = uv_idx;
                 }
+            }
+            // removed a relevant node from the queue and there are no edges with relevant sources anymore in the queue
+            // this condition assumes that initially there is exactly one reachable relevant node in the graph
+            if (relevant_u && relevant == 0) {
+                costs_heap_.clear();
+                break;
             }
         }
     }
@@ -587,12 +653,8 @@ private:
     std::vector<int> changed_nodes_;
     std::vector<int> changed_edges_;
     std::vector<std::tuple<int, int, int, int>> changed_trail_;
+    DLStats &stats_;
     int offset_active_edges_;
-};
-
-struct DLStats {
-    Duration time_propagate = Duration{0};
-    Duration time_undo = Duration{0};
 };
 
 struct Stats {
@@ -608,7 +670,7 @@ template <typename T>
 struct DLState {
     DLState(DLStats &stats, const std::vector<Edge<T>> &edges)
         : stats(stats)
-        , dl_graph(edges) {}
+        , dl_graph(stats, edges) {}
     DLStats &stats;
     std::vector<int> edge_trail;
     DifferenceLogicGraph<T> dl_graph;
@@ -844,6 +906,7 @@ int main(int argc, char *argv[]) {
         std::cout << "  total[" << thread << "]: ";
         std::cout << (stat.time_undo + stat.time_propagate).count() << "s\n";
         std::cout << "    propagate: " << stat.time_propagate.count() << "s\n";
+        std::cout << "      dijkstra: " << stat.time_dijkstra.count() << "s\n";
         std::cout << "    undo     : " << stat.time_undo.count() << "s\n";
         ++thread;
     }
