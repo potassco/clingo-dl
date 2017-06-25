@@ -34,6 +34,7 @@
 #include <stdlib.h>
 
 //#define CROSSCHECK
+#define CHECKSOLUTION
 
 using namespace Clingo;
 
@@ -513,7 +514,7 @@ public:
     }
     template <class M>
     void dijkstra(int source_idx, std::vector<int> &visited_set, M &m) {
-        // TODO: the paper argues that the SSSP algorithm in "Shortest path algorithms: Engineering aspects" are faster
+        // TODO: the paper argues that the SSSP algorithm in "Shortest path algorithms: Engineering aspects" is faster
         //       than a simple dijkstra. Maybe there are even better ones nowadays.
         int relevant = 0;
         assert(visited_set.empty() && costs_heap_.empty());
@@ -804,12 +805,24 @@ private:
 
     // undo
 
-void undo(PropagateControl const &ctl, LiteralSpan changes) override {
-    static_cast<void>(changes);
+    void undo(PropagateControl const &ctl, LiteralSpan changes) override {
+        static_cast<void>(changes);
         auto &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_undo};
         state.dl_graph.backtrack();
     }
+
+#if defined(CHECKSOLUTION) || defined(CROSSCHECK)
+    void check(PropagateControl &ctl) override {
+        auto &state = states_[ctl.thread_id()];
+        for (auto &x : edges_) {
+            if (ctl.assignment().is_true(x.lit)) {
+                assert(state.dl_graph.node_value_defined(x.from) && state.dl_graph.node_value_defined(x.to));
+                assert(state.dl_graph.node_value(x.from) - state.dl_graph.node_value(x.to) <= x.weight);
+            }
+        }
+    }
+#endif
 
 private:
     std::vector<DLState<T>> states_;
