@@ -7,12 +7,14 @@ using clingo's C++ API and theory language.
 Usage
 -----
 
-    ./propagator [FILE]... [-- [CLINGO OPTION]...]
+    ./propagator [-p] [FILE]... [-- [CLINGO OPTION]...]
+
+Option `-p` can be used to enable propagation of difference constraints.
 
 Example
 -------
 
-    ./propagator encoding-dl.lp tai4_4_1.lp -- -c n=132
+    ./propagator -p encoding-dl.lp tai4_4_1.lp -- -c n=132
 
 Development
 -----------
