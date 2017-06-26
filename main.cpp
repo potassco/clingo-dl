@@ -76,48 +76,6 @@ struct Edge {
     literal_t lit;
 };
 
-template <class T>
-struct EdgeLessFrom {
-    bool operator()(int a_idx, int b_idx) const {
-        if (a_idx < 0)  {
-            assert(b_idx >= 0);
-            return -a_idx - 1 <= (*edges)[b_idx].to;
-        }
-        if (b_idx < 0)  {
-            assert(a_idx >= 0);
-            return (*edges)[a_idx].to < -b_idx - 1;
-        }
-        auto &a = (*edges)[a_idx];
-        auto &b = (*edges)[b_idx];
-        if (a.to != b.to)         { return a.to < b.to; }
-        if (a.from != b.from)     { return a.from < b.from; }
-        if (a.weight != b.weight) { return a.weight < b.weight; }
-        return a.lit < b.lit;
-    }
-    std::vector<Edge<T>> const *edges;
-};
-
-template <class T>
-struct EdgeLessTo {
-    bool operator()(int a_idx, int b_idx) const {
-        if (a_idx < 0)  {
-            assert(b_idx >= 0);
-            return -a_idx - 1 <= (*edges)[b_idx].from;
-        }
-        if (b_idx < 0)  {
-            assert(a_idx >= 0);
-            return (*edges)[a_idx].from < -b_idx - 1;
-        }
-        auto &a = (*edges)[a_idx];
-        auto &b = (*edges)[b_idx];
-        if (a.from != b.from)     { return a.from < b.from; }
-        if (a.to != b.to)         { return a.to < b.to; }
-        if (a.weight != b.weight) { return a.weight < b.weight; }
-        return a.lit < b.lit;
-    }
-    std::vector<Edge<T>> const *edges;
-};
-
 template <class K, class V>
 std::ostream &operator<<(std::ostream &out, std::unordered_map<K, V> const &map);
 template <class T>
@@ -172,7 +130,7 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> start_;
 };
 
-// NOTE: according to papers 4-ary heaps perform best for dijkstra
+// NOTE: according to papers 4-ary heaps perform best for dijkstra and are quite easy to implement
 class BinaryHeap {
 public:
     template <class M>
@@ -266,26 +224,36 @@ private:
 
 template <class T, class P>
 struct HeapFromM {
-    int &offset(int idx)           { return static_cast<P*>(this)->nodes_[idx].offset; }
-    T &cost(int idx)               { return static_cast<P*>(this)->nodes_[idx].cost_from; }
-    int to(int idx)                { return static_cast<P*>(this)->edges_[idx].to; }
-    int from(int idx)              { return static_cast<P*>(this)->edges_[idx].from; }
-    std::vector<int> &out(int idx) { return static_cast<P*>(this)->nodes_[idx].outgoing; }
-    int &path(int idx)             { return static_cast<P*>(this)->nodes_[idx].path_from; }
-    bool &visited(int idx)         { return static_cast<P*>(this)->nodes_[idx].visited_from; }
-    bool &relevant(int idx)        { return static_cast<P*>(this)->nodes_[idx].relevant_from; }
+    int &offset(int idx)                          { return static_cast<P*>(this)->nodes_[idx].offset; }
+    T &cost(int idx)                              { return static_cast<P*>(this)->nodes_[idx].cost_from; }
+    int to(int idx)                               { return static_cast<P*>(this)->edges_[idx].to; }
+    int from(int idx)                             { return static_cast<P*>(this)->edges_[idx].from; }
+    std::vector<int> &out(int idx)                { return static_cast<P*>(this)->nodes_[idx].outgoing; }
+    int &path(int idx)                            { return static_cast<P*>(this)->nodes_[idx].path_from; }
+    bool &visited(int idx)                        { return static_cast<P*>(this)->nodes_[idx].visited_from; }
+    bool &relevant(int idx)                       { return static_cast<P*>(this)->nodes_[idx].relevant_from; }
+    std::vector<int> &visited_set()               { return static_cast<P*>(this)->visited_from_; }
+    std::vector<int> &candidate_outgoing(int idx) { return static_cast<P*>(this)->nodes_[idx].candidate_outgoing; }
+    std::vector<int> &candidate_incoming(int idx) { return static_cast<P*>(this)->nodes_[idx].candidate_incoming; }
+    void remove_incoming(int idx)                 { static_cast<P*>(this)->edge_states_[idx].removed_incoming = true; }
+    void remove_outgoing(int idx)                 { static_cast<P*>(this)->edge_states_[idx].removed_outgoing = true; }
 };
 
 template <class T, class P>
 struct HeapToM {
-    int &offset(int idx)           { return static_cast<P*>(this)->nodes_[idx].offset; }
-    T &cost(int idx)               { return static_cast<P*>(this)->nodes_[idx].cost_to; }
-    int to(int idx)                { return static_cast<P*>(this)->edges_[idx].from; }
-    int from(int idx)              { return static_cast<P*>(this)->edges_[idx].to; }
-    std::vector<int> &out(int idx) { return static_cast<P*>(this)->nodes_[idx].incoming; }
-    int &path(int idx)             { return static_cast<P*>(this)->nodes_[idx].path_to; }
-    bool &visited(int idx)         { return static_cast<P*>(this)->nodes_[idx].visited_to; }
-    bool &relevant(int idx)        { return static_cast<P*>(this)->nodes_[idx].relevant_to; }
+    int &offset(int idx)                          { return static_cast<P*>(this)->nodes_[idx].offset; }
+    T &cost(int idx)                              { return static_cast<P*>(this)->nodes_[idx].cost_to; }
+    int to(int idx)                               { return static_cast<P*>(this)->edges_[idx].from; }
+    int from(int idx)                             { return static_cast<P*>(this)->edges_[idx].to; }
+    std::vector<int> &out(int idx)                { return static_cast<P*>(this)->nodes_[idx].incoming; }
+    int &path(int idx)                            { return static_cast<P*>(this)->nodes_[idx].path_to; }
+    bool &visited(int idx)                        { return static_cast<P*>(this)->nodes_[idx].visited_to; }
+    bool &relevant(int idx)                       { return static_cast<P*>(this)->nodes_[idx].relevant_to; }
+    std::vector<int> &visited_set()               { return static_cast<P*>(this)->visited_to_; }
+    std::vector<int> &candidate_outgoing(int idx) { return static_cast<P*>(this)->nodes_[idx].candidate_incoming; }
+    std::vector<int> &candidate_incoming(int idx) { return static_cast<P*>(this)->nodes_[idx].candidate_outgoing; }
+    void remove_incoming(int idx)                 { static_cast<P*>(this)->edge_states_[idx].removed_outgoing = true; }
+    void remove_outgoing(int idx)                 { static_cast<P*>(this)->edge_states_[idx].removed_incoming = true; }
 };
 
 template <typename T>
@@ -294,12 +262,15 @@ struct DifferenceLogicNode {
     T potential() const { return potential_stack.back().second; }
     std::vector<int> outgoing;
     std::vector<int> incoming;
+    std::vector<int> candidate_incoming;
+    std::vector<int> candidate_outgoing;
     std::vector<std::pair<int, T>> potential_stack; // [(level,potential)]
     T cost_from = 0;
     T cost_to = 0;
     int offset = 0;
     int path_from = 0;
     int path_to = 0;
+    int degree = 0;
     bool relevant_from = false;
     bool relevant_to = false;
     bool visited_from = false;
@@ -312,6 +283,12 @@ struct DLStats {
     Duration time_dijkstra = Duration{0};
 };
 
+struct EdgeState {
+    uint8_t removed_outgoing : 1;
+    uint8_t removed_incoming : 1;
+    uint8_t active : 1;
+};
+
 template <typename T>
 class DifferenceLogicGraph : private HeapToM<T, DifferenceLogicGraph<T>>, private HeapFromM<T, DifferenceLogicGraph<T>> {
     using HTM = HeapToM<T, DifferenceLogicGraph<T>>;
@@ -321,16 +298,12 @@ class DifferenceLogicGraph : private HeapToM<T, DifferenceLogicGraph<T>>, privat
 public:
     DifferenceLogicGraph(DLStats &stats, const std::vector<Edge<T>> &edges)
         : edges_(edges)
-        , candidate_from_(EdgeLessFrom<T>{&edges})
-        , candidate_to_(EdgeLessTo<T>{&edges})
         , stats_(stats) {
+        edge_states_.resize(edges_.size(), {1, 1, 1});
         for (int i = 0; i < numeric_cast<int>(edges_.size()); ++i) {
-            edge_partition_.emplace_back(i);
-            candidate_from_.insert(i);
-            candidate_to_.insert(i);
             ensure_index(nodes_, std::max(edges_[i].from, edges_[i].to));
+            add_candidate_edge(i);
         }
-        active_edges_.resize(edge_partition_.size(), true);
     }
 
     bool empty() const { return nodes_.empty(); }
@@ -339,13 +312,13 @@ public:
     T node_value(int idx) const { return -nodes_[idx].potential(); }
 
     bool edge_is_active(int edge_idx) const {
-        return active_edges_[edge_idx];
+        return edge_states_[edge_idx].active;
     }
 
     void ensure_decision_level(int level) {
         // initialize the trail
         if (changed_trail_.empty() || std::get<0>(changed_trail_.back()) < level) {
-            changed_trail_.emplace_back(level, changed_nodes_.size(), changed_edges_.size(), inactive_.size());
+            changed_trail_.emplace_back(level, changed_nodes_.size(), changed_edges_.size(), inactive_edges_.size());
         }
     }
 
@@ -441,139 +414,23 @@ public:
     bool propagate(int xy_idx, Clingo::PropagateControl &ctl) {
         static int props = 0;
         ++props;
-        assert(candidate_from_.size() == candidate_to_.size());
-        assert(candidate_from_.size() + inactive_.size() == edges_.size());
-        candidate_from_.erase(xy_idx);
-        candidate_to_.erase(xy_idx);
-        inactive_.push_back(xy_idx);
-        bool ret = true;
+        remove_candidate_edge(xy_idx);
         auto &xy = edges_[xy_idx];
         auto &x = nodes_[xy.from];
         auto &y = nodes_[xy.to];
         x.relevant_to = true;
         y.relevant_from = true;
+        int relevant_from;
+        int relevant_to;
         {
             Timer t{stats_.time_dijkstra};
-            dijkstra(xy.from, visited_from_, *static_cast<HFM*>(this));
-            dijkstra(xy.to, visited_to_, *static_cast<HTM*>(this));
+            relevant_from = dijkstra(xy.from, visited_from_, *static_cast<HFM*>(this));
+            relevant_to = dijkstra(xy.to, visited_to_, *static_cast<HTM*>(this));
         }
 
-        // TODO: this does not exploit the in out/degrees of the two sets properly
-        //         the active graph should maintain a degree for each node
-        //         in dijkstra's algorithm the degrees of relevant nodes can then be summed up
-        //       I might want to template this to get all the annoying ifs away
-        //       it is probably better to switch to arrays here than use sets
-        //         only the deletion in the opposite adjacency list is a little tricky
-        //         but can be done in amortized constant time by simply only deleting when passing over the array
-        //         this needs a second set of active edges
-        bool from = visited_from_.size() < visited_to_.size();
-        for (auto &node : from ? visited_from_ : visited_to_) {
-            if (from ? nodes_[node].relevant_from : nodes_[node].relevant_to) {
-                auto lower = (from ? candidate_from_.lower_bound(-node-1) : candidate_to_.lower_bound(-node-1));
-                while (lower != (from ? candidate_from_.end() : candidate_to_.end()) && (from ? edges_[*lower].to : edges_[*lower].from) == node) {
-                    auto uv_idx = *lower;
-                    auto &uv = edges_[uv_idx];
-                    auto &u = nodes_[uv.from];
-                    auto &v = nodes_[uv.to];
-                    ++lower;
-                    assert (!from ? u.relevant_to : v.relevant_from);
-                    if (from ? u.relevant_to : v.relevant_from) {
-                        assert(v.relevant_from && u.relevant_to);
-                        auto a = u.cost_to + y.potential() - u.potential();
-                        auto b = v.cost_from + v.potential() - x.potential();
-                        auto d = a + b - xy.weight;
-#ifdef CROSSCHECK
-                        auto bf_costs_from_u = bellman_ford(changed_edges_, uv.from);
-                        auto bf_costs_from_x = bellman_ford(changed_edges_, xy.from);
-                        auto aa = bf_costs_from_u.find(xy.to);
-                        assert (aa != bf_costs_from_u.end());
-                        assert(aa->second == a);
-                        auto bb = bf_costs_from_x.find(uv.to);
-                        assert (bb != bf_costs_from_u.end());
-                        assert(bb->second == b);
-#endif
-                        if (d <= uv.weight) {
-                            active_edges_[uv_idx] = false;
-#ifdef CROSSCHECK
-                            auto edges = changed_edges_;
-                            edges.emplace_back(uv_idx);
-                            // NOTE: throws if there is a cycle
-                            try         { bellman_ford(changed_edges_, uv.from); }
-                            catch (...) { assert(false && "edge is implied but lead to a conflict :("); }
-#endif
-                            candidate_from_.erase(uv_idx);
-                            candidate_to_.erase(uv_idx);
-                            inactive_.push_back(uv_idx);
-                        }
-                    }
-                }
-                lower = (from ? candidate_to_.lower_bound(-node-1) : candidate_from_.lower_bound(-node-1));
-                while (lower != (from ? candidate_to_.end() : candidate_from_.end()) && (from ? edges_[*lower].from : edges_[*lower].to) == node) {
-                    auto uv_idx = *lower;
-                    auto &uv = edges_[uv_idx];
-                    auto &u = nodes_[uv.from];
-                    auto &v = nodes_[uv.to];
-                    ++lower;
-                    assert (!from ? v.relevant_to : u.relevant_from);
-                    if (from ? v.relevant_to : u.relevant_from) {
-                        assert(u.relevant_from && v.relevant_to);
-                        auto a = v.cost_to + y.potential() - v.potential();
-                        auto b = u.cost_from + u.potential() - x.potential();
-                        auto d = a + b - xy.weight;
-                        if (d < -uv.weight) {
-                            if (!ctl.assignment().is_false(uv.lit)) {
-#ifdef CROSSCHECK
-                                T sum = uv.weight - xy.weight;
-#endif
-                                std::vector<literal_t> clause;
-                                clause.push_back(-uv.lit);
-                                // forward
-                                for (auto next_edge_idx = u.path_from; next_edge_idx >= 0; ) {
-                                    auto &next_edge = edges_[next_edge_idx];
-                                    auto &next_node = nodes_[next_edge.from];
-                                    clause.push_back(-next_edge.lit);
-#ifdef CROSSCHECK
-                                    sum+= next_edge.weight;
-#endif
-                                    next_edge_idx = next_node.path_from;
-                                }
-                                // backward
-                                for (auto next_edge_idx = v.path_to; next_edge_idx >= 0; ) {
-                                    auto &next_edge = edges_[next_edge_idx];
-                                    auto &next_node = nodes_[next_edge.to];
-                                    clause.push_back(-next_edge.lit);
-#ifdef CROSSCHECK
-                                    sum+= next_edge.weight;
-#endif
-                                    next_edge_idx = next_node.path_to;
-                                }
-#ifdef CROSSCHECK
-                                assert(sum < 0);
-#endif
-                                if (!(ret = ctl.add_clause(clause) && ctl.propagate())) {
-                                    break;
-                                }
-                            }
-                            active_edges_[uv_idx] = false;
-                            candidate_from_.erase(uv_idx);
-                            candidate_to_.erase(uv_idx);
-                            inactive_.push_back(uv_idx);
-                        }
-#ifdef CROSSCHECK
-                        else {
-                            auto edges = changed_edges_;
-                            edges.emplace_back(uv_idx);
-                            // NOTE: throws if there is a cycle
-                            try         { bellman_ford(changed_edges_, uv.from); }
-                            catch (...) { assert(false && "edge must not cause a conflict"); }
-                        }
-#endif
-                    }
-                }
-
-            }
-            if (!ret) { break; }
-        }
+        bool ret = relevant_from < relevant_to
+            ? propagate_edges(*static_cast<HFM*>(this), ctl, xy_idx)
+            : propagate_edges(*static_cast<HTM*>(this), ctl, xy_idx);
 
         for (auto &x : visited_from_) {
             nodes_[x].visited_from = false;
@@ -587,11 +444,191 @@ public:
         visited_to_.clear();
         return ret;
     }
+
+    void backtrack() {
+        for (int count = changed_nodes_.size() - std::get<1>(changed_trail_.back()); count > 0; --count) {
+            auto &node = nodes_[changed_nodes_.back()];
+            node.potential_stack.pop_back();
+            changed_nodes_.pop_back();
+        }
+        for (int count = changed_edges_.size() - std::get<2>(changed_trail_.back()); count > 0; --count) {
+            auto &edge = edges_[changed_edges_.back()];
+            nodes_[edge.from].outgoing.pop_back();
+            nodes_[edge.to].incoming.pop_back();
+            changed_edges_.pop_back();
+        }
+        int n = std::get<3>(changed_trail_.back());
+        for (auto i = inactive_edges_.begin() + n, e = inactive_edges_.end(); i < e; ++i) {
+            add_candidate_edge(*i);
+        }
+        inactive_edges_.resize(n);
+        changed_trail_.pop_back();
+    }
+
+private:
+    void add_candidate_edge(int uv_idx) {
+        auto &uv = edges_[uv_idx];
+        auto &u = nodes_[uv.from];
+        auto &v = nodes_[uv.to];
+        ++u.degree; ++v.degree;
+        edge_states_[uv_idx].active = true;
+        if (edge_states_[uv_idx].removed_outgoing) {
+            edge_states_[uv_idx].removed_outgoing = false;
+            u.candidate_outgoing.emplace_back(uv_idx);
+        }
+        if (edge_states_[uv_idx].removed_incoming) {
+            edge_states_[uv_idx].removed_incoming = false;
+            v.candidate_incoming.emplace_back(uv_idx);
+        }
+    }
+
+    void remove_candidate_edge(int uv_idx) {
+        auto &uv = edges_[uv_idx];
+        auto &u = nodes_[uv.from];
+        auto &v = nodes_[uv.to];
+        --u.degree;
+        --v.degree;
+        inactive_edges_.push_back(uv_idx);
+        edge_states_[uv_idx].active = false;
+    }
+
+    bool propagate_edge_true(int uv_idx, int xy_idx) {
+        auto &uv = edges_[uv_idx];
+        auto &u = nodes_[uv.from];
+        auto &v = nodes_[uv.to];
+        assert(u.relevant_to || v.relevant_from);
+
+        if (u.relevant_to && v.relevant_from) {
+            auto &xy = edges_[xy_idx];
+            auto &x = nodes_[xy.from];
+            auto &y = nodes_[xy.to];
+
+            auto a = u.cost_to + y.potential() - u.potential();
+            auto b = v.cost_from + v.potential() - x.potential();
+            auto d = a + b - xy.weight;
+#ifdef CROSSCHECK
+            auto bf_costs_from_u = bellman_ford(changed_edges_, uv.from);
+            auto bf_costs_from_x = bellman_ford(changed_edges_, xy.from);
+            auto aa = bf_costs_from_u.find(xy.to);
+            assert (aa != bf_costs_from_u.end());
+            assert(aa->second == a);
+            auto bb = bf_costs_from_x.find(uv.to);
+            assert (bb != bf_costs_from_u.end());
+            assert(bb->second == b);
+#endif
+            if (d <= uv.weight) {
+#ifdef CROSSCHECK
+                auto edges = changed_edges_;
+                edges.emplace_back(uv_idx);
+                // NOTE: throws if there is a cycle
+                try         { bellman_ford(changed_edges_, uv.from); }
+                catch (...) { assert(false && "edge is implied but lead to a conflict :("); }
+#endif
+                remove_candidate_edge(uv_idx);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool propagate_edge_false(Clingo::PropagateControl &ctl, int uv_idx, int xy_idx, bool &ret) {
+        auto &uv = edges_[uv_idx];
+        auto &u = nodes_[uv.from];
+        auto &v = nodes_[uv.to];
+        assert (v.relevant_to || u.relevant_from);
+
+        if (v.relevant_to && u.relevant_from) {
+            auto &xy = edges_[xy_idx];
+            auto &x = nodes_[xy.from];
+            auto &y = nodes_[xy.to];
+
+            auto a = v.cost_to + y.potential() - v.potential();
+            auto b = u.cost_from + u.potential() - x.potential();
+            auto d = a + b - xy.weight;
+            if (d < -uv.weight) {
+                if (!ctl.assignment().is_false(uv.lit)) {
+#ifdef CROSSCHECK
+                    T sum = uv.weight - xy.weight;
+#endif
+                    std::vector<literal_t> clause;
+                    clause.push_back(-uv.lit);
+                    // forward
+                    for (auto next_edge_idx = u.path_from; next_edge_idx >= 0; ) {
+                        auto &next_edge = edges_[next_edge_idx];
+                        auto &next_node = nodes_[next_edge.from];
+                        clause.push_back(-next_edge.lit);
+#ifdef CROSSCHECK
+                        sum+= next_edge.weight;
+#endif
+                        next_edge_idx = next_node.path_from;
+                    }
+                    // backward
+                    for (auto next_edge_idx = v.path_to; next_edge_idx >= 0; ) {
+                        auto &next_edge = edges_[next_edge_idx];
+                        auto &next_node = nodes_[next_edge.to];
+                        clause.push_back(-next_edge.lit);
+#ifdef CROSSCHECK
+                        sum+= next_edge.weight;
+#endif
+                        next_edge_idx = next_node.path_to;
+                    }
+#ifdef CROSSCHECK
+                    assert(sum < 0);
+#endif
+                    if (!(ret = ctl.add_clause(clause) && ctl.propagate())) {
+                        return false;
+                    }
+                }
+                remove_candidate_edge(uv_idx);
+                return true;
+            }
+#ifdef CROSSCHECK
+            else {
+                auto edges = changed_edges_;
+                edges.emplace_back(uv_idx);
+                // NOTE: throws if there is a cycle
+                try         { bellman_ford(changed_edges_, uv.from); }
+                catch (...) { assert(false && "edge must not cause a conflict"); }
+            }
+#endif
+        }
+        return false;
+    }
+
     template <class M>
-    void dijkstra(int source_idx, std::vector<int> &visited_set, M &m) {
+    bool propagate_edges(M &m, Clingo::PropagateControl &ctl, int xy_idx) {
+        for (auto &node : m.visited_set()) {
+            if (m.relevant(node)) {
+                auto &in = m.candidate_incoming(node);
+                in.resize(std::remove_if(in.begin(), in.end(), [&](int uv_idx) {
+                    if (!edge_states_[uv_idx].active || propagate_edge_true(uv_idx, xy_idx)) {
+                        m.remove_incoming(uv_idx);
+                        return true;
+                    }
+                    return false;
+                }) - in.begin());
+                bool ret = true;
+                auto &out = m.candidate_outgoing(node);
+                out.resize(std::remove_if(out.begin(), out.end(), [&](int uv_idx) {
+                    if (!ret) { return false; }
+                    if (!edge_states_[uv_idx].active || propagate_edge_false(ctl, uv_idx, xy_idx, ret)) {
+                        m.remove_outgoing(uv_idx);
+                        return true;
+                    }
+                    return false;
+                }) - out.begin());
+                if (!ret) { return false; }
+            }
+        }
+        return true;
+    }
+
+    template <class M>
+    int dijkstra(int source_idx, std::vector<int> &visited_set, M &m) {
         // TODO: the paper argues that the SSSP algorithm in "Shortest path algorithms: Engineering aspects" is faster
         //       than a simple dijkstra. Maybe there are even better ones nowadays.
         int relevant = 0;
+        int relevant_degree = 0;
         assert(visited_set.empty() && costs_heap_.empty());
         costs_heap_.push(m, source_idx);
         visited_set.push_back(source_idx);
@@ -606,6 +643,7 @@ public:
                 --relevant; // just removed a relevant edge from the queue
             }
             bool relevant_u = m.relevant(u_idx);
+            if (relevant_u) { relevant_degree += nodes_[u_idx].degree; }
             for (auto &uv_idx : m.out(u_idx)) {
                 auto &uv = edges_[uv_idx];
                 auto v_idx = m.to(uv_idx);
@@ -640,6 +678,7 @@ public:
                 break;
             }
         }
+        return relevant_degree;
     }
 
 #ifdef CROSSCHECK
@@ -683,29 +722,6 @@ public:
     }
 #endif
 
-    void backtrack() {
-        for (int count = changed_nodes_.size() - std::get<1>(changed_trail_.back()); count > 0; --count) {
-            auto &node = nodes_[changed_nodes_.back()];
-            node.potential_stack.pop_back();
-            changed_nodes_.pop_back();
-        }
-        for (int count = changed_edges_.size() - std::get<2>(changed_trail_.back()); count > 0; --count) {
-            auto &edge = edges_[changed_edges_.back()];
-            nodes_[edge.from].outgoing.pop_back();
-            nodes_[edge.to].incoming.pop_back();
-            changed_edges_.pop_back();
-        }
-        int n = std::get<3>(changed_trail_.back());
-        for (auto i = inactive_.begin() + n, e = inactive_.end(); i < e; ++i) {
-            active_edges_[*i] = true;
-            candidate_from_.insert(*i);
-            candidate_to_.insert(*i);
-        }
-        inactive_.resize(n);
-        changed_trail_.pop_back();
-    }
-
-private:
     void set_potential(DifferenceLogicNode<T> &node, int level, T potential) {
         if (!node.defined() || node.potential_stack.back().first < level) {
             node.potential_stack.emplace_back(level, potential);
@@ -726,15 +742,12 @@ private:
     std::vector<int> visited_from_;
     std::vector<int> visited_to_;
     std::vector<Edge<T>> const &edges_;
-    std::vector<int> edge_partition_;
-    std::vector<bool> active_edges_;
     std::vector<DifferenceLogicNode<T>> nodes_;
     std::vector<int> changed_nodes_;
     std::vector<int> changed_edges_;
     std::vector<std::tuple<int, int, int, int>> changed_trail_;
-    std::set<int, EdgeLessFrom<T>> candidate_from_;
-    std::set<int, EdgeLessTo<T>> candidate_to_;
-    std::vector<int> inactive_;
+    std::vector<int> inactive_edges_;
+    std::vector<EdgeState> edge_states_;
     DLStats &stats_;
 };
 
@@ -897,8 +910,11 @@ private:
         auto &state = states_[ctl.thread_id()];
         for (auto &x : edges_) {
             if (ctl.assignment().is_true(x.lit)) {
-                assert(state.dl_graph.node_value_defined(x.from) && state.dl_graph.node_value_defined(x.to));
-                assert(state.dl_graph.node_value(x.from) - state.dl_graph.node_value(x.to) <= x.weight);
+                if (!state.dl_graph.node_value_defined(x.from) ||
+                    !state.dl_graph.node_value_defined(x.to) ||
+                    !(state.dl_graph.node_value(x.from) - state.dl_graph.node_value(x.to) <= x.weight)) {
+                    throw std::logic_error("not a valid solution");
+                }
             }
         }
     }
