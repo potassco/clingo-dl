@@ -868,6 +868,11 @@ private:
         auto id = numeric_cast<int>(edges_.size());
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
+        // TODO: the other phase of the literal should be watched to
+        //       this can be used to remove edges from the active set
+        //       if the corresponding literal becomes false
+        //       this has quite some potential
+        //       if only a small subset of difference constraints can be true!
         init.add_watch(lit);
         if (strict_) {
             auto id = numeric_cast<int>(edges_.size());
