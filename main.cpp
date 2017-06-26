@@ -420,6 +420,8 @@ public:
         auto &y = nodes_[xy.to];
         x.relevant_to = true;
         y.relevant_from = true;
+        // TODO: this could be split into 4 integers
+        //       two for the forward and two for the backward propagation
         int relevant_from;
         int relevant_to;
         {
