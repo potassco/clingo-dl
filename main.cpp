@@ -427,6 +427,32 @@ public:
             relevant_from = dijkstra(xy.from, visited_from_, *static_cast<HFM*>(this));
             relevant_to = dijkstra(xy.to, visited_to_, *static_cast<HTM*>(this));
         }
+#ifdef CROSSCHECK
+        int check_relevant_from = 0;
+        for (auto &node : visited_from_) {
+            if (nodes_[node].relevant_from) {
+                for (auto &edge : nodes_[node].candidate_incoming) {
+                    if (edge_states_[edge].active) { ++check_relevant_from; }
+                }
+                for (auto &edge : nodes_[node].candidate_outgoing) {
+                    if (edge_states_[edge].active) { ++check_relevant_from; }
+                }
+            }
+        }
+        int check_relevant_to = 0;
+        for (auto &node : visited_to_) {
+            if (nodes_[node].relevant_to) {
+                for (auto &edge : nodes_[node].candidate_incoming) {
+                    if (edge_states_[edge].active) { ++check_relevant_to; }
+                }
+                for (auto &edge : nodes_[node].candidate_outgoing) {
+                    if (edge_states_[edge].active) { ++check_relevant_to; }
+                }
+            }
+        }
+        assert(relevant_from == check_relevant_from);
+        assert(relevant_to == check_relevant_to);
+#endif
 
         bool ret = relevant_from < relevant_to
             ? propagate_edges(*static_cast<HFM*>(this), ctl, xy_idx)
@@ -468,16 +494,17 @@ public:
 private:
     void add_candidate_edge(int uv_idx) {
         auto &uv = edges_[uv_idx];
+        auto &uv_state = edge_states_[uv_idx];
         auto &u = nodes_[uv.from];
         auto &v = nodes_[uv.to];
         ++u.degree; ++v.degree;
-        edge_states_[uv_idx].active = true;
-        if (edge_states_[uv_idx].removed_outgoing) {
-            edge_states_[uv_idx].removed_outgoing = false;
+        uv_state.active = true;
+        if (uv_state.removed_outgoing) {
+            uv_state.removed_outgoing = false;
             u.candidate_outgoing.emplace_back(uv_idx);
         }
-        if (edge_states_[uv_idx].removed_incoming) {
-            edge_states_[uv_idx].removed_incoming = false;
+        if (uv_state.removed_incoming) {
+            uv_state.removed_incoming = false;
             v.candidate_incoming.emplace_back(uv_idx);
         }
     }
