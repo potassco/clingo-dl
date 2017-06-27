@@ -270,7 +270,8 @@ struct DifferenceLogicNode {
     int offset = 0;
     int path_from = 0;
     int path_to = 0;
-    int degree = 0;
+    int degree_out = 0;
+    int degree_in = 0;
     bool relevant_from = false;
     bool relevant_to = false;
     bool visited_from = false;
@@ -299,7 +300,7 @@ public:
     DifferenceLogicGraph(DLStats &stats, const std::vector<Edge<T>> &edges)
         : edges_(edges)
         , stats_(stats) {
-        edge_states_.resize(edges_.size(), {1, 1, 1});
+        edge_states_.resize(edges_.size(), {1, 1, 0});
         for (int i = 0; i < numeric_cast<int>(edges_.size()); ++i) {
             ensure_index(nodes_, std::max(edges_[i].from, edges_[i].to));
             add_candidate_edge(i);
@@ -422,43 +423,49 @@ public:
         y.relevant_from = true;
         // TODO: this could be split into 4 integers
         //       two for the forward and two for the backward propagation
-        int relevant_from;
-        int relevant_to;
+        int num_relevant_out_from;
+        int num_relevant_in_from;
+        int num_relevant_out_to;
+        int num_relevant_in_to;
         {
             Timer t{stats_.time_dijkstra};
-            relevant_from = dijkstra(xy.from, visited_from_, *static_cast<HFM*>(this));
-            relevant_to = dijkstra(xy.to, visited_to_, *static_cast<HTM*>(this));
+            std::tie(num_relevant_out_from, num_relevant_in_from) = dijkstra(xy.from, visited_from_, *static_cast<HFM*>(this));
+            std::tie(num_relevant_out_to, num_relevant_in_to) = dijkstra(xy.to, visited_to_, *static_cast<HTM*>(this));
         }
 #ifdef CROSSCHECK
-        int check_relevant_from = 0;
+        int check_relevant_out_from = 0, check_relevant_in_from = 0;
         for (auto &node : visited_from_) {
             if (nodes_[node].relevant_from) {
                 for (auto &edge : nodes_[node].candidate_incoming) {
-                    if (edge_states_[edge].active) { ++check_relevant_from; }
+                    if (edge_states_[edge].active) { ++check_relevant_in_from; }
                 }
                 for (auto &edge : nodes_[node].candidate_outgoing) {
-                    if (edge_states_[edge].active) { ++check_relevant_from; }
+                    if (edge_states_[edge].active) { ++check_relevant_out_from; }
                 }
             }
         }
-        int check_relevant_to = 0;
+        assert(num_relevant_out_from == check_relevant_out_from);
+        assert(num_relevant_in_from == check_relevant_in_from);
+        int check_relevant_out_to = 0, check_relevant_in_to = 0;
         for (auto &node : visited_to_) {
             if (nodes_[node].relevant_to) {
                 for (auto &edge : nodes_[node].candidate_incoming) {
-                    if (edge_states_[edge].active) { ++check_relevant_to; }
+                    if (edge_states_[edge].active) { ++check_relevant_in_to; }
                 }
                 for (auto &edge : nodes_[node].candidate_outgoing) {
-                    if (edge_states_[edge].active) { ++check_relevant_to; }
+                    if (edge_states_[edge].active) { ++check_relevant_out_to; }
                 }
             }
         }
-        assert(relevant_from == check_relevant_from);
-        assert(relevant_to == check_relevant_to);
+        assert(num_relevant_out_to == check_relevant_out_to);
+        assert(num_relevant_in_to == check_relevant_in_to);
 #endif
 
-        bool ret = relevant_from < relevant_to
-            ? propagate_edges(*static_cast<HFM*>(this), ctl, xy_idx)
-            : propagate_edges(*static_cast<HTM*>(this), ctl, xy_idx);
+        bool forward_from  = num_relevant_in_from < num_relevant_out_to;
+        bool backward_from = num_relevant_out_from < num_relevant_in_to;
+
+        bool ret = propagate_edges(*static_cast<HFM*>(this), ctl, xy_idx,  forward_from,  backward_from) &&
+                   propagate_edges(*static_cast<HTM*>(this), ctl, xy_idx, !forward_from, !backward_from);
 
         for (auto &x : visited_from_) {
             nodes_[x].visited_from = false;
@@ -497,9 +504,10 @@ public:
         auto &uv = edges_[uv_idx];
         auto &u = nodes_[uv.from];
         auto &v = nodes_[uv.to];
-        --u.degree;
-        --v.degree;
+        --u.degree_out;
+        --v.degree_in;
         inactive_edges_.push_back(uv_idx);
+        assert(edge_states_[uv_idx].active);
         edge_states_[uv_idx].active = false;
     }
 
@@ -509,7 +517,8 @@ private:
         auto &uv_state = edge_states_[uv_idx];
         auto &u = nodes_[uv.from];
         auto &v = nodes_[uv.to];
-        ++u.degree; ++v.degree;
+        ++u.degree_out; ++v.degree_in;
+        assert(!uv_state.active);
         uv_state.active = true;
         if (uv_state.removed_outgoing) {
             uv_state.removed_outgoing = false;
@@ -625,39 +634,44 @@ private:
     }
 
     template <class M>
-    bool propagate_edges(M &m, Clingo::PropagateControl &ctl, int xy_idx) {
+    bool propagate_edges(M &m, Clingo::PropagateControl &ctl, int xy_idx, bool forward, bool backward) {
+        if (!forward && !backward) { return true; }
         for (auto &node : m.visited_set()) {
             if (m.relevant(node)) {
-                auto &in = m.candidate_incoming(node);
-                in.resize(std::remove_if(in.begin(), in.end(), [&](int uv_idx) {
-                    if (!edge_states_[uv_idx].active || propagate_edge_true(uv_idx, xy_idx)) {
-                        m.remove_incoming(uv_idx);
-                        return true;
-                    }
-                    return false;
-                }) - in.begin());
-                bool ret = true;
-                auto &out = m.candidate_outgoing(node);
-                out.resize(std::remove_if(out.begin(), out.end(), [&](int uv_idx) {
+                if (forward) {
+                    auto &in = m.candidate_incoming(node);
+                    in.resize(std::remove_if(in.begin(), in.end(), [&](int uv_idx) {
+                        if (!edge_states_[uv_idx].active || propagate_edge_true(uv_idx, xy_idx)) {
+                            m.remove_incoming(uv_idx);
+                            return true;
+                        }
+                        return false;
+                    }) - in.begin());
+                }
+                if (backward) {
+                    bool ret = true;
+                    auto &out = m.candidate_outgoing(node);
+                    out.resize(std::remove_if(out.begin(), out.end(), [&](int uv_idx) {
+                        if (!ret) { return false; }
+                        if (!edge_states_[uv_idx].active || propagate_edge_false(ctl, uv_idx, xy_idx, ret)) {
+                            m.remove_outgoing(uv_idx);
+                            return true;
+                        }
+                        return false;
+                    }) - out.begin());
                     if (!ret) { return false; }
-                    if (!edge_states_[uv_idx].active || propagate_edge_false(ctl, uv_idx, xy_idx, ret)) {
-                        m.remove_outgoing(uv_idx);
-                        return true;
-                    }
-                    return false;
-                }) - out.begin());
-                if (!ret) { return false; }
+                }
             }
         }
         return true;
     }
 
     template <class M>
-    int dijkstra(int source_idx, std::vector<int> &visited_set, M &m) {
+    std::pair<int, int> dijkstra(int source_idx, std::vector<int> &visited_set, M &m) {
         // TODO: the paper argues that the SSSP algorithm in "Shortest path algorithms: Engineering aspects" is faster
         //       than a simple dijkstra. Maybe there are even better ones nowadays.
         int relevant = 0;
-        int relevant_degree = 0;
+        int relevant_degree_out = 0, relevant_degree_in = 0;
         assert(visited_set.empty() && costs_heap_.empty());
         costs_heap_.push(m, source_idx);
         visited_set.push_back(source_idx);
@@ -672,7 +686,10 @@ private:
                 --relevant; // just removed a relevant edge from the queue
             }
             bool relevant_u = m.relevant(u_idx);
-            if (relevant_u) { relevant_degree += nodes_[u_idx].degree; }
+            if (relevant_u) {
+                relevant_degree_out += nodes_[u_idx].degree_out;
+                relevant_degree_in  += nodes_[u_idx].degree_in;
+            }
             for (auto &uv_idx : m.out(u_idx)) {
                 auto &uv = edges_[uv_idx];
                 auto v_idx = m.to(uv_idx);
@@ -707,7 +724,7 @@ private:
                 break;
             }
         }
-        return relevant_degree;
+        return {relevant_degree_out, relevant_degree_in};
     }
 
 #ifdef CROSSCHECK
