@@ -493,6 +493,16 @@ public:
         changed_trail_.pop_back();
     }
 
+    void remove_candidate_edge(int uv_idx) {
+        auto &uv = edges_[uv_idx];
+        auto &u = nodes_[uv.from];
+        auto &v = nodes_[uv.to];
+        --u.degree;
+        --v.degree;
+        inactive_edges_.push_back(uv_idx);
+        edge_states_[uv_idx].active = false;
+    }
+
 private:
     void add_candidate_edge(int uv_idx) {
         auto &uv = edges_[uv_idx];
@@ -509,16 +519,6 @@ private:
             uv_state.removed_incoming = false;
             v.candidate_incoming.emplace_back(uv_idx);
         }
-    }
-
-    void remove_candidate_edge(int uv_idx) {
-        auto &uv = edges_[uv_idx];
-        auto &u = nodes_[uv.from];
-        auto &v = nodes_[uv.to];
-        --u.degree;
-        --v.degree;
-        inactive_edges_.push_back(uv_idx);
-        edge_states_[uv_idx].active = false;
     }
 
     bool propagate_edge_true(int uv_idx, int xy_idx) {
@@ -868,17 +868,17 @@ private:
         auto id = numeric_cast<int>(edges_.size());
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
-        // TODO: the other phase of the literal should be watched to
-        //       this can be used to remove edges from the active set
-        //       if the corresponding literal becomes false
-        //       this has quite some potential
-        //       if only a small subset of difference constraints can be true!
         init.add_watch(lit);
+        if (propagate_) {
+            false_lit_to_edges_.emplace(-lit, id);
+            init.add_watch(-lit);
+        }
         if (strict_) {
             auto id = numeric_cast<int>(edges_.size());
             edges_.push_back({v_id, u_id, -weight - 1, -lit});
             lit_to_edges_.emplace(-lit, id);
-            init.add_watch(-lit);
+            if (propagate_) { false_lit_to_edges_.emplace(lit, id); }
+            else            { init.add_watch(-lit); }
         }
     }
 
@@ -907,6 +907,9 @@ private:
         // NOTE: vector copy only because clasp bug
         //       can only be triggered with propagation
         for (auto lit : std::vector<Clingo::literal_t>(changes.begin(), changes.end())) {
+            for (auto it = false_lit_to_edges_.find(lit), ie = false_lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
+                state.dl_graph.remove_candidate_edge(it->second);
+            }
             for (auto it = lit_to_edges_.find(lit), ie = lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
                 if (state.dl_graph.edge_is_active(it->second)) {
                     auto neg_cycle = state.dl_graph.add_edge(it->second);
@@ -957,6 +960,7 @@ private:
 private:
     std::vector<DLState<T>> states_;
     std::unordered_multimap<literal_t, int> lit_to_edges_;
+    std::unordered_multimap<literal_t, int> false_lit_to_edges_;
     std::vector<Edge<T>> edges_;
     std::vector<std::reference_wrapper<const std::string>> vert_map_;
     std::unordered_map<std::string, int> vert_map_inv_;
