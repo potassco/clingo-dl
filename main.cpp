@@ -906,9 +906,12 @@ private:
         state.dl_graph.ensure_decision_level(level);
         // NOTE: vector copy only because clasp bug
         //       can only be triggered with propagation
+        //       (will be fixed with 5.2.1)
         for (auto lit : std::vector<Clingo::literal_t>(changes.begin(), changes.end())) {
             for (auto it = false_lit_to_edges_.find(lit), ie = false_lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
-                state.dl_graph.remove_candidate_edge(it->second);
+                if (state.dl_graph.edge_is_active(it->second)) {
+                    state.dl_graph.remove_candidate_edge(it->second);
+                }
             }
             for (auto it = lit_to_edges_.find(lit), ie = lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
                 if (state.dl_graph.edge_is_active(it->second)) {
