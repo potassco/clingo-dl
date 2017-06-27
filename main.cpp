@@ -282,6 +282,8 @@ struct DLStats {
     Duration time_propagate = Duration{0};
     Duration time_undo = Duration{0};
     Duration time_dijkstra = Duration{0};
+    uint64_t true_edges;
+    uint64_t false_edges;
 };
 
 struct EdgeState {
@@ -555,6 +557,7 @@ private:
             assert(bb->second == b);
 #endif
             if (d <= uv.weight) {
+                ++stats_.true_edges;
 #ifdef CROSSCHECK
                 auto edges = changed_edges_;
                 edges.emplace_back(uv_idx);
@@ -584,6 +587,7 @@ private:
             auto b = u.cost_from + u.potential() - x.potential();
             auto d = a + b - xy.weight;
             if (d < -uv.weight) {
+                ++stats_.false_edges;
                 if (!ctl.assignment().is_false(uv.lit)) {
 #ifdef CROSSCHECK
                     T sum = uv.weight - xy.weight;
@@ -1073,7 +1077,9 @@ int main(int argc, char *argv[]) {
         std::cout << "  total[" << thread << "]: ";
         std::cout << (stat.time_undo + stat.time_propagate).count() << "s\n";
         std::cout << "    propagate: " << stat.time_propagate.count() << "s\n";
-        std::cout << "      dijkstra: " << stat.time_dijkstra.count() << "s\n";
+        std::cout << "      dijkstra   : " << stat.time_dijkstra.count() << "s\n";
+        std::cout << "      true edges : " << stat.true_edges << "\n";
+        std::cout << "      false edges: " << stat.false_edges << "\n";
         std::cout << "    undo     : " << stat.time_undo.count() << "s\n";
         ++thread;
     }
