@@ -1056,6 +1056,7 @@ int main(int argc, char *argv[]) {
 
         if (rdl) {
             if (strict) {
+                // NOTE: could be implemented by introducing and epsilon
                 std::cout << "Real difference logic not available with strict semantics!" << std::endl;
                 exit(EXIT_FAILURE);
             }
