@@ -130,8 +130,8 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> start_;
 };
 
-// NOTE: according to papers 4-ary heaps perform best for dijkstra and are quite easy to implement
-class BinaryHeap {
+template <int N>
+class Heap {
 public:
     template <class M>
     void push(M &m, int item) {
@@ -170,23 +170,16 @@ public:
     }
     template <class M>
     void increase(M &m, int i) {
-        for (int p = i, l = left_(p), s = numeric_cast<int>(heap_.size()); l < s; l = left_(p)) {
-            int r = right_(p);
-            if (r < s) {
-                if (less_(m, r, l)) {
-                    if (less_(m, r, p)) {
-                        swap_(m, p, r);
-                        p = r;
-                        continue;
-                    }
-                }
+        for (int p = i, j = children_(p), s = numeric_cast<int>(heap_.size()); j < s; j = children_(p)) {
+            int min = j;
+            for (int k = j + 1; k < j + N; ++k) {
+                if (k < s && less_(m, k, min)) { min = k; }
             }
-            if (less_(m, l, p)) {
-                swap_(m, p, l);
-                p = l;
-                continue;
+            if (less_(m, min, p)) {
+                swap_(m, min, p);
+                p = min;
             }
-            break;
+            else { return; }
         }
     }
     int size() { return heap_.size(); }
@@ -200,9 +193,8 @@ private:
         m.offset(heap_[i]) = j;
         std::swap(heap_[i], heap_[j]);
     }
-    int left_(int offset) { return 2 * offset + 1; }
-    int right_(int offset) { return left_(offset) + 1; }
-    int parent_(int offset) { return (offset - 1) / 2; }
+    int parent_(int offset) { return (offset - 1) / N; }
+    int children_(int offset) { return N * offset + 1; }
     template <class M>
     bool less_(M &m, int a, int b) {
         a = heap_[a], b = heap_[b];
@@ -824,7 +816,7 @@ private:
     }
 
 private:
-    BinaryHeap costs_heap_;
+    Heap<4> costs_heap_;
     std::vector<int> visited_from_;
     std::vector<int> visited_to_;
     std::vector<Edge<T>> const &edges_;
