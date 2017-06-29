@@ -143,18 +143,26 @@ public:
     int pop(M &m) {
         assert(!heap_.empty());
         auto ret = heap_[0];
-        if (heap_.size() > 1) {
-            heap_[0] = heap_.back();
-            m.offset(heap_[0]) = 0;
+        extract(m, 0);
+        return ret;
+    }
+
+    template <class M>
+    void extract(M &m, int i) {
+        if (!(0 <= i && i < numeric_cast<int>(heap_.size()))) {
+            std::cerr << i << " vs. " << heap_.size() << std::endl;
+        }
+        assert(0 <= i && i < numeric_cast<int>(heap_.size()));
+        if (numeric_cast<int>(heap_.size()) > i + 1) {
+            heap_[i] = heap_.back();
+            m.offset(heap_[i]) = i;
             heap_.pop_back();
-            increase(m, 0);
+            increase(m, i);
         }
         else {
             heap_.pop_back();
         }
-        return ret;
     }
-
     template <class M>
     void decrease(M &m, int i) {
         while (i > 0) {
@@ -213,6 +221,7 @@ struct HeapFromM {
     int to(int idx) { return static_cast<P *>(this)->edges_[idx].to; }
     int from(int idx) { return static_cast<P *>(this)->edges_[idx].from; }
     std::vector<int> &out(int idx) { return static_cast<P *>(this)->nodes_[idx].outgoing; }
+    std::vector<int> &in(int idx) { return static_cast<P *>(this)->nodes_[idx].incoming; }
     int &path(int idx) { return static_cast<P *>(this)->nodes_[idx].path_from; }
     bool &visited(int idx) { return static_cast<P *>(this)->nodes_[idx].visited_from; }
     bool &relevant(int idx) { return static_cast<P *>(this)->nodes_[idx].relevant_from; }
@@ -221,6 +230,9 @@ struct HeapFromM {
     std::vector<int> &candidate_incoming(int idx) { return static_cast<P *>(this)->nodes_[idx].candidate_incoming; }
     void remove_incoming(int idx) { static_cast<P *>(this)->edge_states_[idx].removed_incoming = true; }
     void remove_outgoing(int idx) { static_cast<P *>(this)->edge_states_[idx].removed_outgoing = true; }
+
+    T caliber(int idx) { return static_cast<P *>(this)->nodes_[idx].caliber_in(); }
+    void set_caliber(int idx, T value) { static_cast<P *>(this)->set_caliber_in(idx, value); }
 };
 
 template <class T, class P>
@@ -230,6 +242,7 @@ struct HeapToM {
     int to(int idx) { return static_cast<P *>(this)->edges_[idx].from; }
     int from(int idx) { return static_cast<P *>(this)->edges_[idx].to; }
     std::vector<int> &out(int idx) { return static_cast<P *>(this)->nodes_[idx].incoming; }
+    std::vector<int> &in(int idx) { return static_cast<P *>(this)->nodes_[idx].outgoing; }
     int &path(int idx) { return static_cast<P *>(this)->nodes_[idx].path_to; }
     bool &visited(int idx) { return static_cast<P *>(this)->nodes_[idx].visited_to; }
     bool &relevant(int idx) { return static_cast<P *>(this)->nodes_[idx].relevant_to; }
@@ -238,17 +251,22 @@ struct HeapToM {
     std::vector<int> &candidate_incoming(int idx) { return static_cast<P *>(this)->nodes_[idx].candidate_outgoing; }
     void remove_incoming(int idx) { static_cast<P *>(this)->edge_states_[idx].removed_outgoing = true; }
     void remove_outgoing(int idx) { static_cast<P *>(this)->edge_states_[idx].removed_incoming = true; }
+
+    T caliber(int idx) { return static_cast<P *>(this)->nodes_[idx].caliber_out(); }
+    void set_caliber(int idx, T value) { static_cast<P *>(this)->set_caliber_out(idx, value); }
 };
 
 template <typename T>
 struct DifferenceLogicNode {
     bool defined() const { return !potential_stack.empty(); }
-    T potential() const { return potential_stack.back().second; }
+    T potential() const { return std::get<1>(potential_stack.back()); }
+    T &caliber_in() { return std::get<2>(potential_stack.back()); }
+    T &caliber_out() { return std::get<3>(potential_stack.back()); }
     std::vector<int> outgoing;
     std::vector<int> incoming;
     std::vector<int> candidate_incoming;
     std::vector<int> candidate_outgoing;
-    std::vector<std::pair<int, T>> potential_stack; // [(level,potential)]
+    std::vector<std::tuple<int, T, T, T>> potential_stack; // [(level,potential,caliber_in,caliber_out)]
     T cost_from = 0;
     T cost_to = 0;
     int offset = 0;
@@ -338,18 +356,24 @@ public:
             v.visited_from = true;
             v.path_from = uv_idx;
         }
-
         // detect negative cycles
         while (!costs_heap_.empty() && !u.visited_from) {
             auto s_idx = costs_heap_.pop(m);
             auto &s = nodes_[s_idx];
             assert(s.visited_from);
             set_potential(s, level, s.potential() + s.cost_from);
+
+            for (auto rs_idx : s.incoming) {
+                auto &rs = edges_[rs_idx];
+                set_caliber_out(rs.from, -1);
+            }
+
             for (auto st_idx : s.outgoing) {
                 assert(st_idx < numeric_cast<int>(edges_.size()));
                 auto &st = edges_[st_idx];
                 auto &t = nodes_[st.to];
                 auto c = s.potential() + st.weight - t.potential();
+                set_caliber_in(st.to, -1);
                 if (c < (t.visited_from ? t.cost_from : 0)) {
                     assert(c < 0);
                     t.path_from = st_idx;
@@ -388,6 +412,8 @@ public:
             // add the edge to the graph
             u.outgoing.emplace_back(uv_idx);
             v.incoming.emplace_back(uv_idx);
+            set_caliber_out(uv.from, -1);
+            set_caliber_in(uv.to, -1);
             changed_edges_.emplace_back(uv_idx);
 #ifdef CROSSCHECK
             // NOTE: just a check that will throw if there is a cycle
@@ -483,8 +509,8 @@ public:
 
     void backtrack() {
         for (int count = changed_nodes_.size() - std::get<1>(changed_trail_.back()); count > 0; --count) {
-            auto &node = nodes_[changed_nodes_.back()];
-            node.potential_stack.pop_back();
+            auto &s = nodes_[changed_nodes_.back()];
+            s.potential_stack.pop_back();
             changed_nodes_.pop_back();
         }
         for (int count = changed_edges_.size() - std::get<2>(changed_trail_.back()); count > 0; --count) {
@@ -704,8 +730,9 @@ private:
         m.visited(source_idx) = true;
         m.cost(source_idx) = 0;
         m.path(source_idx) = -1;
-        while (!costs_heap_.empty()) {
-            auto u_idx = costs_heap_.pop(m);
+        std::vector<int> exact_;
+        T bound = 0;
+        auto process_node = [&](int u_idx) {
             auto tu = m.path(u_idx);
             if (tu >= 0 && m.relevant(m.from(tu))) {
                 m.relevant(u_idx) = true;
@@ -719,10 +746,23 @@ private:
             for (auto &uv_idx : m.out(u_idx)) {
                 auto &uv = edges_[uv_idx];
                 auto v_idx = m.to(uv_idx);
+                if (m.visited(v_idx) && m.offset(v_idx) < 0) {
+                    continue;
+                }
                 // NOTE: explicitely using uv.from and uv.to is intended here
                 auto c = m.cost(u_idx) + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
                 assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
-                if (!m.visited(v_idx) || c < m.cost(v_idx)) {
+                if (m.caliber(v_idx) < 0) {
+                    auto caliber = std::numeric_limits<T>::max();
+                    for (auto &xv_idx : m.in(v_idx)) {
+                        auto &xv = edges_[xv_idx];
+                        auto c = nodes_[xv.from].potential() + xv.weight - nodes_[xv.to].potential();
+                        caliber = std::min(caliber, c);
+                    }
+                    m.set_caliber(v_idx, caliber);
+                }
+                bool is_exact = bound + m.caliber(v_idx) >= c;
+                if (!m.visited(v_idx) || c < m.cost(v_idx) || is_exact) {
                     m.cost(v_idx) = c;
                     if (!m.visited(v_idx)) {
                         // node v contributes an edge with a relevant source
@@ -731,7 +771,11 @@ private:
                         }
                         visited_set.push_back(m.to(uv_idx));
                         m.visited(v_idx) = true;
-                        costs_heap_.push(m, v_idx);
+                        if (is_exact) {
+                            exact_.emplace_back(v_idx);
+                            m.offset(v_idx) = -1;
+                        }
+                        else { costs_heap_.push(m, v_idx); }
                     }
                     else {
                         if (m.relevant(m.from(m.path(v_idx)))) {
@@ -744,16 +788,36 @@ private:
                         else if (relevant_u) {
                             ++relevant;
                         }
-                        costs_heap_.decrease(m, m.offset(v_idx));
+                        if (is_exact) {
+                            exact_.emplace_back(v_idx);
+                            costs_heap_.extract(m, m.offset(v_idx));
+                            m.offset(v_idx) = -1;
+                        }
+                        else {
+                            costs_heap_.decrease(m, m.offset(v_idx));
+                        }
                     }
                     m.path(v_idx) = uv_idx;
                 }
             }
-            // removed a relevant node from the queue and there are no edges with relevant sources anymore in the queue
-            // this condition assumes that initially there is exactly one reachable relevant node in the graph
-            if (relevant_u && relevant == 0) {
-                costs_heap_.clear();
-                break;
+            return relevant_u;
+        };
+        while (!costs_heap_.empty()) {
+            auto top = costs_heap_.pop(m);
+            m.offset(top) = -1;
+            bound = m.cost(top); // each path in the heap is at least that long
+            exact_.emplace_back(top);
+            while (!exact_.empty()) {
+                auto u_idx = exact_.back();
+                exact_.pop_back();
+                auto relevant_u = process_node(u_idx);
+                // removed a relevant node from the queue and there are no edges with relevant sources anymore in the queue
+                // this condition assumes that initially there is exactly one reachable relevant node in the graph
+                if (relevant_u && relevant == 0) {
+                    exact_.clear();
+                    costs_heap_.clear();
+                    return {relevant_degree_out, relevant_degree_in};
+                }
             }
         }
         return {relevant_degree_out, relevant_degree_in};
@@ -801,15 +865,32 @@ private:
 #endif
 
     void set_potential(DifferenceLogicNode<T> &node, int level, T potential) {
-        if (!node.defined() || node.potential_stack.back().first < level) {
-            node.potential_stack.emplace_back(level, potential);
+        if (!node.defined() || std::get<0>(node.potential_stack.back()) < level) {
+            node.potential_stack.emplace_back(level, potential, -1, -1);
             changed_nodes_.emplace_back(numeric_cast<int>(&node - nodes_.data()));
         }
         else {
-            node.potential_stack.back().second = potential;
+            std::get<1>(node.potential_stack.back()) = potential;
+            std::get<2>(node.potential_stack.back()) = -1;
+            std::get<3>(node.potential_stack.back()) = -1;
         }
     }
-
+    template <int N>
+    void set_caliber_(int idx, T value) {
+        auto &node = nodes_[idx];
+        assert(node.defined());
+        if (value != std::get<N>(node.potential_stack.back())) {
+            auto level = current_decision_level_();
+            if (std::get<0>(node.potential_stack.back()) < level) {
+                node.potential_stack.emplace_back(node.potential_stack.back());
+                std::get<0>(node.potential_stack.back()) = level;
+                changed_nodes_.emplace_back(numeric_cast<int>(&node - nodes_.data()));
+            }
+            std::get<N>(node.potential_stack.back()) = value;
+        }
+    }
+    void set_caliber_in(int idx, T value) { set_caliber_<2>(idx, value); }
+    void set_caliber_out(int idx, T value) { set_caliber_<3>(idx, value); }
     int current_decision_level_() {
         assert(!changed_trail_.empty());
         return std::get<0>(changed_trail_.back());
