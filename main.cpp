@@ -750,20 +750,33 @@ private:
                     continue;
                 }
                 // NOTE: explicitely using uv.from and uv.to is intended here
-                auto c = m.cost(u_idx) + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
                 assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
                 if (m.caliber(v_idx) < 0) {
                     auto caliber = std::numeric_limits<T>::max();
                     for (auto &xv_idx : m.in(v_idx)) {
                         auto &xv = edges_[xv_idx];
-                        auto c = nodes_[xv.from].potential() + xv.weight - nodes_[xv.to].potential();
-                        caliber = std::min(caliber, c);
+                        auto weight = nodes_[xv.from].potential() + xv.weight - nodes_[xv.to].potential();
+                        caliber = std::min(caliber, weight);
                     }
                     m.set_caliber(v_idx, caliber);
                 }
-                bool is_exact = bound + m.caliber(v_idx) >= c;
-                if (!m.visited(v_idx) || c < m.cost(v_idx) || is_exact) {
-                    m.cost(v_idx) = c;
+                auto cost = m.cost(u_idx) + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
+                // NOTE: if the source is relevant
+                //       there might be a path of equal length that is not relevant
+                //       this path has to be processed first:
+                //
+                //                        1     1
+                //                     u --- v --- w
+                //                      \_________/
+                //                           2
+                //
+                //       where edges go from left to right and v is relevant
+                //       here the caliber heuristics would give that the path u -> v -> w is exact
+                //       before u -> w is popped from the queue which would not propagate w as relevant
+                //       and is important for correctness
+                bool is_exact = relevant_u ? bound + m.caliber(v_idx) > cost : bound + m.caliber(v_idx) >= cost;
+                if (!m.visited(v_idx) || cost < m.cost(v_idx) || is_exact) {
+                    m.cost(v_idx) = cost;
                     if (!m.visited(v_idx)) {
                         // node v contributes an edge with a relevant source
                         if (relevant_u) {
