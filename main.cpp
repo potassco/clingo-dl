@@ -284,6 +284,8 @@ struct DLStats {
     Duration time_propagate = Duration{0};
     Duration time_undo = Duration{0};
     Duration time_dijkstra = Duration{0};
+    Duration time_heap = Duration{0};
+    Duration time_caliber = Duration{0};
     uint64_t true_edges;
     uint64_t false_edges;
 };
@@ -725,105 +727,115 @@ private:
         int relevant = 0;
         int relevant_degree_out = 0, relevant_degree_in = 0;
         assert(visited_set.empty() && costs_heap_.empty());
-        costs_heap_.push(m, source_idx);
+        {
+            Timer t{stats_.time_heap};
+            costs_heap_.push(m, source_idx);
+        }
         visited_set.push_back(source_idx);
         m.visited(source_idx) = true;
         m.cost(source_idx) = 0;
         m.path(source_idx) = -1;
-        std::vector<int> exact_;
         T bound = 0;
-        auto process_node = [&](int u_idx) {
-            auto tu = m.path(u_idx);
-            if (tu >= 0 && m.relevant(m.from(tu))) {
-                m.relevant(u_idx) = true;
-                --relevant; // just removed a relevant edge from the queue
-            }
-            bool relevant_u = m.relevant(u_idx);
-            if (relevant_u) {
-                relevant_degree_out += nodes_[u_idx].degree_out;
-                relevant_degree_in += nodes_[u_idx].degree_in;
-            }
-            for (auto &uv_idx : m.out(u_idx)) {
-                auto &uv = edges_[uv_idx];
-                auto v_idx = m.to(uv_idx);
-                if (m.visited(v_idx) && m.offset(v_idx) < 0) {
-                    continue;
-                }
-                // NOTE: explicitely using uv.from and uv.to is intended here
-                assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
-                if (m.caliber(v_idx) < 0) {
-                    auto caliber = std::numeric_limits<T>::max();
-                    for (auto &xv_idx : m.in(v_idx)) {
-                        auto &xv = edges_[xv_idx];
-                        auto weight = nodes_[xv.from].potential() + xv.weight - nodes_[xv.to].potential();
-                        caliber = std::min(caliber, weight);
-                    }
-                    m.set_caliber(v_idx, caliber);
-                }
-                auto cost = m.cost(u_idx) + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
-                // NOTE: if the source is relevant
-                //       there might be a path of equal length that is not relevant
-                //       this path has to be processed first:
-                //
-                //                        1     1
-                //                     u --- v --- w
-                //                      \_________/
-                //                           2
-                //
-                //       where edges go from left to right and v is relevant
-                //       here the caliber heuristics would give that the path u -> v -> w is exact
-                //       before u -> w is popped from the queue which would not propagate w as relevant
-                //       and is important for correctness
-                bool is_exact = relevant_u ? bound + m.caliber(v_idx) > cost : bound + m.caliber(v_idx) >= cost;
-                if (!m.visited(v_idx) || cost < m.cost(v_idx) || is_exact) {
-                    m.cost(v_idx) = cost;
-                    if (!m.visited(v_idx)) {
-                        // node v contributes an edge with a relevant source
-                        if (relevant_u) {
-                            ++relevant;
-                        }
-                        visited_set.push_back(m.to(uv_idx));
-                        m.visited(v_idx) = true;
-                        if (is_exact) {
-                            exact_.emplace_back(v_idx);
-                            m.offset(v_idx) = -1;
-                        }
-                        else { costs_heap_.push(m, v_idx); }
-                    }
-                    else {
-                        if (m.relevant(m.from(m.path(v_idx)))) {
-                            // node v no longer contributes a relevant edge
-                            if (!relevant_u) {
-                                --relevant;
-                            }
-                        }
-                        // node v contributes a relevant edge now
-                        else if (relevant_u) {
-                            ++relevant;
-                        }
-                        if (is_exact) {
-                            exact_.emplace_back(v_idx);
-                            costs_heap_.extract(m, m.offset(v_idx));
-                            m.offset(v_idx) = -1;
-                        }
-                        else {
-                            costs_heap_.decrease(m, m.offset(v_idx));
-                        }
-                    }
-                    m.path(v_idx) = uv_idx;
-                }
-            }
-            return relevant_u;
-        };
         while (!costs_heap_.empty()) {
-            auto top = costs_heap_.pop(m);
+            int top;
+            {
+                Timer t{stats_.time_heap};
+                top = costs_heap_.pop(m);
+            }
             m.offset(top) = -1;
             bound = m.cost(top); // each path in the heap is at least that long
             exact_.emplace_back(top);
             while (!exact_.empty()) {
                 auto u_idx = exact_.back();
                 exact_.pop_back();
-                auto relevant_u = process_node(u_idx);
+                auto tu = m.path(u_idx);
+                if (tu >= 0 && m.relevant(m.from(tu))) {
+                    m.relevant(u_idx) = true;
+                    --relevant; // just removed a relevant edge from the queue
+                }
+                bool relevant_u = m.relevant(u_idx);
+                if (relevant_u) {
+                    relevant_degree_out += nodes_[u_idx].degree_out;
+                    relevant_degree_in += nodes_[u_idx].degree_in;
+                }
+                for (auto &uv_idx : m.out(u_idx)) {
+                    auto &uv = edges_[uv_idx];
+                    auto v_idx = m.to(uv_idx);
+                    if (m.visited(v_idx) && m.offset(v_idx) < 0) {
+                        continue;
+                    }
+                    // NOTE: explicitely using uv.from and uv.to is intended here
+                    assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
+                    if (m.caliber(v_idx) < 0) {
+                        Timer t{stats_.time_caliber};
+                        auto caliber = std::numeric_limits<T>::max();
+                        for (auto &xv_idx : m.in(v_idx)) {
+                            auto &xv = edges_[xv_idx];
+                            auto weight = nodes_[xv.from].potential() + xv.weight - nodes_[xv.to].potential();
+                            caliber = std::min(caliber, weight);
+                        }
+                        m.set_caliber(v_idx, caliber);
+                    }
+                    auto cost = m.cost(u_idx) + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
+                    // NOTE: if the source is relevant
+                    //       there might be a path of equal length that is not relevant
+                    //       this path has to be processed first:
+                    //
+                    //                        1     1
+                    //                     u --- v --- w
+                    //                      \_________/
+                    //                           2
+                    //
+                    //       where edges go from left to right and v is relevant
+                    //       here the caliber heuristics would give that the path u -> v -> w is exact
+                    //       before u -> w is popped from the queue which would not propagate w as relevant
+                    //       and is important for correctness
+                    bool is_exact = relevant_u ? bound + m.caliber(v_idx) > cost : bound + m.caliber(v_idx) >= cost;
+                    if (!m.visited(v_idx) || cost < m.cost(v_idx) || is_exact) {
+                        m.cost(v_idx) = cost;
+                        if (!m.visited(v_idx)) {
+                            // node v contributes an edge with a relevant source
+                            if (relevant_u) {
+                                ++relevant;
+                            }
+                            visited_set.push_back(m.to(uv_idx));
+                            m.visited(v_idx) = true;
+                            if (is_exact) {
+                                exact_.emplace_back(v_idx);
+                                m.offset(v_idx) = -1;
+                            }
+                            else {
+                                Timer t{stats_.time_heap};
+                                costs_heap_.push(m, v_idx);
+                            }
+                        }
+                        else {
+                            if (m.relevant(m.from(m.path(v_idx)))) {
+                                // node v no longer contributes a relevant edge
+                                if (!relevant_u) {
+                                    --relevant;
+                                }
+                            }
+                            // node v contributes a relevant edge now
+                            else if (relevant_u) {
+                                ++relevant;
+                            }
+                            if (is_exact) {
+                                exact_.emplace_back(v_idx);
+                                {
+                                    Timer t{stats_.time_heap};
+                                    costs_heap_.extract(m, m.offset(v_idx));
+                                }
+                                m.offset(v_idx) = -1;
+                            }
+                            else {
+                                Timer t{stats_.time_heap};
+                                costs_heap_.decrease(m, m.offset(v_idx));
+                            }
+                        }
+                        m.path(v_idx) = uv_idx;
+                    }
+                }
                 // removed a relevant node from the queue and there are no edges with relevant sources anymore in the queue
                 // this condition assumes that initially there is exactly one reachable relevant node in the graph
                 if (relevant_u && relevant == 0) {
@@ -911,6 +923,7 @@ private:
 
 private:
     Heap<4> costs_heap_;
+    std::vector<int> exact_;
     std::vector<int> visited_from_;
     std::vector<int> visited_to_;
     std::vector<Edge<T>> const &edges_;
@@ -1205,6 +1218,8 @@ int main(int argc, char *argv[]) {
         std::cout << (stat.time_undo + stat.time_propagate).count() << "s\n";
         std::cout << "    propagate: " << stat.time_propagate.count() << "s\n";
         std::cout << "      dijkstra   : " << stat.time_dijkstra.count() << "s\n";
+        std::cout << "        heap     : " << stat.time_heap.count() / stat.time_dijkstra.count() * 100 << "%\n";
+        std::cout << "        caliber  : " << stat.time_caliber.count() / stat.time_dijkstra.count() * 100 << "%\n";
         std::cout << "      true edges : " << stat.true_edges << "\n";
         std::cout << "      false edges: " << stat.false_edges << "\n";
         std::cout << "    undo     : " << stat.time_undo.count() << "s\n";
