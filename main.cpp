@@ -266,6 +266,7 @@ struct DLStats {
     Duration time_propagate = Duration{0};
     Duration time_undo = Duration{0};
     Duration time_dijkstra = Duration{0};
+    Duration time_heap{0};
     uint64_t true_edges;
     uint64_t false_edges;
 };
@@ -338,12 +339,30 @@ public:
             v.visited_from = true;
             v.path_from = uv_idx;
         }
+        else {
+            // MLB: this might have increased the maximum arc length
+        }
+
+        // MLB: this algorithm could use a multi-level bucket too
+        //      but one would have to come up with a good minimum and maximum arc length
+        //      (or make the MLB resizable)
+        //      given that the runtime of the algorithm is dominated by propagation
+        //      it is probably best to use optimally tuned MLBs there
+        //
+        //      Note that there are zero length arcs by construction of the
+        //      potential function. The mlb paper notes that the minimum
+        //      non-zero arc can be used to decrease the number of buckets. To
+        //      also exploit this this, the dijkstra below has to specially
+        //      treat such edges (e.g., as the with the caliber heuristic).
+        //      This is purely a memory optimization to safe some memory though;
+        //      it does not affect runtime (if memory is not exhausted).
 
         // detect negative cycles
         while (!costs_heap_.empty() && !u.visited_from) {
             auto s_idx = costs_heap_.pop(m);
             auto &s = nodes_[s_idx];
             assert(s.visited_from);
+            // MLB: this just has increased all the incoming arc lengths
             set_potential(s, level, s.potential() + s.cost_from);
             for (auto st_idx : s.outgoing) {
                 assert(st_idx < numeric_cast<int>(edges_.size()));
@@ -696,6 +715,7 @@ private:
     std::pair<int, int> dijkstra(int source_idx, std::vector<int> &visited_set, M &m) {
         // TODO: the paper argues that the SSSP algorithm in "Shortest path algorithms: Engineering aspects" is faster
         //       than a simple dijkstra. Maybe there are even better ones nowadays.
+        // MLB: use MLB instead of binary heap here
         int relevant = 0;
         int relevant_degree_out = 0, relevant_degree_in = 0;
         assert(visited_set.empty() && costs_heap_.empty());
@@ -705,7 +725,11 @@ private:
         m.cost(source_idx) = 0;
         m.path(source_idx) = -1;
         while (!costs_heap_.empty()) {
-            auto u_idx = costs_heap_.pop(m);
+            int u_idx;
+            {
+                Timer t{stats_.time_heap};
+                u_idx = costs_heap_.pop(m);
+            }
             auto tu = m.path(u_idx);
             if (tu >= 0 && m.relevant(m.from(tu))) {
                 m.relevant(u_idx) = true;
@@ -731,7 +755,10 @@ private:
                         }
                         visited_set.push_back(m.to(uv_idx));
                         m.visited(v_idx) = true;
-                        costs_heap_.push(m, v_idx);
+                        {
+                            Timer t{stats_.time_heap};
+                            costs_heap_.push(m, v_idx);
+                        }
                     }
                     else {
                         if (m.relevant(m.from(m.path(v_idx)))) {
@@ -744,7 +771,10 @@ private:
                         else if (relevant_u) {
                             ++relevant;
                         }
-                        costs_heap_.decrease(m, m.offset(v_idx));
+                        {
+                            Timer t{stats_.time_heap};
+                            costs_heap_.decrease(m, m.offset(v_idx));
+                        }
                     }
                     m.path(v_idx) = uv_idx;
                 }
@@ -1111,6 +1141,7 @@ int main(int argc, char *argv[]) {
         std::cout << (stat.time_undo + stat.time_propagate).count() << "s\n";
         std::cout << "    propagate: " << stat.time_propagate.count() << "s\n";
         std::cout << "      dijkstra   : " << stat.time_dijkstra.count() << "s\n";
+        std::cout << "        heap     : " << stat.time_heap.count() / stat.time_dijkstra.count() * 100 << "%\n";
         std::cout << "      true edges : " << stat.true_edges << "\n";
         std::cout << "      false edges: " << stat.false_edges << "\n";
         std::cout << "    undo     : " << stat.time_undo.count() << "s\n";
