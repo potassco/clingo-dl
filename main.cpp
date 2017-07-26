@@ -133,6 +133,9 @@ private:
 template <int N>
 class Heap {
 public:
+    void resize(int max_edge) {
+        (void)max_edge;
+    }
     template <class M>
     void push(M &m, int item) {
         auto i = m.offset(item) = heap_.size();
@@ -222,7 +225,7 @@ int pow(int n) {
 
 template <int N>
 int nth_root(int n) {
-    assert(N > 0 && n > 0);
+    assert(N > 0 && n >= 0);
     int r = 0;
     while (pow<N>(r) <= n) { ++r; }
     return r;
@@ -234,13 +237,23 @@ class MLB : public Heap<N> { };
 template <int N>
 class MLB<int, N> {
 public:
-    MLB() : MLB(1000000) { }
-    MLB(int max_edge)
+    MLB(int max_edge = 0)
     : max_edge_{max_edge}
     , num_buckets_{nth_root<N>(max_edge_)} {
         levels_.reserve(N);
         for (int i = 0, p = 1; i < N; ++i, p*= num_buckets_) {
             levels_.emplace_back(p, num_buckets_);
+        }
+    }
+    void resize(int max_edge) {
+        assert(empty());
+        max_edge_ = max_edge;
+        int num_buckets = nth_root<N>(max_edge_);
+        if (num_buckets != max_edge) {
+            num_buckets_ = num_buckets;
+            for (int i = 0, p = 1; i < N; ++i, p*= num_buckets_) {
+                levels_[i].resize(p, num_buckets_);
+            }
         }
     }
     template <class M>
@@ -355,6 +368,10 @@ private:
         : buckets_{static_cast<size_t>(num_buckets)}
         , bucket_width_{bucket_width}
         , first_bucket_{num_buckets} { }
+        void resize(int bucket_width, int num_buckets) {
+            buckets_.resize(num_buckets);
+            bucket_width_ = bucket_width;;
+        }
         bool empty() {
             return last_bucket_ < first_bucket_;
         }
@@ -557,7 +574,15 @@ public:
     void ensure_decision_level(int level) {
         // initialize the trail
         if (changed_trail_.empty() || std::get<0>(changed_trail_.back()) < level) {
-            changed_trail_.emplace_back(level, changed_nodes_.size(), changed_edges_.size(), inactive_edges_.size());
+            int max_edge = changed_trail_.empty() ? 0 : std::get<4>(changed_trail_.back());
+            changed_trail_.emplace_back(level, changed_nodes_.size(), changed_edges_.size(), inactive_edges_.size(), max_edge);
+        }
+    }
+
+    void update_max_edge(int weight) {
+        assert(weight >= 0);
+        if (std::get<4>(changed_trail_.back()) < weight) {
+            std::get<4>(changed_trail_.back()) = weight;
         }
     }
 
@@ -592,29 +617,14 @@ public:
             v.path_from = uv_idx;
         }
         else {
-            // MLB: this might have increased the maximum arc length
+            update_max_edge(v.cost_from);
         }
-
-        // MLB: this algorithm could use a multi-level bucket too
-        //      but one would have to come up with a good minimum and maximum arc length
-        //      (or make the MLB resizable)
-        //      given that the runtime of the algorithm is dominated by propagation
-        //      it is probably best to use optimally tuned MLBs there
-        //
-        //      Note that there are zero length arcs by construction of the
-        //      potential function. The mlb paper notes that the minimum
-        //      non-zero arc can be used to decrease the number of buckets. To
-        //      also exploit this this, the dijkstra below has to specially
-        //      treat such edges (e.g., as the with the caliber heuristic).
-        //      This is purely a memory optimization to safe some memory though;
-        //      it does not affect runtime (if memory is not exhausted).
 
         // detect negative cycles
         while (!costs_heap_.empty() && !u.visited_from) {
             auto s_idx = costs_heap_.pop(m);
             auto &s = nodes_[s_idx];
             assert(s.visited_from);
-            // MLB: this just has increased all the incoming arc lengths
             set_potential(s, level, s.potential() + s.cost_from);
             for (auto st_idx : s.outgoing) {
                 assert(st_idx < numeric_cast<int>(edges_.size()));
@@ -668,7 +678,16 @@ public:
 
         // reset visited flags
         for (auto &x : visited_from_) {
-            nodes_[x].visited_from = false;
+            auto &s = nodes_[x];
+            s.visited_from = false;
+            if (neg_cycle.empty()) {
+                for (auto rs_idx : s.incoming) {
+                    auto &rs = edges_[rs_idx];
+                    auto &r = nodes_[rs.from];
+                    auto c = r.potential() + rs.weight - s.potential();
+                    update_max_edge(c);
+                }
+            }
         }
         visited_from_.clear();
         costs_heap_.clear();
@@ -685,8 +704,6 @@ public:
         auto &y = nodes_[xy.to];
         x.relevant_to = true;
         y.relevant_from = true;
-        // TODO: this could be split into 4 integers
-        //       two for the forward and two for the backward propagation
         int num_relevant_out_from;
         int num_relevant_in_from;
         int num_relevant_out_to;
@@ -971,6 +988,10 @@ private:
         m.visited(source_idx) = true;
         m.cost(source_idx) = 0;
         m.path(source_idx) = -1;
+        // NOTE: two times the length of the maximum edge is reserved here
+        //       this could still be improved on using a second list
+        //       to store longer paths to be added once the queue gets empty
+        dijkstra_heap_.resize(2 * std::get<4>(changed_trail_.back()));
         dijkstra_heap_.push(m, source_idx);
         visited_set.push_back(source_idx);
         while (!dijkstra_heap_.empty()) {
@@ -990,7 +1011,7 @@ private:
                 auto v_idx = m.to(uv_idx);
                 // NOTE: explicitely using uv.from and uv.to is intended here
                 auto c = m.cost(u_idx) + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
-                assert(c >= 0);
+                assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() <= std::get<4>(changed_trail_.back()));
                 assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
                 if (!m.visited(v_idx) || c < m.cost(v_idx)) {
                     if (!m.visited(v_idx)) {
@@ -1092,7 +1113,7 @@ private:
     std::vector<DifferenceLogicNode<T>> nodes_;
     std::vector<int> changed_nodes_;
     std::vector<int> changed_edges_;
-    std::vector<std::tuple<int, int, int, int>> changed_trail_;
+    std::vector<std::tuple<int, int, int, int, int>> changed_trail_;
     std::vector<int> inactive_edges_;
     std::vector<EdgeState> edge_states_;
     DLStats &stats_;
