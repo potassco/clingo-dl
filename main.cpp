@@ -155,6 +155,11 @@ public:
         return ret;
     }
 
+    template <class M, class T>
+    void decrease(M &m, int i, T c) {
+        m.cost(i) = c;
+        decrease(m, m.offset(i));
+    }
     template <class M>
     void decrease(M &m, int i) {
         while (i > 0) {
@@ -204,6 +209,254 @@ private:
 
 private:
     std::vector<int> heap_;
+};
+
+template <int N>
+int pow(int n) {
+    int r = 1;
+    for (int i = 0; i < N; ++i) {
+        r *= n;
+    }
+    return r;
+}
+
+template <int N>
+int nth_root(int n) {
+    assert(N > 0 && n > 0);
+    int r = 0;
+    while (pow<N>(r) <= n) { ++r; }
+    return r;
+}
+
+template <class T, int N>
+class MLB : public Heap<N> { };
+
+template <int N>
+class MLB<int, N> {
+public:
+    MLB() : MLB(1000000) { }
+    MLB(int max_edge)
+    : max_edge_{max_edge}
+    , num_buckets_{nth_root<N>(max_edge_)} {
+        levels_.reserve(N);
+        for (int i = 0, p = 1; i < N; ++i, p*= num_buckets_) {
+            levels_.emplace_back(p, num_buckets_);
+        }
+    }
+    template <class M>
+    void push(M &m, int item) {
+        assert(base_distance_ <= m.cost(item) && m.cost(item) <= base_distance_ + max_edge_);
+        int path_length = m.cost(item);
+        assert(path_length <= base_distance_ + max_edge_);
+        int weight = path_length - base_distance_;
+        int insert_level = insert_level_(last_level_, weight);
+        levels_[insert_level].insert(m, item, weight);
+    }
+    template <class M>
+    int pop(M &m) {
+        // create a new bottom level starting to expand from the lowest non-empty level
+        if (bottom_().empty()) {
+            Level *current_level = &last_(), *next_level = nullptr;
+            for (int i = 1; i < N && last_level_ > 0; ++i) {
+                --last_level_;
+                next_level = &levels_[last_level_];
+                current_level->migrate(m, *next_level, base_distance_);
+                current_level = next_level;
+            }
+        }
+        assert(!bottom_().empty());
+
+        // extract node from the bottom level (and move up if it becomes empty)
+        auto ret = bottom_().extract(m);
+        for (int i = 0; i < N && last_().empty() && last_level_ < N - 1; ++i, ++last_level_) { }
+
+        // if the buckets are empty now, the current path length is the base for all following paths
+        if (last_().empty()) {
+            base_distance_ = m.cost(ret);
+            last_().set_base_weight(0);
+        }
+        return ret;
+    }
+
+    template <class M>
+    void decrease(M &m, int item, int path_length) {
+        int new_cost = path_length - base_distance_;
+        int old_cost = m.cost(item) - base_distance_;
+        assert(0 <= new_cost && new_cost < old_cost);
+        m.cost(item) = path_length;
+        int new_level = insert_level_(last_level_, new_cost);
+        int old_level = insert_level_(new_level, old_cost);
+        // NOTE: possibly unnecessary bucket scans if old_level == new_level
+        levels_[old_level].remove(m, item, old_cost);
+        levels_[new_level].insert(m, item, new_cost);
+    }
+    bool empty() {
+        return last_().empty();
+    }
+    void clear() {
+        last_level_ = N - 1;
+        base_distance_ = 0;
+        for (int i = 0; i < N; ++i) {
+            levels_[i].clear();
+        }
+    }
+
+private:
+    struct Bucket {
+        int &back() {
+            return elements.back();
+        }
+        template <class M>
+        int pop_min(M &m) {
+            // NOTE: what was relevant stays relevant
+            while (relevant < size() && m.relevant(elements[relevant])) {
+                ++relevant;
+            }
+            if (relevant < size()) {
+                swap_(m, elements[relevant], elements.back());
+            }
+            auto ret = elements.back();
+            elements.pop_back();
+            return ret;
+        }
+        bool empty() {
+            return elements.empty();
+        }
+        int size() {
+            return elements.size();
+        }
+        void clear() {
+            elements.clear();
+            relevant = 0;
+        }
+        template <class M>
+        void append(M &m, int item) {
+            m.offset(item) = elements.size();
+            elements.emplace_back(item);
+        }
+        template <class M>
+        void remove(M &m, int item) {
+            swap_(m, elements[m.offset(item)], elements.back());
+            elements.pop_back();
+        }
+        template <class M>
+        void swap_(M &m, int &a, int &b) {
+            if (a != b) {
+                std::swap(a, b);
+                std::swap(m.offset(a), m.offset(b));
+            }
+        }
+        int relevant = 0;
+        std::vector<int> elements;
+    };
+    class Level {
+    public:
+        Level(int bucket_width, int num_buckets)
+        : buckets_{static_cast<size_t>(num_buckets)}
+        , bucket_width_{bucket_width}
+        , first_bucket_{num_buckets} { }
+        bool empty() {
+            return last_bucket_ < first_bucket_;
+        }
+        void set_base_weight(int weight) {
+            assert(empty());
+            base_offset_ = weight / bucket_width_;
+        }
+
+        bool can_insert(int weight) {
+            int offset = weight / bucket_width_ - base_offset_;
+            assert(offset >= 0);
+            return offset < num_buckets_();
+        }
+
+        template <class M>
+        void insert(M &m, int item, int weight) {
+            int offset = weight / bucket_width_ - base_offset_;
+            assert (0 <= offset && offset < num_buckets_());
+            if (empty()) {
+                first_bucket_ = last_bucket_ = offset;
+            }
+            else {
+                assert(!first_().empty() && !last_().empty());
+                first_bucket_ = std::min(first_bucket_, offset);
+                last_bucket_ = std::max(last_bucket_, offset);
+            }
+            buckets_[offset].append(m, item);
+            assert(!first_().empty() && !last_().empty());
+        }
+        template <class M>
+        void remove(M &m, int item, int weight) {
+            int offset = weight / bucket_width_ - base_offset_;
+            buckets_[offset].remove(m, item);
+            update_first_();
+            update_last_();
+            assert(empty() || (!first_().empty() && !last_().empty()));
+        }
+
+        template <class M>
+        void migrate(M &m, Level &level, int base_distance) {
+            assert(!first_().empty());
+            level.set_base_weight((first_bucket_ + base_offset_) * bucket_width_);
+            for (auto &item : first_().elements) {
+                level.insert(m, item, m.cost(item) - base_distance);
+            }
+            first_().clear();
+            update_first_();
+            assert(empty() || (!first_().empty() && !last_().empty()));
+        }
+        template <class M>
+        int extract(M &m) {
+            auto ret = first_().pop_min(m);
+            update_first_();
+            assert(empty() || (!first_().empty() && !last_().empty()));
+            return ret;
+        }
+        void clear() {
+            for (; first_bucket_ <= last_bucket_; ++first_bucket_) {
+                buckets_[first_bucket_].clear();
+            }
+            set_base_weight(0);
+        }
+    private:
+        void update_first_() {
+            for (; first_bucket_ <= last_bucket_ && first_().empty(); ++first_bucket_) { }
+        }
+        void update_last_() {
+            for (; first_bucket_ <= last_bucket_ && last_().empty(); --last_bucket_) { }
+        }
+        int num_buckets_() {
+            return buckets_.size();
+        }
+        Bucket &first_() {
+            return buckets_[first_bucket_];
+        }
+        Bucket &last_() {
+            return buckets_[last_bucket_];
+        }
+    private:
+        std::vector<Bucket> buckets_;
+        int bucket_width_;
+        int base_offset_ = 0;
+        int first_bucket_;
+        int last_bucket_ = 0;
+    };
+    int insert_level_(int base, int weight) {
+        for (int i = 0; i < N && !levels_[base].can_insert(weight); ++i, ++base) { }
+        return base;
+
+    }
+    Level &last_() {
+        return levels_[last_level_];
+    }
+    Level &bottom_() {
+        return levels_[0];
+    }
+private:
+    int base_distance_ = 0;
+    int last_level_ = N - 1;
+    int max_edge_;
+    int num_buckets_;
+    std::vector<Level> levels_;
 };
 
 template <class T, class P>
@@ -266,7 +519,6 @@ struct DLStats {
     Duration time_propagate = Duration{0};
     Duration time_undo = Duration{0};
     Duration time_dijkstra = Duration{0};
-    Duration time_heap{0};
     uint64_t true_edges;
     uint64_t false_edges;
 };
@@ -372,14 +624,14 @@ public:
                 if (c < (t.visited_from ? t.cost_from : 0)) {
                     assert(c < 0);
                     t.path_from = st_idx;
-                    t.cost_from = c;
                     if (!t.visited_from) {
+                        t.cost_from = c;
                         t.visited_from = true;
                         visited_from_.emplace_back(st.to);
                         costs_heap_.push(m, st.to);
                     }
                     else {
-                        costs_heap_.decrease(m, m.offset(st.to));
+                        costs_heap_.decrease(m, st.to, c);
                     }
                 }
             }
@@ -713,23 +965,16 @@ private:
 
     template <class M>
     std::pair<int, int> dijkstra(int source_idx, std::vector<int> &visited_set, M &m) {
-        // TODO: the paper argues that the SSSP algorithm in "Shortest path algorithms: Engineering aspects" is faster
-        //       than a simple dijkstra. Maybe there are even better ones nowadays.
-        // MLB: use MLB instead of binary heap here
         int relevant = 0;
         int relevant_degree_out = 0, relevant_degree_in = 0;
-        assert(visited_set.empty() && costs_heap_.empty());
-        costs_heap_.push(m, source_idx);
-        visited_set.push_back(source_idx);
+        assert(visited_set.empty() && dijkstra_heap_.empty());
         m.visited(source_idx) = true;
         m.cost(source_idx) = 0;
         m.path(source_idx) = -1;
-        while (!costs_heap_.empty()) {
-            int u_idx;
-            {
-                Timer t{stats_.time_heap};
-                u_idx = costs_heap_.pop(m);
-            }
+        dijkstra_heap_.push(m, source_idx);
+        visited_set.push_back(source_idx);
+        while (!dijkstra_heap_.empty()) {
+            int u_idx = dijkstra_heap_.pop(m);
             auto tu = m.path(u_idx);
             if (tu >= 0 && m.relevant(m.from(tu))) {
                 m.relevant(u_idx) = true;
@@ -745,20 +990,18 @@ private:
                 auto v_idx = m.to(uv_idx);
                 // NOTE: explicitely using uv.from and uv.to is intended here
                 auto c = m.cost(u_idx) + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
+                assert(c >= 0);
                 assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
                 if (!m.visited(v_idx) || c < m.cost(v_idx)) {
-                    m.cost(v_idx) = c;
                     if (!m.visited(v_idx)) {
+                        m.cost(v_idx) = c;
                         // node v contributes an edge with a relevant source
                         if (relevant_u) {
                             ++relevant;
                         }
                         visited_set.push_back(m.to(uv_idx));
                         m.visited(v_idx) = true;
-                        {
-                            Timer t{stats_.time_heap};
-                            costs_heap_.push(m, v_idx);
-                        }
+                        dijkstra_heap_.push(m, v_idx);
                     }
                     else {
                         if (m.relevant(m.from(m.path(v_idx)))) {
@@ -771,21 +1014,16 @@ private:
                         else if (relevant_u) {
                             ++relevant;
                         }
-                        {
-                            Timer t{stats_.time_heap};
-                            costs_heap_.decrease(m, m.offset(v_idx));
-                        }
+                        dijkstra_heap_.decrease(m, v_idx, c);
                     }
                     m.path(v_idx) = uv_idx;
                 }
             }
             // removed a relevant node from the queue and there are no edges with relevant sources anymore in the queue
             // this condition assumes that initially there is exactly one reachable relevant node in the graph
-            if (relevant_u && relevant == 0) {
-                costs_heap_.clear();
-                break;
-            }
+            if (relevant_u && relevant == 0) { break; }
         }
+        dijkstra_heap_.clear();
         return {relevant_degree_out, relevant_degree_in};
     }
 
@@ -847,6 +1085,7 @@ private:
 
 private:
     Heap<4> costs_heap_;
+    MLB<T, 4> dijkstra_heap_;
     std::vector<int> visited_from_;
     std::vector<int> visited_to_;
     std::vector<Edge<T>> const &edges_;
@@ -1141,7 +1380,6 @@ int main(int argc, char *argv[]) {
         std::cout << (stat.time_undo + stat.time_propagate).count() << "s\n";
         std::cout << "    propagate: " << stat.time_propagate.count() << "s\n";
         std::cout << "      dijkstra   : " << stat.time_dijkstra.count() << "s\n";
-        std::cout << "        heap     : " << stat.time_heap.count() / stat.time_dijkstra.count() * 100 << "%\n";
         std::cout << "      true edges : " << stat.true_edges << "\n";
         std::cout << "      false edges: " << stat.false_edges << "\n";
         std::cout << "    undo     : " << stat.time_undo.count() << "s\n";
