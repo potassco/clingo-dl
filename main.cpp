@@ -266,8 +266,8 @@ struct DLStats {
     Duration time_propagate = Duration{0};
     Duration time_undo = Duration{0};
     Duration time_dijkstra = Duration{0};
-    uint64_t true_edges;
-    uint64_t false_edges;
+    uint64_t true_edges{0};
+    uint64_t false_edges{0};
 };
 
 struct EdgeState {
@@ -406,16 +406,15 @@ public:
     }
 
     bool propagate(int xy_idx, Clingo::PropagateControl &ctl) {
-        static int props = 0;
-        ++props;
         remove_candidate_edge(xy_idx);
         auto &xy = edges_[xy_idx];
         auto &x = nodes_[xy.from];
         auto &y = nodes_[xy.to];
+        if (x.incoming.empty() || y.outgoing.empty()) {
+            return true;
+        }
         x.relevant_to = true;
         y.relevant_from = true;
-        // TODO: this could be split into 4 integers
-        //       two for the forward and two for the backward propagation
         int num_relevant_out_from;
         int num_relevant_in_from;
         int num_relevant_out_to;
@@ -694,8 +693,6 @@ private:
 
     template <class M>
     std::pair<int, int> dijkstra(int source_idx, std::vector<int> &visited_set, M &m) {
-        // TODO: the paper argues that the SSSP algorithm in "Shortest path algorithms: Engineering aspects" is faster
-        //       than a simple dijkstra. Maybe there are even better ones nowadays.
         int relevant = 0;
         int relevant_degree_out = 0, relevant_degree_in = 0;
         assert(visited_set.empty() && costs_heap_.empty());
