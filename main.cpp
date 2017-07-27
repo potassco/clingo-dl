@@ -410,7 +410,7 @@ public:
         auto &xy = edges_[xy_idx];
         auto &x = nodes_[xy.from];
         auto &y = nodes_[xy.to];
-        if (x.incoming.empty() || y.outgoing.empty()) {
+        if ((x.incoming.empty() && x.outgoing.size() == 1) || (y.outgoing.empty() && y.incoming.size() == 1)) {
             return true;
         }
         x.relevant_to = true;
