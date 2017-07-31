@@ -9,7 +9,7 @@ CPPFLAGS?=-I$(CLINGOROOT)/include
 LDFLAGS?=-L$(CLINGOROOT)/lib -Wl,-rpath=$(CLINGOROOT)/lib
 LDLIBS?=-lclingo
 
-TARGET=propagator
+TARGET=clingoDL
 SOURCE=main.cpp
 
 OBJECT=$(patsubst %,%.o,$(basename $(SOURCE)))

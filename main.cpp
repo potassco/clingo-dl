@@ -1042,6 +1042,7 @@ void solve(Stats &stats, Control &ctl, bool strict, bool propagate) {
 
 int main(int argc, char *argv[]) {
     Stats stats;
+    int ret;
     {
         Timer t{stats.time_total};
         auto argb = argv + 1, arge = argb;
@@ -1052,7 +1053,7 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        Clingo::clingo_main("clingoDL", {argb, numeric_cast<size_t>(argv + argc - argb)}, [&](Clingo::Control &ctl, Clingo::StringSpan files) {
+        ret = Clingo::clingo_main("clingoDL", {argb, numeric_cast<size_t>(argv + argc - argb)}, [&](Clingo::Control &ctl, Clingo::StringSpan files) {
             ctl.add("base", {}, R"(#theory dl {
     term{};
     constant {- : 1, unary};
@@ -1106,4 +1107,5 @@ int main(int argc, char *argv[]) {
         std::cout << "      undo: " << stat.time_undo.count() << "s\n";
         ++thread;
     }
+    return ret;
 }
