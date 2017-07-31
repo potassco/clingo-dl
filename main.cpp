@@ -32,7 +32,7 @@
 #include <limits>
 #include <chrono>
 #include <iomanip>
-#include <stdlib.h>
+#include <cstdlib>
 
 //#define CROSSCHECK
 #define CHECKSOLUTION
@@ -1035,18 +1035,8 @@ void solve(Stats &stats, Control &ctl, bool strict, bool propagate) {
     DifferenceLogicPropagator<T> p{stats, strict, propagate};
     ctl.register_propagator(p);
     ctl.ground({{"base", {}}});
-    int i = 0;
     for (auto m : ctl.solve()) {
-        i++;
-        std::cout << "Answer " << i << "\n";
-        std::cout << m << "\n";
         p.print_assignment(m.thread_id());
-    }
-    if (i == 0) {
-        std::cout << "UNSATISFIABLE\n";
-    }
-    else {
-        std::cout << "SATISFIABLE\n";
     }
 }
 
@@ -1061,59 +1051,59 @@ int main(int argc, char *argv[]) {
                 break;
             }
         }
-        Control ctl{{argb, numeric_cast<size_t>(argv + argc - argb)}};
-        ctl.add("base", {}, R"(#theory dl {
+
+        Clingo::clingo_main("clingoDL", {argb, numeric_cast<size_t>(argv + argc - argb)}, [&](Clingo::Control &ctl, Clingo::StringSpan files) {
+            ctl.add("base", {}, R"(#theory dl {
     term{};
     constant {- : 1, unary};
     diff_term {- : 1, binary, left};
     &diff/0 : diff_term, {<=}, constant, any;
     &show_assignment/0 : term, directive
 }.)");
-        bool propagate = false;
-        for (auto arg = argv + 1; arg != arge; ++arg) {
-            if (std::strcmp(*arg, "-p") == 0) {
-                propagate = true;
+            bool propagate = false;
+            for (auto arg = argv + 1; arg != arge; ++arg) {
+                if (std::strcmp(*arg, "-p") == 0) {
+                    propagate = true;
+                }
+                else {
+                    ctl.load(*arg);
+                }
+            }
+            for (auto &x : files) { ctl.load(x); }
+            // TODO: thise should be options not gringo constants
+            // configure strict/non-strict mode
+            auto strict = get_int("strict", ctl, 0) != 0;
+            // configure IDL/RDL mode
+            auto rdl = get_int("rdl", ctl, 0) != 0;
+
+            if (rdl) {
+                if (strict) {
+                    // NOTE: could be implemented by introducing and epsilon
+                    std::cout << "Real difference logic not available with strict semantics!" << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                solve<double>(stats, ctl, strict, propagate);
             }
             else {
-                ctl.load(*arg);
+                solve<int>(stats, ctl, strict, propagate);
             }
-        }
-        // configure strict/non-strict mode
-        auto strict = get_int("strict", ctl, 0) != 0;
-        // configure IDL/RDL mode
-        auto rdl = get_int("rdl", ctl, 0) != 0;
-
-        if (rdl) {
-            if (strict) {
-                // NOTE: could be implemented by introducing and epsilon
-                std::cout << "Real difference logic not available with strict semantics!" << std::endl;
-                exit(EXIT_FAILURE);
-            }
-            solve<double>(stats, ctl, strict, propagate);
-        }
-        else {
-            solve<int>(stats, ctl, strict, propagate);
-        }
-        auto solvers = ctl.statistics()["solving"]["solvers"];
-        stats.choices = solvers["choices"];
-        stats.conflicts = solvers["conflicts"];
-        stats.restarts = solvers["restarts"];
+        });
     }
 
-    std::cout << "total: " << stats.time_total.count() << "s\n";
-    std::cout << "  init: " << stats.time_init.count() << "s\n";
+
+    std::cout << "\n";
+    std::cout << "propagator statistics:\n";
+    std::cout << "  total: " << stats.time_total.count() << "s\n";
+    std::cout << "    init: " << stats.time_init.count() << "s\n";
     int thread = 0;
     for (auto &stat : stats.dl_stats) {
-        std::cout << "  total[" << thread << "]: ";
+        std::cout << "    total[" << thread << "]: ";
         std::cout << (stat.time_undo + stat.time_propagate).count() << "s\n";
-        std::cout << "    propagate: " << stat.time_propagate.count() << "s\n";
-        std::cout << "      dijkstra   : " << stat.time_dijkstra.count() << "s\n";
-        std::cout << "      true edges : " << stat.true_edges << "\n";
-        std::cout << "      false edges: " << stat.false_edges << "\n";
-        std::cout << "    undo     : " << stat.time_undo.count() << "s\n";
+        std::cout << "      propagate: " << stat.time_propagate.count() << "s\n";
+        std::cout << "        dijkstra: " << stat.time_dijkstra.count() << "s\n";
+        std::cout << "        true edges: " << stat.true_edges << "\n";
+        std::cout << "        false edges: " << stat.false_edges << "\n";
+        std::cout << "      undo: " << stat.time_undo.count() << "s\n";
         ++thread;
     }
-    std::cout << "conflicts: " << stats.conflicts << "\n";
-    std::cout << "choices  : " << stats.choices << "\n";
-    std::cout << "restarts : " << stats.restarts << "\n";
 }
