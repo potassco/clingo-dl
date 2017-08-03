@@ -1040,72 +1040,75 @@ void solve(Stats &stats, Control &ctl, bool strict, bool propagate) {
     }
 }
 
+class ClingoDLApp : public Clingo::ClingoApplication {
+public:
+    ClingoDLApp(Stats &stats) : stats_{stats} { }
+    char const *program_name() const noexcept override { return "clingoDL"; }
+    void main(Control &ctl, StringSpan files) override {
+        ctl.add("base", {}, R"(#theory dl {
+term{};
+constant {- : 1, unary};
+diff_term {- : 1, binary, left};
+&diff/0 : diff_term, {<=}, constant, any;
+&show_assignment/0 : term, directive
+}.)");
+        for (auto &file : files) { ctl.load(file); }
+
+        if (rdl_) {
+            solve<double>(stats_, ctl, strict_, propagate_);
+        }
+        else {
+            solve<int>(stats_, ctl, strict_, propagate_);
+        }
+    }
+
+    void register_options(ClingoOptions &options) override {
+        char const *group = "Clingo(DL) Options";
+        options.add_flag(group, "propagate,p", "Enable propagation.", propagate_);
+        options.add_flag(group, "rdl", "Enable support for real numbers.", rdl_);
+        options.add_flag(group, "strict", "Enable strict mode.", strict_);
+    }
+
+    void validate_options() override {
+        if (rdl_ && strict_) {
+            // NOTE: could be implemented by introducing and epsilon
+            std::cout << "Real difference logic not available with strict semantics!" << std::endl;
+            exit(EXIT_FAILURE);
+        }
+    }
+
+private:
+    Stats &stats_;
+    bool propagate_ = false;
+    bool strict_ = false;
+    bool rdl_ = false;
+};
+
 int main(int argc, char *argv[]) {
     Stats stats;
     int ret;
     {
         Timer t{stats.time_total};
-        auto argb = argv + 1, arge = argb;
-        for (; *argb; ++argb, ++arge) {
-            if (std::strcmp(*argb, "--") == 0) {
-                ++argb;
-                break;
-            }
-        }
-
-        ret = Clingo::clingo_main("clingoDL", {argb, numeric_cast<size_t>(argv + argc - argb)}, [&](Clingo::Control &ctl, Clingo::StringSpan files) {
-            ctl.add("base", {}, R"(#theory dl {
-    term{};
-    constant {- : 1, unary};
-    diff_term {- : 1, binary, left};
-    &diff/0 : diff_term, {<=}, constant, any;
-    &show_assignment/0 : term, directive
-}.)");
-            bool propagate = false;
-            for (auto arg = argv + 1; arg != arge; ++arg) {
-                if (std::strcmp(*arg, "-p") == 0) {
-                    propagate = true;
-                }
-                else {
-                    ctl.load(*arg);
-                }
-            }
-            for (auto &x : files) { ctl.load(x); }
-            // TODO: thise should be options not gringo constants
-            // configure strict/non-strict mode
-            auto strict = get_int("strict", ctl, 0) != 0;
-            // configure IDL/RDL mode
-            auto rdl = get_int("rdl", ctl, 0) != 0;
-
-            if (rdl) {
-                if (strict) {
-                    // NOTE: could be implemented by introducing and epsilon
-                    std::cout << "Real difference logic not available with strict semantics!" << std::endl;
-                    exit(EXIT_FAILURE);
-                }
-                solve<double>(stats, ctl, strict, propagate);
-            }
-            else {
-                solve<int>(stats, ctl, strict, propagate);
-            }
-        });
+        ClingoDLApp app{stats};
+        ret = Clingo::clingo_main(app, {argv+1, numeric_cast<size_t>(argc-1)});
     }
 
-
-    std::cout << "\n";
-    std::cout << "propagator statistics:\n";
-    std::cout << "  total: " << stats.time_total.count() << "s\n";
-    std::cout << "    init: " << stats.time_init.count() << "s\n";
-    int thread = 0;
-    for (auto &stat : stats.dl_stats) {
-        std::cout << "    total[" << thread << "]: ";
-        std::cout << (stat.time_undo + stat.time_propagate).count() << "s\n";
-        std::cout << "      propagate: " << stat.time_propagate.count() << "s\n";
-        std::cout << "        dijkstra: " << stat.time_dijkstra.count() << "s\n";
-        std::cout << "        true edges: " << stat.true_edges << "\n";
-        std::cout << "        false edges: " << stat.false_edges << "\n";
-        std::cout << "      undo: " << stat.time_undo.count() << "s\n";
-        ++thread;
+    if (stats.dl_stats.size() > 0) {
+        std::cout << "\n";
+        std::cout << "propagator statistics:\n";
+        std::cout << "  total: " << stats.time_total.count() << "s\n";
+        std::cout << "    init: " << stats.time_init.count() << "s\n";
+        int thread = 0;
+        for (auto &stat : stats.dl_stats) {
+            std::cout << "    total[" << thread << "]: ";
+            std::cout << (stat.time_undo + stat.time_propagate).count() << "s\n";
+            std::cout << "      propagate: " << stat.time_propagate.count() << "s\n";
+            std::cout << "        dijkstra: " << stat.time_dijkstra.count() << "s\n";
+            std::cout << "        true edges: " << stat.true_edges << "\n";
+            std::cout << "        false edges: " << stat.false_edges << "\n";
+            std::cout << "      undo: " << stat.time_undo.count() << "s\n";
+            ++thread;
+        }
     }
     return ret;
 }

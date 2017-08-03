@@ -7,14 +7,15 @@ using clingo's C++ API and theory language.
 Usage
 -----
 
-    ./propagator [-p] [FILE]... [-- [CLINGO OPTION]...]
+    ./propagator [CLINGO OPTION]... [-p] [--strict] [--rdl] [FILE]...
 
-Option `-p` can be used to enable propagation of difference constraints.
+Option `-p` can be used to enable propagation of difference constraints,
+`--strict` to turn on strict mode, and `--rdl` to use real numbers.
 
 Example
 -------
 
-    ./propagator -p encoding-dl.lp tai4_4_1.lp -- -c n=132
+    ./propagator -c n=132 -p encoding-dl.lp tai4_4_1.lp
 
 Development
 -----------
@@ -26,12 +27,12 @@ are available, the propagator can be compiled. First run
 
     make FLAGS
 
-to the default configuration file `FLAGS`.  The default paths there point to
-locations in our development environment and probably have to be adjusted.
-Note that it is not necessary to install clingo but just to compile it. Point
-the include path to the folder where the `clingo.hh` file is, and the library
-paths to the place where the `libclingo.so` file is.  If clingo is installed
-globally the CPPFLAGS and LDFLAGS can be left empty. Then run
+to create the default configuration file `FLAGS`.  The default paths there
+point to locations in our development environment and probably have to be
+adjusted.  Note that it is not necessary to install clingo but just to compile
+it. Point the include path to the folder where the `clingo.hh` file is, and the
+library paths to the place where the `libclingo.so` file is.  If clingo is
+installed globally the CPPFLAGS and LDFLAGS can be left empty. Then run
 
     make
 
