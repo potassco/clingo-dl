@@ -7,7 +7,7 @@ using clingo's C++ API and theory language.
 Usage
 -----
 
-    ./propagator [CLINGO OPTION]... [-p] [--strict] [--rdl] [FILE]...
+    ./clingoDL [CLINGO OPTION]... [-p] [--strict] [--rdl] [FILE]...
 
 Option `-p` can be used to enable propagation of difference constraints,
 `--strict` to turn on strict mode, and `--rdl` to use real numbers.
@@ -15,15 +15,15 @@ Option `-p` can be used to enable propagation of difference constraints,
 Example
 -------
 
-    ./propagator -c n=132 -p encoding-dl.lp tai4_4_1.lp
+    ./clingoDL -c n=132 -p encoding-dl.lp tai4_4_1.lp
 
 Development
 -----------
 
 ### Compiling
 
-The propagator needs a C++14 conforming compiler and the clingo solver. If both
-are available, the propagator can be compiled. First run
+The clingoDL system needs a C++14 conforming compiler and the clingo solver. If
+both are available, it can be compiled. First run
 
     make FLAGS
 
@@ -36,7 +36,7 @@ installed globally the CPPFLAGS and LDFLAGS can be left empty. Then run
 
     make
 
-to build the propagator.
+to build clingoDL.
 
 ### Code Formatting
 
