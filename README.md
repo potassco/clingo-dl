@@ -22,7 +22,7 @@ Development
 
 ### Compiling
 
-The clingoDL system needs a C++14 conforming compiler and the clingo solver. If
+The clingoDL system needs a C++14 conforming compiler and at least clingo version 5.3. If
 both are available, it can be compiled. First run
 
     make FLAGS
