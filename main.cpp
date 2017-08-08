@@ -847,18 +847,86 @@ struct DLState {
 };
 
 template <typename T>
+T evaluate_binary(char const *op, T left, T right) {
+    if (std::strcmp(op, "+") == 0) {
+        return left + right;
+    }
+    if (std::strcmp(op, "-") == 0) {
+        return left - right;
+    }
+    if (std::strcmp(op, "*") == 0) {
+        return left * right;
+    }
+    if (std::strcmp(op, "/") == 0) {
+        if (std::is_integral<T>::value && right == 0) {
+            throw std::runtime_error("could not evaluate term: division by zero");
+        }
+        return left / right;
+    }
+    throw std::runtime_error("could not evaluate term: unknown binary operator");
+}
+
+template <typename T>
+T evaluate_real(char const *);
+
+template <>
+int evaluate_real(char const *) {
+    throw std::runtime_error("could not evaluate term: integer expected");
+}
+
+template <>
+double evaluate_real(char const *name) {
+    static const std::string chars = "\"";
+    auto len = std::strlen(name);
+    if (len < 2 || name[0] != '"' || name[len - 1] != '"') {
+        throw std::runtime_error("could not evaluate term: real numbers have to be represented as strings");
+    }
+    char *parsed = nullptr;
+    auto ret = std::strtod(name + 1, &parsed);
+    if (parsed != name + len - 1) {
+        throw std::runtime_error("could not evaluate term: not a valid real number");
+    }
+    return ret;
+}
+
+template <typename T>
+T evaluate(Clingo::TheoryTerm term) {
+    switch (term.type()) {
+        case Clingo::TheoryTermType::Number: {
+            return term.number();
+        }
+        case Clingo::TheoryTermType::Symbol: {
+            return evaluate_real<T>(term.name());
+        }
+        case Clingo::TheoryTermType::Function: {
+            auto args = term.arguments();
+            if (args.size() == 2) {
+                return evaluate_binary(term.name(), evaluate<T>(args[0]), evaluate<T>(args[1]));
+            }
+            if (args.size() == 1) {
+                if (std::strcmp(term.name(), "-") == 0) {
+                    return -evaluate<T>(args[0]);
+                }
+                else {
+                    throw std::runtime_error("could not evaluate term: unknown unary operator");
+                }
+            }
+        }
+        default: {
+            throw std::runtime_error("could not evaluate term: only numeric terms with basic arithmetic operations are supported");
+        }
+    }
+}
+
+template <typename T>
 T get_weight(TheoryAtom const &atom);
 template <>
 int get_weight(TheoryAtom const &atom) {
-    return atom.guard().second.arguments().empty() ? atom.guard().second.number() : -atom.guard().second.arguments()[0].number();
+    return evaluate<int>(atom.guard().second);
 }
 template <>
 double get_weight(TheoryAtom const &atom) {
-    static const std::string chars = "()\"";
-    // TODO: why not simply atom.guard().second.name();
-    std::string guard = atom.guard().second.to_string();
-    guard.erase(std::remove_if(guard.begin(), guard.end(), [](char c) { return chars.find(c) != std::string::npos; }), guard.end());
-    return std::stod(guard);
+    return evaluate<double>(atom.guard().second);
 }
 
 template <typename T>
@@ -1047,7 +1115,13 @@ public:
     void main(Control &ctl, StringSpan files) override {
         ctl.add("base", {}, R"(#theory dl {
 term{};
-constant {- : 1, unary};
+constant {
+  + : 1, binary, left;
+  - : 1, binary, left;
+  * : 2, binary, left;
+  / : 2, binary, left;
+  - : 3, unary
+};
 diff_term {- : 1, binary, left};
 &diff/0 : diff_term, {<=}, constant, any;
 &show_assignment/0 : term, directive
