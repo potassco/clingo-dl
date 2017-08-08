@@ -1,5 +1,5 @@
-Propagation Difference Constraints
-==================================
+ASP modulo Difference Constraints
+=================================
 
 This project comprises a small prototype to propagate difference constraints
 using clingo's C++ API and theory language.
