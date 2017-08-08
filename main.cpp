@@ -1146,8 +1146,7 @@ diff_term {- : 1, binary, left};
     void validate_options() override {
         if (rdl_ && strict_) {
             // NOTE: could be implemented by introducing and epsilon
-            std::cout << "Real difference logic not available with strict semantics!" << std::endl;
-            exit(EXIT_FAILURE);
+            throw std::runtime_error("real difference logic not available with strict semantics");
         }
     }
 
