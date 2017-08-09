@@ -918,6 +918,75 @@ T evaluate(Clingo::TheoryTerm term) {
     }
 }
 
+int require_number(Clingo::Symbol sym) {
+    return sym.type() == Clingo::SymbolType::Number
+        ? sym.number()
+        : throw std::runtime_error("could not evaluate term: artithmetic on non-integer");
+}
+
+Clingo::Symbol evaluate_term(Clingo::TheoryTerm term) {
+    switch (term.type()) {
+        case Clingo::TheoryTermType::Number: {
+            return Clingo::Number(term.number());
+        }
+        case Clingo::TheoryTermType::Symbol: {
+            return Clingo::Id(term.name(), true);
+        }
+        case Clingo::TheoryTermType::Function: {
+            auto op = term.name();
+            std::vector<Clingo::Symbol> args;
+            for (auto arg : term.arguments()) {
+                args.emplace_back(evaluate_term(arg));
+            }
+            if (args.size() == 2) {
+                if (std::strcmp(op, "+") == 0) {
+                    return Clingo::Number(require_number(args[0]) + require_number(args[1]));
+                }
+                else if (std::strcmp(op, "-") == 0) {
+                    return Clingo::Number(require_number(args[0]) - require_number(args[1]));
+                }
+                else if (std::strcmp(op, "*") == 0) {
+                    return Clingo::Number(require_number(args[0]) * require_number(args[1]));
+                }
+                else if (std::strcmp(op, "/") == 0) {
+                    if (args[1] == Clingo::Number(0)) {
+                        throw std::runtime_error("could not evaluate term: division by zero");
+                    }
+                    return Clingo::Number(require_number(args[0]) / require_number(args[1]));
+                }
+            }
+            else if (args.size() == 1) {
+                if (std::strcmp(op, "-") == 0) {
+                    switch (args[0].type()) {
+                        case Clingo::SymbolType::Number: {
+                            return Clingo::Number(-args[0].number());
+                        }
+                        case Clingo::SymbolType::Function: {
+                            if (std::strcmp(args[0].name(), "") != 0) {
+                                return Clingo::Function(args[0].name(), args[0].arguments(), args[0].is_negative());
+                            }
+                            // [[fallthrough]]
+                        }
+                        default: {
+                            throw std::runtime_error("could not evaluate term: only numbers and functions can be inverted");
+                        }
+                    }
+                }
+            }
+            return Clingo::Function(op, args);
+        }
+        case Clingo::TheoryTermType::Tuple: {
+            std::vector<Clingo::Symbol> args;
+            for (auto arg : term.arguments()) {
+                args.emplace_back(evaluate_term(arg));
+            }
+            return Clingo::Function("", args);
+        }
+        default: {
+            throw std::runtime_error("could not evaluate term: sets and lists are not supported");
+        }
+    }
+}
 template <typename T>
 T get_weight(TheoryAtom const &atom);
 template <>
@@ -941,8 +1010,9 @@ public:
         auto &state = states_[thread];
         T adjust = 0;
         int idx = 0;
-        for (std::string const &name : vert_map_) {
-            if (name == "0") {
+        auto null = Clingo::Number(0);
+        for (auto &name : vert_map_) {
+            if (name == null) {
                 adjust = state.dl_graph.node_value(idx);
                 break;
             }
@@ -951,8 +1021,8 @@ public:
 
         std::cout << "with assignment:\n";
         idx = 0;
-        for (std::string const &name : vert_map_) {
-            if (state.dl_graph.node_value_defined(idx) && name != "0") {
+        for (auto &name : vert_map_) {
+            if (state.dl_graph.node_value_defined(idx) && name != null) {
                 std::cout << name << ":" << adjust + state.dl_graph.node_value(idx) << " ";
             }
             ++idx;
@@ -977,8 +1047,25 @@ private:
     void add_edge_atom(PropagateInit &init, TheoryAtom const &atom) {
         int lit = init.solver_literal(atom.literal());
         T weight = get_weight<T>(atom);
-        auto u_id = map_vert(atom.elements()[0].tuple()[0].arguments()[0].to_string());
-        auto v_id = map_vert(atom.elements()[0].tuple()[0].arguments()[1].to_string());
+        auto elems = atom.elements();
+        char const *msg = "parsing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";
+        if (elems.size() != 1) {
+            throw std::runtime_error(msg);
+        }
+        auto tuple = elems[0].tuple();
+        if (tuple.size() != 1) {
+            throw std::runtime_error(msg);
+        }
+        auto term = tuple[0];
+        if (term.type() != Clingo::TheoryTermType::Function || std::strcmp(term.name(), "-") != 0) {
+            throw std::runtime_error(msg);
+        }
+        auto args = term.arguments();
+        if (args.size() != 2) {
+            throw std::runtime_error(msg);
+        }
+        auto u_id = map_vert(evaluate_term(args[0]));
+        auto v_id = map_vert(evaluate_term(args[1]));
         auto id = numeric_cast<int>(edges_.size());
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
@@ -1000,8 +1087,8 @@ private:
         }
     }
 
-    int map_vert(std::string v) {
-        auto ret = vert_map_inv_.emplace(std::move(v), vert_map_.size());
+    int map_vert(Clingo::Symbol v) {
+        auto ret = vert_map_inv_.emplace(v, vert_map_.size());
         if (ret.second) {
             vert_map_.emplace_back(ret.first->first);
         }
@@ -1083,20 +1170,12 @@ private:
     std::unordered_multimap<literal_t, int> lit_to_edges_;
     std::unordered_multimap<literal_t, int> false_lit_to_edges_;
     std::vector<Edge<T>> edges_;
-    std::vector<std::reference_wrapper<const std::string>> vert_map_;
-    std::unordered_map<std::string, int> vert_map_inv_;
+    std::vector<Clingo::Symbol> vert_map_;
+    std::unordered_map<Clingo::Symbol, int> vert_map_inv_;
     Stats &stats_;
     bool strict_;
     bool propagate_;
 };
-
-int get_int(std::string constname, Control &ctl, int def) {
-    Symbol val = ctl.get_const(constname.c_str());
-    if (val.to_string() == constname.c_str()) {
-        return def;
-    }
-    return val.number();
-}
 
 template <typename T>
 void solve(Stats &stats, Control &ctl, bool strict, bool propagate) {
@@ -1185,3 +1264,4 @@ int main(int argc, char *argv[]) {
     }
     return ret;
 }
+

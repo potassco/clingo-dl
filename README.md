@@ -56,3 +56,5 @@ There are still some things that could be done to improve the implementation.
   strict semantics, too.
 - Some kind of preprocessing on the difference constraints might be
   interesting.
+- Operators and operations in difference constraints should be made more
+  flexible.
