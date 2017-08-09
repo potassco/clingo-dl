@@ -1,8 +1,8 @@
 ASP modulo Difference Constraints
 =================================
 
-This project comprises a small prototype to propagate difference constraints
-using clingo's C++ API and theory language.
+This project comprises a small prototype to extend clingo with difference constraints
+using its C++ API and theory language.
 
 Usage
 -----
