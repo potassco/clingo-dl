@@ -33,9 +33,12 @@
 #include <chrono>
 #include <iomanip>
 #include <cstdlib>
+#include <fstream>
 
 //#define CROSSCHECK
 #define CHECKSOLUTION
+
+std::fstream f_graph;
 
 using namespace Clingo;
 
@@ -1067,6 +1070,7 @@ private:
         auto u_id = map_vert(evaluate_term(args[0]));
         auto v_id = map_vert(evaluate_term(args[1]));
         auto id = numeric_cast<int>(edges_.size());
+        f_graph << '"' << u_id << '"' << " -> \"" << v_id << '"' << ";\n";
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
         init.add_watch(lit);
@@ -1238,12 +1242,23 @@ private:
 
 int main(int argc, char *argv[]) {
     Stats stats;
+    f_graph.open("graph.dot", std::ios_base::out);
+    f_graph << R"(% render with: sfdp -Tpng graph.dot > graph.png
+digraph G {\n"
+overlap=scale;
+node[
+  shape=point,
+  label="",
+];
+)";
     int ret;
     {
         Timer t{stats.time_total};
         ClingoDLApp app{stats};
         ret = Clingo::clingo_main(app, {argv+1, numeric_cast<size_t>(argc-1)});
     }
+    f_graph << "}\n";
+    f_graph.close();
 
     if (stats.dl_stats.size() > 0) {
         std::cout << "\n";
