@@ -1243,11 +1243,12 @@ private:
 int main(int argc, char *argv[]) {
     Stats stats;
     f_graph.open("graph.dot", std::ios_base::out);
-    f_graph << R"(% render with: sfdp -Tpng graph.dot > graph.png
-digraph G {\n"
+    f_graph << R"(# render with: sfdp -Tpng graph.dot > graph.png
+digraph G {
 overlap=scale;
 node[
   shape=point,
+  #width=1,
   label="",
 ];
 )";
