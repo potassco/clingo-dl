@@ -1206,6 +1206,7 @@ diff_term {- : 1, binary, left};
 &show_assignment/0 : term, directive
 }.)");
         for (auto &file : files) { ctl.load(file); }
+        if (files.empty()) { ctl.load("-"); }
 
         if (rdl_) {
             solve<double>(stats_, ctl, strict_, propagate_);
