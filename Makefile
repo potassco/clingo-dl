@@ -3,8 +3,8 @@ undefine CXX
 
 CLINGOROOT?=/home/wv/opt/clingo-banane
 
-CXX?=clang++-3.8
-CXXFLAGS?=-std=c++11 -W -Wall -O3 -DNDEBUG
+CXX?=c++
+CXXFLAGS?=-std=c++14 -W -Wall -O3 -DNDEBUG
 CPPFLAGS?=-I$(CLINGOROOT)/include
 LDFLAGS?=-L$(CLINGOROOT)/lib -Wl,-rpath=$(CLINGOROOT)/lib
 LDLIBS?=-lclingo
