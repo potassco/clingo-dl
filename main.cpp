@@ -1046,10 +1046,13 @@ private:
     }
 
     void add_edge_atom(PropagateInit &init, TheoryAtom const &atom) {
+        char const *msg = "parsing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";
         int lit = init.solver_literal(atom.literal());
+        if (!atom.has_guard()) {
+            throw std::runtime_error(msg);
+        }
         T weight = get_weight<T>(atom);
         auto elems = atom.elements();
-        char const *msg = "parsing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";
         if (elems.size() != 1) {
             throw std::runtime_error(msg);
         }
