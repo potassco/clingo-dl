@@ -1013,7 +1013,7 @@ public:
         int idx = 0;
         auto null = Clingo::Number(0);
         for (auto &name : vert_map_) {
-            if (name == null) {
+            if (state.dl_graph.node_value_defined(idx) && name == null) {
                 adjust = state.dl_graph.node_value(idx);
                 break;
             }
