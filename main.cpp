@@ -912,6 +912,7 @@ T evaluate(Clingo::TheoryTerm term) {
                     throw std::runtime_error("could not evaluate term: unknown unary operator");
                 }
             }
+            // [[fallthrough]]
         }
         default: {
             throw std::runtime_error("could not evaluate term: only numeric terms with basic arithmetic operations are supported");
