@@ -1271,3 +1271,46 @@ int main(int argc, char *argv[]) {
     return ret;
 }
 
+
+extern "C" {
+void load(clingo_control_t* cctl) {
+    static Clingo::Control ctl(cctl, false);
+
+    ctl.add("base", {}, R"(#theory dl {
+term{};
+constant {
+  + : 1, binary, left;
+  - : 1, binary, left;
+  * : 2, binary, left;
+  / : 2, binary, left;
+  - : 3, unary
+};
+diff_term {- : 1, binary, left};
+&diff/0 : diff_term, {<=}, constant, any;
+&show_assignment/0 : term, directive
+}.)");
+
+    bool strict = false;
+    bool propagate = false;
+    static Stats stats;
+    static DifferenceLogicPropagator<int> prop{stats, strict, propagate};
+    ctl.register_propagator(prop);
+}
+
+#ifdef WITH_LUA
+#include "lua.hpp"
+#include "lauxlib.h"
+
+static int l_load(lua_State* L) {
+    clingo_control_t* ctl = reinterpret_cast<clingo_control_t*>(lua_touserdata(L,1));
+    load(ctl);
+    return 0;
+}
+
+int luaopen_libluaclingoDL (lua_State *L) {
+    lua_newtable(L);
+    lua_register(L, "loadPropagator", l_load);
+    return 0;
+}
+#endif
+}
