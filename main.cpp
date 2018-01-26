@@ -1169,6 +1169,31 @@ private:
         }
     }
 #endif
+    void extend_model(int threadId, bool, SymbolVector& ret) override
+    {
+        auto &state = states_[threadId];
+        T adjust = 0;
+        int idx = 0;
+        auto null = Clingo::Number(0);
+        for (auto &name : vert_map_) {
+            if (state.dl_graph.node_value_defined(idx) && name == null) {
+                adjust = state.dl_graph.node_value(idx);
+                break;
+            }
+            ++idx;
+        }
+
+        idx = 0;
+        for (auto &name : vert_map_) {
+            if (state.dl_graph.node_value_defined(idx) && name != null) {
+                SymbolVector params;
+                params.emplace_back(name);
+                params.emplace_back(String(std::to_string(adjust + state.dl_graph.node_value(idx)).c_str()));
+                ret.emplace_back(Function("dl",params));
+            }
+            ++idx;
+        }
+    }
 
 private:
     std::vector<DLState<T>> states_;
@@ -1182,14 +1207,33 @@ private:
     bool propagate_;
 };
 
+
+class MyHandler : public SolveEventHandler
+{
+//    virtual bool on_model(Model const &model) override
+//    {
+//       auto v = model.symbols(ShowType::Theory);
+//       if (std::find(v.begin(), v.end(), Function("dl",SymbolVector{Id("y",true),String("6")}, true))!=v.end()) {
+//           // an answer where y is 6
+//       }
+//       return true;
+//    }
+};
+
 template <typename T>
 void solve(Stats &stats, Control &ctl, bool strict, bool propagate) {
     DifferenceLogicPropagator<T> p{stats, strict, propagate};
     ctl.register_propagator(p);
     ctl.ground({{"base", {}}});
-    for (auto m : ctl.solve()) {
-        p.print_assignment(m.thread_id());
-    }
+    MyHandler h;
+    for(auto m : ctl.solve(Clingo::SymbolicLiteralSpan(),&h)) {
+        (void)(m);
+        //p.print_assignment(m.thread_id());
+        //std::cout << "Answer Set Special Print, could also be onModel:";
+        //for (auto &atom : m.symbols(ShowType::All)) {
+        //    std::cout << " " << atom;
+        }
+    std::cout << "\n";
 }
 
 class ClingoDLApp : public Clingo::ClingoApplication {
