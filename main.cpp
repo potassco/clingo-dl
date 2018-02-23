@@ -1196,6 +1196,7 @@ class ClingoDLApp : public Clingo::ClingoApplication {
 public:
     ClingoDLApp(Stats &stats) : stats_{stats} { }
     char const *program_name() const noexcept override { return "clingoDL"; }
+    char const *version() const noexcept override { return "1.0.0"; }
     void main(Control &ctl, StringSpan files) override {
         ctl.add("base", {}, R"(#theory dl {
 term{};
