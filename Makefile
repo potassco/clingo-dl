@@ -2,6 +2,7 @@ undefine CXX
 -include FLAGS
 
 CLINGOROOT?=/home/wv/opt/clingo-banane
+LUA_INCLUDE_DIR?=/usr/include/lua5.3
 
 CXX?=c++
 CXXFLAGS?=-std=c++14 -W -Wall -O3 -DNDEBUG
@@ -10,12 +11,28 @@ LDFLAGS?=-L$(CLINGOROOT)/lib -Wl,-rpath=$(CLINGOROOT)/lib
 LDLIBS?=-lclingo
 
 TARGET=clingoDL
+LIBTARGET=lib$(TARGET)
+LIBLUATARGET=liblua$(TARGET)
 SOURCE=main.cpp
-
-OBJECT=$(patsubst %,%.o,$(basename $(SOURCE)))
+OBJECT=$(patsubst %,%.o,$(basename *))
 DEPEND=$(patsubst %,%.d,$(basename $(SOURCE)))
 
-all: $(TARGET)
+all: $(TARGET) $(LIBTARGET) $(LIBLUATARGET)
+
+$(TARGET): main.o
+	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
+main.o: main.cpp
+	$(CXX) -c $^ -MT $@ -MMD -MP -MF $(CXXFLAGS) $(CPPFLAGS)
+
+$(LIBTARGET): libmain.o
+	$(CXX) -o $@.so $^ $(LDFLAGS) -shared $(LDLIBS)
+libmain.o: main.cpp
+	$(CXX) -fPIC -c $^ -o $@ -MT $@ -MMD -MP -MF $(CXXFLAGS) $(CPPFLAGS) 
+
+$(LIBLUATARGET): libluamain.o
+	$(CXX) -o $@.so $^ $(LDFLAGS) -shared $(LDLIBS)
+libluamain.o: main.cpp
+	$(CXX) -fPIC -c $^ -o $@ -MT $@ -MMD -MP -MF $(CXXFLAGS) $(CPPFLAGS) -DWITH_LUA -I$(LUA_INCLUDE_DIR)
 
 FLAGS:
 	rm -f FLAGS
@@ -24,15 +41,7 @@ FLAGS:
 	echo "CPPFLAGS:=$(CPPFLAGS)" >> FLAGS
 	echo "LDFLAGS:=$(LDFLAGS)" >> FLAGS
 	echo "LDLIBS:=$(LDLIBS)" >> FLAGS
-
-$(TARGET): $(OBJECT) FLAGS
-	$(CXX) $(CXXFLAGS) -o $@ $(OBJECT) $(LDFLAGS) $(LDLIBS)
-
-.DELETE_ON_ERROR: %.Td
-%.o: %.cpp
-%.o %.Td: %.cpp %.d FLAGS
-	$(CXX) -c -MT $@ -MMD -MP -MF $*.Td $(CXXFLAGS) $(CPPFLAGS) $<
-	mv -f $*.Td $*.d
+	echo "LUA_INCLUDE_DIR:=$(LUA_INCLUDE_DIR)" >> FLAGS
 
 .PHONY: format
 format:
@@ -40,7 +49,7 @@ format:
 
 .PHONY: clean
 clean:
-	rm -f $(TARGET) $(OBJECT) $(DEPEND) $(patsubst %,%.Td,$(basename $(SOURCE)))
+	rm -f $(TARGET) $(LIBTARGET).so $(LIBLUATARGET).so $(OBJECT) $(DEPEND) $(patsubst %,%.Td,$(basename $(SOURCE)))
 
 .PRECIOUS: %.d
 %.d: ;

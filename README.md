@@ -15,7 +15,7 @@ Option `-p` can be used to enable propagation of difference constraints,
 Example
 -------
 
-    ./clingoDL -c n=132 -p encoding-dl.lp tai4_4_1.lp
+    ./clingoDL -c n=132 -p examples/taskassignment/encoding-dl.lp examples/taskassignment/tai4_4_1.lp
 
 Development
 -----------
@@ -37,6 +37,19 @@ installed globally the CPPFLAGS and LDFLAGS can be left empty. Then run
     make
 
 to build clingoDL.
+
+Run
+
+    make libclingoDL
+
+to build the clingoDL C library (callable from C and Python), see examples/libloading/propagator-py.lp
+
+Run
+
+    make libluaclingoDL
+
+to build the clingoDL lua library (callable from lua), see examples/libloading/propagator-lua.lp
+
 
 ### Code Formatting
 
