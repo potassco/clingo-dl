@@ -22,29 +22,16 @@ Development
 
 ### Compiling
 
-The clingoDL system needs a C++14 conforming compiler and at least clingo version 5.3. If
-both are available, it can be compiled. First run
+The clingoDL system needs a C++14 conforming compiler and at least clingo version 5.3.
+First run
 
-    make FLAGS
+    cmake -H. -B build
 
-to create the default configuration file `FLAGS`.  The default paths there
-point to locations in our development environment and probably have to be
-adjusted.  Note that it is not necessary to install clingo but just to compile
-it. Point the include path to the folder where the `clingo.hh` file is, and the
-library paths to the place where the `libclingo.so` file is.  If clingo is
-installed globally the CPPFLAGS and LDFLAGS can be left empty. Then run
+to create the default configuration for building in ./build/.
 
-    make
+    cmake --build build
 
 to build clingoDL.
-
-### Code Formatting
-
-To format the code with clang-format simply run:
-
-    make format
-
-Check the Makefile to fine-tune the style.
 
 ### TODO
 
