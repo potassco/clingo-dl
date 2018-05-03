@@ -1169,7 +1169,7 @@ private:
         }
     }
 #endif
-    void extend_model(int threadId, bool, SymbolVector& ret) override
+    void extend_model(int threadId, bool, SymbolSpanCallback cb) override
     {
         auto &state = states_[threadId];
         T adjust = 0;
@@ -1184,15 +1184,17 @@ private:
         }
 
         idx = 0;
+        SymbolVector vec;
         for (auto &name : vert_map_) {
             if (state.dl_graph.node_value_defined(idx) && name != null) {
                 SymbolVector params;
                 params.emplace_back(name);
                 params.emplace_back(String(std::to_string(adjust + state.dl_graph.node_value(idx)).c_str()));
-                ret.emplace_back(Function("dl",params));
+                vec.emplace_back(Function("dl",params));
             }
             ++idx;
         }
+        cb({vec});
     }
 
 private:
