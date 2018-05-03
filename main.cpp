@@ -34,6 +34,15 @@
 #include <iomanip>
 #include <cstdlib>
 
+//! Major version number.
+#define CLINGODL_VERSION_MAJOR 1
+//! Minor version number.
+#define CLINGODL_VERSION_MINOR 0
+//! Revision number.
+#define CLINGODL_VERSION_REVISION 0
+//! String representation of version.
+#define CLINGODL_VERSION "1.0.0"
+
 //#define CROSSCHECK
 #define CHECKSOLUTION
 
@@ -173,13 +182,17 @@ public:
         for (int p = i, j = children_(p), s = numeric_cast<int>(heap_.size()); j < s; j = children_(p)) {
             int min = j;
             for (int k = j + 1; k < j + N; ++k) {
-                if (k < s && less_(m, k, min)) { min = k; }
+                if (k < s && less_(m, k, min)) {
+                    min = k;
+                }
             }
             if (less_(m, min, p)) {
                 swap_(m, min, p);
                 p = min;
             }
-            else { return; }
+            else {
+                return;
+            }
         }
     }
     int size() { return heap_.size(); }
@@ -411,7 +424,7 @@ public:
         auto &x = nodes_[xy.from];
         auto &y = nodes_[xy.to];
         // BUG: this test is not correct
-        //if ((x.incoming.empty() && x.outgoing.size() == 1) || (y.outgoing.empty() && y.incoming.size() == 1)) {
+        // if ((x.incoming.empty() && x.outgoing.size() == 1) || (y.outgoing.empty() && y.incoming.size() == 1)) {
         //    return true;
         //}
         x.relevant_to = true;
@@ -465,8 +478,7 @@ public:
         bool forward_from = num_relevant_in_from < num_relevant_out_to;
         bool backward_from = num_relevant_out_from < num_relevant_in_to;
 
-        bool ret = propagate_edges(*static_cast<HFM*>(this), ctl, xy_idx,  forward_from,  backward_from) &&
-                   propagate_edges(*static_cast<HTM*>(this), ctl, xy_idx, !forward_from, !backward_from);
+        bool ret = propagate_edges(*static_cast<HFM *>(this), ctl, xy_idx, forward_from, backward_from) && propagate_edges(*static_cast<HTM *>(this), ctl, xy_idx, !forward_from, !backward_from);
 
         for (auto &x : visited_from_) {
             nodes_[x].visited_from = false;
@@ -914,17 +926,11 @@ T evaluate(Clingo::TheoryTerm term) {
             }
             // [[fallthrough]]
         }
-        default: {
-            throw std::runtime_error("could not evaluate term: only numeric terms with basic arithmetic operations are supported");
-        }
+        default: { throw std::runtime_error("could not evaluate term: only numeric terms with basic arithmetic operations are supported"); }
     }
 }
 
-int require_number(Clingo::Symbol sym) {
-    return sym.type() == Clingo::SymbolType::Number
-        ? sym.number()
-        : throw std::runtime_error("could not evaluate term: artithmetic on non-integer");
-}
+int require_number(Clingo::Symbol sym) { return sym.type() == Clingo::SymbolType::Number ? sym.number() : throw std::runtime_error("could not evaluate term: artithmetic on non-integer"); }
 
 Clingo::Symbol evaluate_term(Clingo::TheoryTerm term) {
     switch (term.type()) {
@@ -969,9 +975,7 @@ Clingo::Symbol evaluate_term(Clingo::TheoryTerm term) {
                             }
                             // [[fallthrough]]
                         }
-                        default: {
-                            throw std::runtime_error("could not evaluate term: only numbers and functions can be inverted");
-                        }
+                        default: { throw std::runtime_error("could not evaluate term: only numbers and functions can be inverted"); }
                     }
                 }
             }
@@ -984,9 +988,7 @@ Clingo::Symbol evaluate_term(Clingo::TheoryTerm term) {
             }
             return Clingo::Function("", args);
         }
-        default: {
-            throw std::runtime_error("could not evaluate term: sets and lists are not supported");
-        }
+        default: { throw std::runtime_error("could not evaluate term: sets and lists are not supported"); }
     }
 }
 template <typename T>
@@ -1160,15 +1162,40 @@ private:
         auto &state = states_[ctl.thread_id()];
         for (auto &x : edges_) {
             if (ctl.assignment().is_true(x.lit)) {
-                if (!state.dl_graph.node_value_defined(x.from) ||
-                    !state.dl_graph.node_value_defined(x.to) ||
-                    !(state.dl_graph.node_value(x.from) - state.dl_graph.node_value(x.to) <= x.weight)) {
+                if (!state.dl_graph.node_value_defined(x.from) || !state.dl_graph.node_value_defined(x.to) || !(state.dl_graph.node_value(x.from) - state.dl_graph.node_value(x.to) <= x.weight)) {
                     throw std::logic_error("not a valid solution");
                 }
             }
         }
     }
 #endif
+    void extend_model(int threadId, bool, SymbolSpanCallback cb) override
+    {
+        auto &state = states_[threadId];
+        T adjust = 0;
+        int idx = 0;
+        auto null = Clingo::Number(0);
+        for (auto &name : vert_map_) {
+            if (state.dl_graph.node_value_defined(idx) && name == null) {
+                adjust = state.dl_graph.node_value(idx);
+                break;
+            }
+            ++idx;
+        }
+
+        idx = 0;
+        SymbolVector vec;
+        for (auto &name : vert_map_) {
+            if (state.dl_graph.node_value_defined(idx) && name != null) {
+                SymbolVector params;
+                params.emplace_back(name);
+                params.emplace_back(String(std::to_string(adjust + state.dl_graph.node_value(idx)).c_str()));
+                vec.emplace_back(Function("dl",params));
+            }
+            ++idx;
+        }
+        cb({vec});
+    }
 
 private:
     std::vector<DLState<T>> states_;
@@ -1182,21 +1209,37 @@ private:
     bool propagate_;
 };
 
+
+class MyHandler : public SolveEventHandler
+{
+//    virtual bool on_model(Model const &model) override
+//    {
+//       auto v = model.symbols(ShowType::Theory);
+//       if (std::find(v.begin(), v.end(), Function("dl",SymbolVector{Id("y",true),String("6")}, true))!=v.end()) {
+//           // an answer where y is 6
+//       }
+//       return true;
+//    }
+};
+
 template <typename T>
 void solve(Stats &stats, Control &ctl, bool strict, bool propagate) {
     DifferenceLogicPropagator<T> p{stats, strict, propagate};
     ctl.register_propagator(p);
     ctl.ground({{"base", {}}});
-    for (auto m : ctl.solve()) {
-        p.print_assignment(m.thread_id());
-    }
+    MyHandler h;
+    for(auto m : ctl.solve(Clingo::SymbolicLiteralSpan(),&h)) {
+        (void)(m);
+        }
+    std::cout << "\n";
 }
 
 class ClingoDLApp : public Clingo::ClingoApplication {
 public:
-    ClingoDLApp(Stats &stats) : stats_{stats} { }
+    ClingoDLApp(Stats &stats)
+        : stats_{stats} {}
     char const *program_name() const noexcept override { return "clingoDL"; }
-    char const *version() const noexcept override { return "1.0.0"; }
+    char const *version() const noexcept override { return CLINGODL_VERSION; }
     void main(Control &ctl, StringSpan files) override {
         ctl.add("base", {}, R"(#theory dl {
 term{};
@@ -1211,8 +1254,12 @@ diff_term {- : 1, binary, left};
 &diff/0 : diff_term, {<=}, constant, any;
 &show_assignment/0 : term, directive
 }.)");
-        for (auto &file : files) { ctl.load(file); }
-        if (files.empty()) { ctl.load("-"); }
+        for (auto &file : files) {
+            ctl.load(file);
+        }
+        if (files.empty()) {
+            ctl.load("-");
+        }
 
         if (rdl_) {
             solve<double>(stats_, ctl, strict_, propagate_);
@@ -1249,7 +1296,7 @@ int main(int argc, char *argv[]) {
     {
         Timer t{stats.time_total};
         ClingoDLApp app{stats};
-        ret = Clingo::clingo_main(app, {argv+1, numeric_cast<size_t>(argc-1)});
+        ret = Clingo::clingo_main(app, {argv + 1, numeric_cast<size_t>(argc - 1)});
     }
 
     if (stats.dl_stats.size() > 0) {
@@ -1271,4 +1318,3 @@ int main(int argc, char *argv[]) {
     }
     return ret;
 }
-

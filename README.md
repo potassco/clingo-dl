@@ -15,36 +15,23 @@ Option `-p` can be used to enable propagation of difference constraints,
 Example
 -------
 
-    ./clingoDL -c n=132 -p encoding-dl.lp tai4_4_1.lp
+    ./clingoDL -c n=132 -p examples/taskassignment/encoding-dl.lp examples/taskassignment/tai4_4_1.lp
 
 Development
 -----------
 
 ### Compiling
 
-The clingoDL system needs a C++14 conforming compiler and at least clingo version 5.3. If
-both are available, it can be compiled. First run
+The clingoDL system needs a C++14 conforming compiler and at least clingo version 5.3.
+First run
 
-    make FLAGS
+    cmake -H. -Bbuild
 
-to create the default configuration file `FLAGS`.  The default paths there
-point to locations in our development environment and probably have to be
-adjusted.  Note that it is not necessary to install clingo but just to compile
-it. Point the include path to the folder where the `clingo.hh` file is, and the
-library paths to the place where the `libclingo.so` file is.  If clingo is
-installed globally the CPPFLAGS and LDFLAGS can be left empty. Then run
+to create the default configuration for building in ./build/.
 
-    make
+    cmake --build build
 
 to build clingoDL.
-
-### Code Formatting
-
-To format the code with clang-format simply run:
-
-    make format
-
-Check the Makefile to fine-tune the style.
 
 ### TODO
 
