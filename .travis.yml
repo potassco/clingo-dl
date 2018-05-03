@@ -40,5 +40,4 @@ script:
       -DCMAKE_C_COMPILER=${MY_CC}
       -DCMAKE_CXX_COMPILER=${MY_CXX}
       .. &&
-    make -j3 &&
-    make test CTEST_OUTPUT_ON_FAILURE=True
+    make -j3

@@ -25,7 +25,7 @@ Development
 The clingoDL system needs a C++14 conforming compiler and at least clingo version 5.3.
 First run
 
-    cmake -H. -B build
+    cmake -H. -Bbuild
 
 to create the default configuration for building in ./build/.
 
