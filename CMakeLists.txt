@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
-file(READ "main.cpp" clingoh)
-string(REGEX MATCH "#define CLINGODL_VERSION \"([^\"]*)\"" clingov ${clingoh})
+file(READ "main.cpp" main)
+string(REGEX MATCH "#define CLINGODL_VERSION \"([^\"]*)\"" clingov ${main})
 project(CLINGODL VERSION "${CMAKE_MATCH_1}" LANGUAGES CXX)
 # Enable folders in IDEs like Visual Studio
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -11,7 +11,7 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 	message(STATUS "No build type selected - using 'Release'")
 	set(CMAKE_BUILD_TYPE "Release")
 endif()
-#list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 #include(GNUInstallDirs)
 
@@ -61,38 +61,16 @@ set(CMAKE_CXX_EXTENSIONS ON)
 
 set(CLASP_BUILD_WITH_THREADS CLINGODL_BUILD_WITH_THREADS CACHE BOOL "")
 
-# Check for and optionally build external dependency
-find_package(clingo QUIET CONFIG)
-if (NOT clingo_FOUND)
-	if (NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/clingo/CMakeLists.txt)
-		message(STATUS "Clingo is not installed - fetching submodule")
-		execute_process(COMMAND git submodule update --init --recursive WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_QUIET)
-	else()
-		message(STATUS "Clingo is not installed - using local copy")
-	endif()
-	#set(CLINGO_BUILD_APPS   ${CLINGODL_BUILD_APP}   CACHE BOOL "")
-	add_subdirectory(clingo)
-endif()
-
+find_package(clingo)
 
 set(files main.cpp)
 
 # Build clingoDL
 if(CLINGODL_BUILD_APP)
 	add_executable(clingoDL ${files})
-	target_link_libraries(clingoDL PRIVATE libclingo)
-	#target_link_libraries(clingoDL PRIVATE libclingo libpyclingo Pyclingo::Pyclingo libluaclingo)
+	target_link_libraries(clingoDL PRIVATE Clingo::Clingo)
 	set_target_properties(clingoDL PROPERTIES FOLDER exe)
 endif()
 
-# Build optional targets
-#if(CLINGODL_BUILD_TESTS)
-#	enable_testing()
-#	add_subdirectory(tests)
-#endif()
-
-#if(CLINGODL_BUILD_EXAMPLES)
-#	add_subdirectory(examples)
-#endif()
 
 
