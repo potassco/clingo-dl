@@ -9,6 +9,8 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE "Release")
 endif()
 
+include(GNUInstallDirs)
+
 if (NOT MSVC)
     if (NOT CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
         set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -46,3 +48,5 @@ set(files main.cpp)
 add_executable(clingoDL ${files})
 target_link_libraries(clingoDL PRIVATE libclingo)
 set_target_properties(clingoDL PROPERTIES FOLDER exe)
+
+install(TARGETS clingoDL RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
