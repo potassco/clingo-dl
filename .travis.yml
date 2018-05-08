@@ -18,7 +18,10 @@ install:
   - source activate test-environment
   - conda install -q -c potassco/label/dev clingo
   - conda install -q cmake gxx_linux-64
+  # TODO: most likely there is a way to have travis not checkout submodules
   - rm -rf clingo
   - cmake .
   - make
-  - tree
+
+script:
+  - echo "&diff{a-0} <= 42." | ./bin/clingoDL
