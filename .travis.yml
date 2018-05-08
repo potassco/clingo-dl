@@ -17,8 +17,6 @@ install:
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
   - conda install -q -c potassco/label/dev clingo
-
-script:
   - rm -rf clingo
   - cmake .
   - make
