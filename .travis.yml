@@ -24,4 +24,4 @@ install:
   - make
 
 script:
-  - echo "&diff{a-0} <= 42." | ./bin/clingoDL
+  - echo "&diff{a-0} <= 42." | ./bin/clingoDL || [ $? = 10 ]
