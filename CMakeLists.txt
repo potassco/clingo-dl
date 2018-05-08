@@ -11,6 +11,8 @@ endif()
 
 include(GNUInstallDirs)
 
+option(CLINGODL_BUILD_WITH_SYSTEM_CLINGO "if true the local clingo copy will not be used" OFF)
+
 if (NOT MSVC)
     if (NOT CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
         set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -33,7 +35,7 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 
-if (NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/clingo/CMakeLists.txt)
+if (NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/clingo/CMakeLists.txt OR CLINGODL_BUILD_WITH_SYSTEM_CLINGO)
     find_package(Clingo REQUIRED)
     message(STATUS "Local clingo copy not available - using system installation")
 else()
