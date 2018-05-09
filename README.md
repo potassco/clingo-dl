@@ -7,7 +7,7 @@ using its C++ API and theory language.
 Usage
 -----
 
-    ./clingoDL [CLINGO OPTION]... [-p] [--strict] [--rdl] [FILE]...
+    clingoDL [CLINGO OPTION]... [-p] [--strict] [--rdl] [FILE]...
 
 Option `-p` can be used to enable propagation of difference constraints,
 `--strict` to turn on strict mode, and `--rdl` to use real numbers.
@@ -15,7 +15,7 @@ Option `-p` can be used to enable propagation of difference constraints,
 Example
 -------
 
-    ./clingoDL -c n=132 -p examples/taskassignment/encoding-dl.lp examples/taskassignment/tai4_4_1.lp
+    clingoDL -c n=132 -p examples/taskassignment/encoding-dl.lp examples/taskassignment/tai4_4_1.lp
 
 Development
 -----------
@@ -27,7 +27,7 @@ First run
 
     cmake -H. -Bbuild
 
-to create the default configuration for building in ./build/.
+to create the default configuration for building in `./build`.
 
     cmake --build build
 

@@ -1,5 +1,2 @@
 *.swp
-*.d
-*.o
-clingoDL
-FLAGS
+build
