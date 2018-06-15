@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1)
-file(READ "main.cpp" main)
+file(READ "clingoDL.h" main)
 string(REGEX MATCH "#define CLINGODL_VERSION \"([^\"]*)\"" clingov ${main})
 project(CLINGODL VERSION "${CMAKE_MATCH_1}" LANGUAGES CXX)
 # Enable folders in IDEs like Visual Studio
@@ -45,10 +45,16 @@ endif()
 
 # TODO: folder properties for main.cpp
 #       (in clingo/cmake there is a convienient script to generate those)
-set(files main.cpp)
+set(appfiles main.cpp propagator.cpp clingoDL.cpp)
+set(libfiles propagator.cpp clingoDL.cpp)
 
-add_executable(clingoDL ${files})
+add_executable(clingoDL ${appfiles})
 target_link_libraries(clingoDL PRIVATE libclingo)
 set_target_properties(clingoDL PROPERTIES FOLDER exe)
-
 install(TARGETS clingoDL RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+add_library(clingoDLlib SHARED ${libfiles})
+target_link_libraries(clingoDLlib PRIVATE libclingo)
+set_target_properties(clingoDLlib PROPERTIES PUBLIC_HEADER clingoDL.h)
+install(TARGETS clingoDLlib LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+                            PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
