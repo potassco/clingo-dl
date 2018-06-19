@@ -51,10 +51,14 @@ set(libfiles propagator.cpp clingoDL.cpp)
 add_executable(clingoDL ${appfiles})
 target_link_libraries(clingoDL PRIVATE libclingo)
 set_target_properties(clingoDL PROPERTIES FOLDER exe)
-install(TARGETS clingoDL RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+#install(TARGETS clingoDL RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+# LIBRARY DESTINATION DOES NOT SEEM TO WORK
+add_library(libclingoDL SHARED ${libfiles})
+target_link_libraries(libclingoDL PRIVATE libclingo)
+set_target_properties(libclingoDL PROPERTIES PUBLIC_HEADER clingoDL.h)
+set_target_properties(libclingoDL PROPERTIES LIBRARY_OUTPUT_NAME clingoDL)
 
-add_library(clingoDLlib SHARED ${libfiles})
-target_link_libraries(clingoDLlib PRIVATE libclingo)
-set_target_properties(clingoDLlib PROPERTIES PUBLIC_HEADER clingoDL.h)
-install(TARGETS clingoDLlib LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-                            PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(TARGETS clingoDL libclingoDL 
+                RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+                LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+                PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

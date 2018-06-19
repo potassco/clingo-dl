@@ -1,6 +1,7 @@
 #include "clingoDL.h"
 #include "propagator.h"
-#include <map>
+#include <vector>
+#include <iostream>
 
 #define CLINGODL_CALLBACK_TRY try
 #define CLINGODL_CALLBACK_CATCH catch (...){ return false; } return true
@@ -12,8 +13,8 @@ template <typename T>
 bool init(clingo_propagate_init_t* i, void* data)
 {
     CLINGODL_CALLBACK_TRY {
-    PropagateInit in(i);
-    reinterpret_cast<DifferenceLogicPropagator<T>*>(data)->init(in);
+        PropagateInit in(i);
+        reinterpret_cast<DifferenceLogicPropagator<T>*>(data)->init(in);
     }
     CLINGODL_CALLBACK_CATCH;
 }
@@ -22,8 +23,8 @@ template <typename T>
 bool propagate(clingo_propagate_control_t* i, const clingo_literal_t *changes, size_t size, void* data)
 {
     CLINGODL_CALLBACK_TRY {
-    PropagateControl in(i);
-    reinterpret_cast<DifferenceLogicPropagator<T>*>(data)->propagate(in, {changes, size});
+        PropagateControl in(i);
+        reinterpret_cast<DifferenceLogicPropagator<T>*>(data)->propagate(in, {changes, size});
     }
     CLINGODL_CALLBACK_CATCH;
 }
@@ -32,8 +33,8 @@ template <typename T>
 bool undo(clingo_propagate_control_t* i, const clingo_literal_t *changes, size_t size, void* data)
 {
     CLINGODL_CALLBACK_TRY {
-    PropagateControl in(i);
-    reinterpret_cast<DifferenceLogicPropagator<T>*>(data)->undo(in, {changes, size});
+        PropagateControl in(i);
+        reinterpret_cast<DifferenceLogicPropagator<T>*>(data)->undo(in, {changes, size});
     }
     CLINGODL_CALLBACK_CATCH;
 }
@@ -42,8 +43,8 @@ template <typename T>
 bool check(clingo_propagate_control_t* i, void* data)
 {
     CLINGODL_CALLBACK_TRY {
-    PropagateControl in(i);
-    reinterpret_cast<DifferenceLogicPropagator<T>*>(data)->check(in);
+        PropagateControl in(i);
+        reinterpret_cast<DifferenceLogicPropagator<T>*>(data)->check(in);
     }
     CLINGODL_CALLBACK_CATCH;
 }
@@ -51,7 +52,17 @@ bool check(clingo_propagate_control_t* i, void* data)
 
 class PropagatorStorage {
 public:
-    std::pair<clingo_propagator*, void*> create(char const* option) {
+    ~PropagatorStorage() {
+        for (auto i : intProps_) {
+            delete i.first;
+            delete i.second;
+        }
+        for (auto i : doubleProps_) {
+            delete i.first;
+            delete i.second;
+        }
+    }
+    int create(char const* option) {
         /// TODO: do something about stats writing, can be changed later
         static Stats s;    
         if(strcmp(option,"int")==0) {
@@ -62,7 +73,8 @@ public:
                 (bool (*) (clingo_propagate_control_t *, clingo_literal_t const *, size_t, void *))undo<int>,
                 (bool (*) (clingo_propagate_control_t *, void *))check<int>
             };
-            intProps_[p] = c;
+            intProps_.push_back(std::make_pair(p,c));
+            return (intProps_.size()-1)*2;
         }
         else if(strcmp(option,"double")==0){
             auto c = new DifferenceLogicPropagator<double> (s,false,false);
@@ -72,44 +84,83 @@ public:
                 (bool (*) (clingo_propagate_control_t *, clingo_literal_t const *, size_t, void *))undo<double>,
                 (bool (*) (clingo_propagate_control_t *, void *))check<double>
             };
-            doubleProps_[p] = c;
+            doubleProps_.push_back(std::make_pair(p,c));
+            return (doubleProps_.size()-1)*2+1;
         } else throw std::invalid_argument("Difference Logic only supports int and double as options");
     }
 
-    void destroy(clingo_propagator* p)
-    {
-        auto x = intProps_.find(p);
-        if (x != intProps_.end()) {
-            delete x->second;
-            intProps_.erase(x);
-            delete p;
+    std::pair<clingo_propagator*, void*> getPropagator(int ref) const {
+        if (ref % 2 == 0) {
+            ref/=2;
+            return intProps_[ref];
+        }
+        if (ref % 2 == 1) {
+            ref= (ref-1)/2;
+            return doubleProps_[ref];
+        }
+    }
+
+    void destroy(int ref) {
+        // vector space is currently not reused
+        if (ref % 2 == 0) {
+            ref/=2;
+            delete intProps_[ref].first;
+            delete intProps_[ref].second;
+            intProps_[ref].first = 0;
+            intProps_[ref].second = 0;
             return;
         }
-        auto y = doubleProps_.find(p);
-        if (y != doubleProps_.end()) {
-            delete y->second;
-            doubleProps_.erase(y);
-            delete p;
+        if (ref % 2 == 1) {
+            ref= (ref-1)/2;
+            delete doubleProps_[ref].first;
+            delete doubleProps_[ref].second;
+            doubleProps_[ref].first = 0;
+            doubleProps_[ref].second = 0;
             return;
         }
     }
 private:
-    std::map<clingo_propagator*, DifferenceLogicPropagator<int>*>    intProps_;
-    std::map<clingo_propagator*, DifferenceLogicPropagator<double>*> doubleProps_;
+    std::vector<std::pair<clingo_propagator*, DifferenceLogicPropagator<int>*>>    intProps_;
+    std::vector<std::pair<clingo_propagator*, DifferenceLogicPropagator<double>*>> doubleProps_;
 } propStorage;
 
-extern "C" bool theory_create_propagator(char const* option, clingo_propagator** p, void** prop_data) {
+extern "C" bool theory_create_propagator(clingo_control_t* ctl, char const* option, int* ref) {
     CLINGODL_TRY {
-    auto x = propStorage.create(option);
-    *p = x.first;
-    *prop_data = x.second;
+        *ref = propStorage.create(option);
+    
+        bool ret = clingo_control_add(ctl,"base", nullptr, 0, R"(#theory dl {
+        term{};
+        constant {
+          + : 1, binary, left;
+          - : 1, binary, left;
+          * : 2, binary, left;
+          / : 2, binary, left;
+          - : 3, unary
+        };
+        diff_term {- : 1, binary, left};
+        &diff/0 : diff_term, {<=}, constant, any;
+        &show_assignment/0 : term, directive
+        }.)");
+        /// TODO: error handling function ?
+        if (!ret) {
+            std::cout << "control_add failed" << std::endl;
+            return ret;
+        }
+    
+        auto x = propStorage.getPropagator(*ref);
+        ret = clingo_control_register_propagator(ctl, x.first, x.second, false);
+        if (!ret) {
+            std::cout << "control_add failed" << std::endl;
+            return ret;
+        }
+        return ret;
     }
     CLINGODL_CATCH;
 }
 
-extern bool theory_destroy_propagator(clingo_propagator* p) {
+extern "C" bool theory_destroy_propagator(int* ref) {
     CLINGODL_TRY {
-    propStorage.destroy(p);
+        propStorage.destroy(*ref);
     }
     CLINGODL_CATCH;
 }

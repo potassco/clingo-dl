@@ -74,10 +74,10 @@ extern "C" {
 
 #include <clingo.h>
 
+//! creates
+CLINGO_VISIBILITY_DEFAULT bool theory_create_propagator(clingo_control_t* ctl, char const* option, int* ref);
 
-CLINGO_VISIBILITY_DEFAULT bool theory_create_propagator(char const* option, clingo_propagator** p, void** prop_data);
-
-CLINGO_VISIBILITY_DEFAULT bool theory_destroy_propagator(clingo_propagator* p);
+CLINGO_VISIBILITY_DEFAULT bool theory_destroy_propagator(int* ref);
 
 #endif
 
