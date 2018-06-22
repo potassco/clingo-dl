@@ -26,20 +26,18 @@
 #include "clingoDL.h"
 #include <clingo.hh>
 
-
 using namespace Clingo;
 
-
-class MyHandler : public SolveEventHandler
-{
-//    virtual bool on_model(Model const &model) override
-//    {
-//       auto v = model.symbols(ShowType::Theory);
-//       if (std::find(v.begin(), v.end(), Function("dl",SymbolVector{Id("y",true),String("6")}, true))!=v.end()) {
-//           // an answer where y is 6
-//       }
-//       return true;
-//    }
+template <typename T>
+class MyHandler : public SolveEventHandler {
+public:
+    MyHandler(DifferenceLogicPropagator<T> &prop) : prop_{prop} { }
+    bool on_model(Model &model) override {
+        prop_.extend_model(model);
+        return true;
+    }
+private:
+    DifferenceLogicPropagator<T> &prop_;
 };
 
 template <typename T>
@@ -47,11 +45,8 @@ void solve(Stats &stats, Control &ctl, bool strict, bool propagate) {
     DifferenceLogicPropagator<T> p{stats, strict, propagate};
     ctl.register_propagator(p);
     ctl.ground({{"base", {}}});
-    MyHandler h;
-    for(auto m : ctl.solve(Clingo::SymbolicLiteralSpan(),&h)) {
-        (void)(m);
-        }
-    std::cout << "\n";
+    MyHandler<T> h{p};
+    ctl.solve(Clingo::SymbolicLiteralSpan{}, &h, false, false).get();
 }
 
 class ClingoDLApp : public Clingo::ClingoApplication {

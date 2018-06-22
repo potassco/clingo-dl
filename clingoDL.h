@@ -24,7 +24,7 @@
 
 
 #ifndef CLINGODL_H
-#define CLINGODL_h
+#define CLINGODL_H
 
 //! Major version number.
 #define CLINGODL_VERSION_MAJOR 1
@@ -34,7 +34,6 @@
 #define CLINGODL_VERSION_REVISION 0
 //! String representation of version.
 #define CLINGODL_VERSION "1.0.0"
-
 
 #ifdef __cplusplus
 extern "C" {
@@ -80,8 +79,6 @@ CLINGO_VISIBILITY_DEFAULT bool theory_create_propagator(clingo_control_t* ctl, c
 CLINGO_VISIBILITY_DEFAULT bool theory_destroy_propagator(int* ref);
 
 #endif
-
-
 
 #ifdef __cplusplus
 }

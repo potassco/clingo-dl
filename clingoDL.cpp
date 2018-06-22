@@ -63,8 +63,9 @@ public:
         }
     }
     int create(char const* option) {
-        /// TODO: do something about stats writing, can be changed later
-        static Stats s;    
+        // TODO: do something about stats writing, can be changed later
+        // NOTE: this is not how to write exception-safe code (hint unique_ptr)
+        static Stats s;
         if(strcmp(option,"int")==0) {
             auto c = new DifferenceLogicPropagator<int> (s,false,false);
             auto p = new clingo_propagator{
@@ -94,7 +95,7 @@ public:
             ref/=2;
             return intProps_[ref];
         }
-        if (ref % 2 == 1) {
+        else {
             ref= (ref-1)/2;
             return doubleProps_[ref];
         }
@@ -108,15 +109,13 @@ public:
             delete intProps_[ref].second;
             intProps_[ref].first = 0;
             intProps_[ref].second = 0;
-            return;
         }
-        if (ref % 2 == 1) {
+        else {
             ref= (ref-1)/2;
             delete doubleProps_[ref].first;
             delete doubleProps_[ref].second;
             doubleProps_[ref].first = 0;
             doubleProps_[ref].second = 0;
-            return;
         }
     }
 private:
@@ -127,7 +126,7 @@ private:
 extern "C" bool theory_create_propagator(clingo_control_t* ctl, char const* option, int* ref) {
     CLINGODL_TRY {
         *ref = propStorage.create(option);
-    
+
         bool ret = clingo_control_add(ctl,"base", nullptr, 0, R"(#theory dl {
         term{};
         constant {
@@ -141,19 +140,11 @@ extern "C" bool theory_create_propagator(clingo_control_t* ctl, char const* opti
         &diff/0 : diff_term, {<=}, constant, any;
         &show_assignment/0 : term, directive
         }.)");
-        /// TODO: error handling function ?
-        if (!ret) {
-            std::cout << "control_add failed" << std::endl;
-            return ret;
-        }
-    
+        if (!ret) { return ret; }
+
         auto x = propStorage.getPropagator(*ref);
         ret = clingo_control_register_propagator(ctl, x.first, x.second, false);
-        if (!ret) {
-            std::cout << "control_add failed" << std::endl;
-            return ret;
-        }
-        return ret;
+        if (!ret) { return ret; }
     }
     CLINGODL_CATCH;
 }
