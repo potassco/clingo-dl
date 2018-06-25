@@ -49,7 +49,7 @@ void solve(Stats &stats, Control &ctl, bool strict, bool propagate) {
     ctl.solve(Clingo::SymbolicLiteralSpan{}, &h, false, false).get();
 }
 
-class ClingoDLApp : public Clingo::ClingoApplication {
+class ClingoDLApp : public Clingo::Application {
 public:
     ClingoDLApp(Stats &stats)
         : stats_{stats} {}
