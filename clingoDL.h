@@ -74,10 +74,14 @@ extern "C" {
 
 #include <clingo.h>
 
-//! creates
+//! creates and registers a propagator, returning a unique "ref"erence
 CLINGO_VISIBILITY_DEFAULT bool theory_create_propagator(clingo_control_t* ctl, char const* option, int* ref);
 
+//! destroy a propagator with a reference, currently no way to unregister a propagator
 CLINGO_VISIBILITY_DEFAULT bool theory_destroy_propagator(int* ref);
+
+//! add options for your theory
+CLINGO_VISIBILITY_DEFAULT bool theory_add_options(clingo_options_t* options);
 
 #endif
 
