@@ -132,7 +132,7 @@ extern "C" bool theory_destroy_propagator() {
 }
 
 extern "C" bool theory_add_options(clingo_options_t* options) {
-    auto group = "DLPropagator";
+    char const * group = "DLPropagator";
     clingo_options_add_flag(options, group, "propagate,p", "Enable propagation.", &prop);
     clingo_options_add_flag(options, group, "strict", "Enable strict mode.", &strict);
 }
