@@ -24,7 +24,7 @@
 
 
 #ifndef CLINGODL_H
-#define CLINGODL_h
+#define CLINGODL_H
 
 //! Major version number.
 #define CLINGODL_VERSION_MAJOR 1
@@ -34,7 +34,6 @@
 #define CLINGODL_VERSION_REVISION 0
 //! String representation of version.
 #define CLINGODL_VERSION "1.0.0"
-
 
 #ifdef __cplusplus
 extern "C" {
@@ -75,17 +74,15 @@ extern "C" {
 #include <clingo.h>
 
 //! creates and registers a propagator, returning a unique "ref"erence
-CLINGO_VISIBILITY_DEFAULT bool theory_create_propagator(clingo_control_t* ctl, char const* option, int* ref);
+CLINGO_VISIBILITY_DEFAULT bool theory_create_propagator(clingo_control_t* ctl, char const* option);
 
 //! destroy a propagator with a reference, currently no way to unregister a propagator
-CLINGO_VISIBILITY_DEFAULT bool theory_destroy_propagator(int* ref);
+CLINGO_VISIBILITY_DEFAULT bool theory_destroy_propagator();
 
 //! add options for your theory
 CLINGO_VISIBILITY_DEFAULT bool theory_add_options(clingo_options_t* options);
 
 #endif
-
-
 
 #ifdef __cplusplus
 }

@@ -23,7 +23,7 @@
 // // }}}
 
 #ifndef PROPAGATOR_H
-#define PROPAGATOT_H
+#define PROPAGATOR_H
 
 
 #include <clingo.hh>
@@ -1040,9 +1040,8 @@ public:
         }
     }
 #endif
-    void extend_model(int threadId, bool, SymbolSpanCallback cb) override
-    {
-        auto &state = states_[threadId];
+    void extend_model(Model &model) {
+        auto &state = states_[model.thread_id()];
         T adjust = 0;
         int idx = 0;
         auto null = Clingo::Number(0);
@@ -1065,7 +1064,7 @@ public:
             }
             ++idx;
         }
-        cb({vec});
+        model.extend(vec);
     }
 
 private:
