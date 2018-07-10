@@ -840,9 +840,7 @@ struct DLState {
         : stats(stats)
         , dl_graph(stats, edges) {}
     DLStats &stats;
-    std::vector<int> edge_trail;
     DifferenceLogicGraph<T> dl_graph;
-    int propagated = 0;
 };
 
 template <typename T>
@@ -873,8 +871,12 @@ T get_weight(TheoryAtom const &atom);
 
 Clingo::Symbol evaluate_term(Clingo::TheoryTerm term);
 
+class ExtendedPropagator {
+public:
+    virtual bool extend_model(Model &model) = 0;   
+};
 template <typename T>
-class DifferenceLogicPropagator : public Propagator {
+class DifferenceLogicPropagator : public Propagator, public ExtendedPropagator {
 public:
     DifferenceLogicPropagator(Stats &stats, bool strict, bool propagate)
         : stats_(stats)
@@ -975,6 +977,7 @@ public:
 
     void initialize_states(PropagateInit &init) {
         stats_.dl_stats.resize(init.number_of_threads());
+        states_.clear();
         for (int i = 0; i < init.number_of_threads(); ++i) {
             states_.emplace_back(stats_.dl_stats[i], edges_);
         }
@@ -1040,7 +1043,7 @@ public:
         }
     }
 #endif
-    void extend_model(Model &model) {
+    bool extend_model(Model &model) override {
         auto &state = states_[model.thread_id()];
         T adjust = 0;
         int idx = 0;
@@ -1066,6 +1069,7 @@ public:
         }
         model.extend(vec);
     }
+
 
 private:
     std::vector<DLState<T>> states_;
