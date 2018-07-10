@@ -1068,6 +1068,7 @@ public:
             ++idx;
         }
         model.extend(vec);
+        return true;
     }
 
 

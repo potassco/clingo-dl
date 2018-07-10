@@ -90,7 +90,7 @@ public:
         statCallsThread_["undo(s)"] = [this](size_t thread) { return stats_->dl_stats[thread].time_undo.count(); };
     }
 
-    clingo_control_t* getControl() const { return ctl_; }
+    clingo_control_t* getControl() const override { return ctl_; }
     clingo_propagator* getClingoPropagator() const override { return clingoProp_.get(); }
     Propagator* getPropagator() const override { return diffProp_.get(); }
     ExtendedPropagator* getExtendedPropagator() const override { return diffProp_.get(); }
