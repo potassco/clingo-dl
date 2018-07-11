@@ -17,8 +17,14 @@ before_build:
     cd tools
 
     appveyor DownloadFile http://cs.uni-potsdam.de/~kaminski/re2c.exe
+
     appveyor DownloadFile https://github.com/lexxmark/winflexbison/releases/download/v2.5.14/win_flex_bison-2.5.14.zip
+
     7z x win_flex_bison-2.5.14.zip
+
+    dir
+
+    set BISON_EXECUTABLE=C:\projects\aspcud\tools\win_bison.exe
 
 
     cd ..
