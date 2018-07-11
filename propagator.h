@@ -33,6 +33,7 @@
 //#define CROSSCHECK
 #define CHECKSOLUTION
 using namespace Clingo;
+using std::chrono::steady_clock;
 
 namespace Detail {
 
@@ -262,6 +263,13 @@ struct DifferenceLogicNode {
 };
 
 struct DLStats {
+    void reset() {
+        time_propagate = steady_clock::duration::zero();
+        time_undo      = steady_clock::duration::zero();
+        time_dijkstra  = steady_clock::duration::zero();
+        true_edges     = 0;
+        false_edges    = 0;
+    }
     Duration time_propagate = Duration{0};
     Duration time_undo = Duration{0};
     Duration time_dijkstra = Duration{0};
@@ -826,6 +834,16 @@ private:
 };
 
 struct Stats {
+    void reset() {
+        time_total = steady_clock::duration::zero();
+        time_init  = steady_clock::duration::zero();
+        conflicts  = 0;
+        choices    = 0;
+        restarts   = 0;
+        for (auto& i : dl_stats) {
+            i.reset();
+        }
+    }
     Duration time_total = Duration{0};
     Duration time_init = Duration{0};
     std::vector<DLStats> dl_stats;

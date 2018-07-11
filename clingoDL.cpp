@@ -126,7 +126,7 @@ public:
             }
             ++num;
         }
-
+        stats_->reset();
     }
 
     void on_statistics_accu(UserStatistics& accu) override {
@@ -241,22 +241,9 @@ extern "C" bool theory_on_model(clingo_model_t* model) {
 
 extern "C" bool theory_on_statistics(clingo_statistics_t* step, clingo_statistics_t* accu) {
     CLINGODL_TRY {
-        uint64_t root_s = 0;
-        CLINGO_CALL(clingo_statistics_root(step, &root_s));
-        bool ret = false;
-        CLINGO_CALL(clingo_statistics_map_has_subkey(step, root_s, "DifferenceLogic", &ret));
-        if (!ret) {
-            uint64_t new_s = 0;
-            CLINGO_CALL(clingo_statistics_map_add_subkey(step, root_s, "DifferenceLogic", clingo_statistics_type_map, &new_s));
-            root_s = new_s;
-        } else {
-            CLINGO_CALL(clingo_statistics_map_at(step, root_s, "DifferenceLogic", &root_s));
-        }
-        UserStatistics s(step, root_s);
-        storage->on_statistics_step(s);
         uint64_t root_a = 0;
         CLINGO_CALL(clingo_statistics_root(accu, &root_a));
-        ret = false;
+        bool ret = false;
         CLINGO_CALL(clingo_statistics_map_has_subkey(step, root_a, "DifferenceLogic", &ret));
         if (!ret) {
             uint64_t new_s = 0;
@@ -267,7 +254,21 @@ extern "C" bool theory_on_statistics(clingo_statistics_t* step, clingo_statistic
         }
         UserStatistics a(accu, root_a);
         storage->on_statistics_accu(a);
-    }
+
+        uint64_t root_s = 0;
+        CLINGO_CALL(clingo_statistics_root(step, &root_s));
+        ret = false;
+        CLINGO_CALL(clingo_statistics_map_has_subkey(step, root_s, "DifferenceLogic", &ret));
+        if (!ret) {
+            uint64_t new_s = 0;
+            CLINGO_CALL(clingo_statistics_map_add_subkey(step, root_s, "DifferenceLogic", clingo_statistics_type_map, &new_s));
+            root_s = new_s;
+        } else {
+            CLINGO_CALL(clingo_statistics_map_at(step, root_s, "DifferenceLogic", &root_s));
+        }
+        UserStatistics s(step, root_s);
+        storage->on_statistics_step(s);
+            }
     CLINGODL_CATCH;
 }
 
