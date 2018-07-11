@@ -28,6 +28,8 @@ before_build:
 
     7z x win_flex_bison-2.5.14.zip
 
+    dir C:\projects\aspcud\tools\bison\
+
     set BISON_EXECUTABLE=C:\projects\aspcud\tools\bison\win_bison.exe
     
     cd ..
@@ -42,18 +44,16 @@ before_build:
 
     7z x lua-5.3.5.tar
     
-    dir /s
-
     cd lua-5.3.5
-
-    dir /s
 
     set PATH=c:\MinGW\bin\;%PATH%
     
     mingw32-make.exe mingw
 
-    dir/s
+    set LUA_LIBRARIES=c:\projects\clingoDL\tools\lua\lua-5.3.5\src
     
+    set LUA_INCLUDE_DIR=c:\projects\clingoDL\tools\lua\lua-5.3.5\src
+
     cd ..
     
     cd ..
