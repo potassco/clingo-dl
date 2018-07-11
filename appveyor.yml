@@ -29,8 +29,8 @@ before_build:
     7z x win_flex_bison-2.5.14.zip
 
     set BISON_EXECUTABLE=C:\projects\aspcud\tools\bison\win_bison.exe
-    #bison
-    cd ..
+    
+    cd .. # bison
 
     mkdir lua
 
@@ -39,6 +39,7 @@ before_build:
     appveyor DownloadFile http://www.lua.org/ftp/lua-5.3.5.tar.gz
 
     7z x lua-5.3.5.tar.gz
+
     7z x lua-5.3.5.tar
     
     dir /s
@@ -48,12 +49,12 @@ before_build:
     dir /s
 
     make
-    lua-5.3.5 
-    #cd ..
-    #lua
-    cd ..
-    #tools
-    cd ..
+    
+    cd .. # lua-5.3.5
+    
+    cd .. # lua
+    
+    cd .. # tools
 
 
     git submodule update --init --recursive
