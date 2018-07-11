@@ -48,9 +48,9 @@ before_build:
 
     dir /s
 
-    copy c:\MinGW\bin\mingw32-make.exe c:\MinGW\bin\make.exe
+#    copy c:\MinGW\bin\mingw32-make.exe c:\MinGW\bin\make.exe
 
-    make mingw
+    c:\MinGW\bin\mingw32-make.exe mingw
 
     dir/s
     
