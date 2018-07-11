@@ -58,7 +58,7 @@ before_build:
     git submodule update --init --recursive
 
 
-    cmake -G "%GEN%" -H. -Bbuild -DCMAKE_BUILD_TYPE=Release -DLUA_LIBRARIES="c:\projects\clingoDL\tools\lua\lua-5.3.5\src\lua53.dll" -DLUA_INCLUDE_DIR="c:\projects\clingoDL\tools\lua\lua-5.3.5\src"
+    cmake -G "%GEN%" -DCMAKE_BUILD_TYPE=Release -DLUA_LIBRARIES="c:\projects\clingoDL\tools\lua\lua-5.3.5\src\lua53.dll" -DLUA_INCLUDE_DIR="c:\projects\clingoDL\tools\lua\lua-5.3.5\src"
 
     dir
 build:
