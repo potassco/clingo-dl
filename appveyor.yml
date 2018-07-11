@@ -48,7 +48,11 @@ before_build:
 
     dir /s
 
-    make
+    copy c:\MinGW\bin\mingw32-make.exe c:\MinGW\bin\make.exe
+
+    make mingw
+
+    dir/s
     
     cd ..
     
