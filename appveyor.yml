@@ -28,9 +28,9 @@ before_build:
 
     7z x win_flex_bison-2.5.14.zip
 
-    dir C:\projects\aspcud\tools\bison\
+    dir C:\projects\clingoDL\tools\bison\
 
-    set BISON_EXECUTABLE=C:\projects\aspcud\tools\bison\win_bison.exe
+    set BISON_EXECUTABLE=C:\projects\clingoDL\tools\bison\win_bison.exe
     
     cd ..
 
