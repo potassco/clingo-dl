@@ -883,30 +883,6 @@ public:
         , strict_(strict)
         , propagate_(propagate) {}
 
-    void print_assignment(int thread) const {
-        auto &state = states_[thread];
-        T adjust = 0;
-        int idx = 0;
-        auto null = Clingo::Number(0);
-        for (auto &name : vert_map_) {
-            if (state.dl_graph.node_value_defined(idx) && name == null) {
-                adjust = state.dl_graph.node_value(idx);
-                break;
-            }
-            ++idx;
-        }
-
-        std::cout << "with assignment:\n";
-        idx = 0;
-        for (auto &name : vert_map_) {
-            if (state.dl_graph.node_value_defined(idx) && name != null) {
-                std::cout << name << ":" << adjust + state.dl_graph.node_value(idx) << " ";
-            }
-            ++idx;
-        }
-        std::cout << "\n";
-    }
-
 public:
     // initialization
 

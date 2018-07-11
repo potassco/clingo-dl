@@ -82,12 +82,12 @@ public:
         clingoProp_->undo = (bool (*) (clingo_propagate_control_t *, clingo_literal_t const *, size_t, void *))undo<int>;
         clingoProp_->check = (bool (*) (clingo_propagate_control_t *, void *))check<int>;
         ctl_ = ctl;
-        statCalls_["time init(s)"] = [this]() -> double { return stats_->time_init.count(); };
-        statCallsThread_["propagation(s)"] = [this](size_t thread) { return stats_->dl_stats[thread].time_propagate.count(); };
-        statCallsThread_["dijkstra(s)"] = [this](size_t thread) { return stats_->dl_stats[thread].time_dijkstra.count(); };
-        statCallsThread_["true edges"] = [this](size_t thread) { return stats_->dl_stats[thread].true_edges; };
-        statCallsThread_["false edges"] = [this](size_t thread) { return stats_->dl_stats[thread].false_edges; };
-        statCallsThread_["undo(s)"] = [this](size_t thread) { return stats_->dl_stats[thread].time_undo.count(); };
+        statCalls_["Time init(s)"] = [this]() -> double { return stats_->time_init.count(); };
+        statCallsThread_["Propagation(s)"] = [this](size_t thread) { return stats_->dl_stats[thread].time_propagate.count(); };
+        statCallsThread_["Dijkstra(s)"] = [this](size_t thread) { return stats_->dl_stats[thread].time_dijkstra.count(); };
+        statCallsThread_["True edges"] = [this](size_t thread) { return stats_->dl_stats[thread].true_edges; };
+        statCallsThread_["False edges"] = [this](size_t thread) { return stats_->dl_stats[thread].false_edges; };
+        statCallsThread_["Undo(s)"] = [this](size_t thread) { return stats_->dl_stats[thread].time_undo.count(); };
     }
 
     clingo_control_t* getControl() const override { return ctl_; }
@@ -194,7 +194,8 @@ extern "C" bool theory_create_propagator(clingo_control_t* ctl) {
           - : 3, unary
         };
         diff_term {- : 1, binary, left};
-        &diff/0 : diff_term, {<=}, constant, any
+        &diff/0 : diff_term, {<=}, constant, any;
+        &show_assignment/0 : term, directive
         }.)"));
 
         auto x = storage->getPropagator();

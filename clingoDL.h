@@ -70,28 +70,28 @@ extern "C" {
 #define CLINGODL_DEPRECATED __declspec(deprecated)
 #else
 #define CLINGODL_DEPRECATED
+#endif
 
 #include <clingo.h>
 
 //! creates and registers the propagator
-CLINGO_VISIBILITY_DEFAULT bool theory_create_propagator(clingo_control_t* ctl);
+CLINGODL_VISIBILITY_DEFAULT bool theory_create_propagator(clingo_control_t* ctl);
 
 //! destroys the propagator, currently no way to unregister a propagator
-CLINGO_VISIBILITY_DEFAULT bool theory_destroy_propagator();
+CLINGODL_VISIBILITY_DEFAULT bool theory_destroy_propagator();
 
 //! add options for your theory
-CLINGO_VISIBILITY_DEFAULT bool theory_add_options(clingo_options_t* options);
+CLINGODL_VISIBILITY_DEFAULT bool theory_add_options(clingo_options_t* options);
 
 //! validate options for your theory
-CLINGO_VISIBILITY_DEFAULT bool theory_validate_options();
+CLINGODL_VISIBILITY_DEFAULT bool theory_validate_options();
 
 //! callback on every model 
-CLINGO_VISIBILITY_DEFAULT bool theory_on_model(clingo_model_t* model);
+CLINGODL_VISIBILITY_DEFAULT bool theory_on_model(clingo_model_t* model);
 
 //! callback on statistic updates
 /// please add a subkey with the name of your propagator
 CLINGO_VISIBILITY_DEFAULT bool theory_on_statistics(clingo_statistics_t* step, clingo_statistics_t* accu);
-#endif
 
 #ifdef __cplusplus
 }
