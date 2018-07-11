@@ -48,7 +48,9 @@ before_build:
 
     dir /s
 
-    c:\MinGW\bin\mingw32-make.exe mingw
+    set PATH=c:\MinGW\bin\;%PATH%
+    
+    mingw32-make.exe mingw
 
     dir/s
     
