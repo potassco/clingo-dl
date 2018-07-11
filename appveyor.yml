@@ -8,8 +8,8 @@ environment:
   matrix:
   - GEN: Visual Studio 14 2015
     LIB: lib32-msvc-14.0
-  - GEN: Visual Studio 14 2015 Win64
-    LIB: lib64-msvc-14.0
+#  - GEN: Visual Studio 14 2015 Win64
+#    LIB: lib64-msvc-14.0
 before_build:
 - cmd: >-
     mkdir tools
@@ -36,13 +36,15 @@ before_build:
 
     7z x lua-5.3.5.tar.gz
     
-    cd lua-5.3.5
+    dir /s
+
+    #cd lua-5.3.5
 
     dir /s
 
     make
     #lua-5.3.5 
-    cd ..
+    #cd ..
     #lua
     cd ..
     #tools
