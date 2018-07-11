@@ -18,21 +18,39 @@ before_build:
 
     appveyor DownloadFile http://cs.uni-potsdam.de/~kaminski/re2c.exe
 
+    set PATH=C:\projects\clingoDL\tools;%PATH%
+
+    mkdir bison
+
     appveyor DownloadFile https://github.com/lexxmark/winflexbison/releases/download/v2.5.14/win_flex_bison-2.5.14.zip
 
     7z x win_flex_bison-2.5.14.zip
 
-    dir
+    set BISON_EXECUTABLE=C:\projects\aspcud\tools\bison\win_bison.exe
+    #bison
+    cd ..
 
-    set BISON_EXECUTABLE=C:\projects\aspcud\tools\win_bison.exe
+    mkdir lua
 
+    appveyor DownloadFile http://www.lua.org/ftp/lua-5.3.5.tar.gz
 
+    7z x lua-5.3.5.tar.gz
+    
+    cd lua-5.3.5
+
+    dir /s
+
+    make
+    #lua-5.3.5 
+    cd ..
+    #lua
+    cd ..
+    #tools
     cd ..
 
 
     git submodule update --init --recursive
 
-    set PATH=C:\projects\clingoDL\tools;%PATH%
 
     cmake -H. -Bbuild -DCMAKE_BUILD_TYPE=Release
 
