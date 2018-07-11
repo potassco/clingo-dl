@@ -22,6 +22,8 @@ before_build:
 
     mkdir bison
 
+    cd bison
+
     appveyor DownloadFile https://github.com/lexxmark/winflexbison/releases/download/v2.5.14/win_flex_bison-2.5.14.zip
 
     7z x win_flex_bison-2.5.14.zip
@@ -32,18 +34,21 @@ before_build:
 
     mkdir lua
 
+    cd lua
+
     appveyor DownloadFile http://www.lua.org/ftp/lua-5.3.5.tar.gz
 
     7z x lua-5.3.5.tar.gz
+    7z x lua-5.3.5.tar
     
     dir /s
 
-    #cd lua-5.3.5
+    cd lua-5.3.5
 
     dir /s
 
     make
-    #lua-5.3.5 
+    lua-5.3.5 
     #cd ..
     #lua
     cd ..
