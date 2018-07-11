@@ -1,0 +1,39 @@
+version: 1.0.{build}
+branches:
+  only:
+    - wip
+skip-tags: true
+clone_folder: c:\projects\clingoDL
+configuration: Release
+environment:
+  matrix:
+  - GEN: Visual Studio 14 2015
+    LIB: lib32-msvc-14.0
+  - GEN: Visual Studio 14 2015 Win64
+    LIB: lib64-msvc-14.0
+before_build:
+- cmd: >-
+    mkdir tools
+
+    cd tools
+
+    appveyor DownloadFile http://cs.uni-potsdam.de/~kaminski/re2c.exe
+
+    cd ..
+
+
+    git submodule update --init --recursive
+
+    set PATH=C:\projects\clingoDL\tools;%PATH%
+
+    cmake -H. -Bbuild -DCMAKE_BUILD_TYPE=Release
+
+build:
+#  project: clingoDL.sln
+#TODO: create a visual studio file
+  verbosity: minimal
+test_script:
+- cmd: >-
+
+    C:/projects/build/bin/clingoDL.exe --version
+    echo "&diff{x-0} <= 42." C:/projects/build/bin/clingoDL.exe
