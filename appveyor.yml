@@ -28,9 +28,9 @@ before_build:
 
     7z x win_flex_bison-2.5.14.zip
 
-    dir C:\projects\clingoDL\tools\bison\
+#    set BISON_EXECUTABLE=C:\projects\clingoDL\tools\bison\win_bison.exe
 
-    set BISON_EXECUTABLE=C:\projects\clingoDL\tools\bison\win_bison.exe
+    set PATH=C:\projects\clingoDL\tools\bison;%PATH%
     
     cd ..
 
@@ -50,9 +50,9 @@ before_build:
     
     mingw32-make.exe mingw
 
-    set LUA_LIBRARIES=c:\projects\clingoDL\tools\lua\lua-5.3.5\src
+#    set LUA_LIBRARIES=c:\projects\clingoDL\tools\lua\lua-5.3.5\src
     
-    set LUA_INCLUDE_DIR=c:\projects\clingoDL\tools\lua\lua-5.3.5\src
+#    set LUA_INCLUDE_DIR=c:\projects\clingoDL\tools\lua\lua-5.3.5\src
 
     cd ..
     
@@ -64,7 +64,7 @@ before_build:
     git submodule update --init --recursive
 
 
-    cmake -H. -Bbuild -DCMAKE_BUILD_TYPE=Release
+    cmake -H. -Bbuild -DCMAKE_BUILD_TYPE=Release -DLUA_LIBRARIES="c:\projects\clingoDL\tools\lua\lua-5.3.5\src" -DLUA_INCLUDE_DIR="c:\projects\clingoDL\tools\lua\lua-5.3.5\src"
 
 build:
 #  project: clingoDL.sln
