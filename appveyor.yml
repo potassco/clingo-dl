@@ -30,7 +30,7 @@ before_build:
 
     set BISON_EXECUTABLE=C:\projects\aspcud\tools\bison\win_bison.exe
     
-    cd .. # bison
+    cd ..
 
     mkdir lua
 
@@ -50,11 +50,11 @@ before_build:
 
     make
     
-    cd .. # lua-5.3.5
+    cd ..
     
-    cd .. # lua
+    cd ..
     
-    cd .. # tools
+    cd ..
 
 
     git submodule update --init --recursive
