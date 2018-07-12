@@ -22,7 +22,8 @@ before_build:
 
     activate test-environment
 
-    conda install -c potassco/label/dev -n clingo cmake -vv
+    conda install cmake 
+    conda install -c potassco/label/dev clingo
 
     cmake -G "%GEN%" .
 
