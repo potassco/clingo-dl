@@ -8,9 +8,9 @@ environment:
 before_build:
 - cmd: >-
 
-    dir C:\Miniconda36-x64
+    set PATH=C:\Miniconda36-x64\Scripts;%PATH%
 
-    set PATH=C:\Miniconda36-x64;%PATH%
+    activate
 
     conda config --set always_yes yes --set changeps1 no
 
