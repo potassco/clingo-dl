@@ -1,71 +1,36 @@
 version: 1.0.{build}
-branches:
-  only:
-    - wip
 clone_folder: c:\projects\clingoDL
 configuration: Release
 environment:
   matrix:
-  - GEN: Visual Studio 14 2015
-    LIB: lib32-msvc-14.0
-#  - GEN: Visual Studio 14 2015 Win64
-#    LIB: lib64-msvc-14.0
+  - GEN: Visual Studio 14 2015 Win64
+    PYTHON_VERSION: 3.6
 before_build:
 - cmd: >-
-    mkdir tools
+    conda config --set always_yes yes --set changeps1 no
 
-    cd tools
+    conda config --append channels potassco/label/dev
 
-    appveyor DownloadFile http://cs.uni-potsdam.de/~kaminski/re2c.exe
+    conda update -q conda
 
-    set PATH=C:\projects\clingoDL\tools;%PATH%
+    conda info -a
 
-    mkdir bison
+    conda create -q -n test-environment python=%PYTHON_VERSION%
 
-    cd bison
+    source activate test-environment
 
-    appveyor DownloadFile https://github.com/lexxmark/winflexbison/releases/download/v2.5.14/win_flex_bison-2.5.14.zip
+    conda install -q -n clingo cmake
 
-    7z x win_flex_bison-2.5.14.zip
+    cmake -G "%GEN%" .
 
-    set PATH=C:\projects\clingoDL\tools\bison;%PATH%
-    
-    cd ..
-
-    mkdir lua
-
-    cd lua
-
-    appveyor DownloadFile http://www.lua.org/ftp/lua-5.3.5.tar.gz
-
-    7z x lua-5.3.5.tar.gz
-
-    7z x lua-5.3.5.tar
-    
-    cd lua-5.3.5
-
-    set PATH=c:\MinGW\bin\;%PATH%
-    
-    mingw32-make.exe mingw
-
-    cd ..
-    
-    cd ..
-    
-    cd ..
-
-
-    git submodule update --init --recursive
-
-
-    cmake -G "%GEN%" -DCMAKE_BUILD_TYPE=Release -DLUA_LIBRARIES="c:\projects\clingoDL\tools\lua\lua-5.3.5\src\lua53.dll" -DLUA_INCLUDE_DIR="c:\projects\clingoDL\tools\lua\lua-5.3.5\src"
-
-    dir
 build:
   project: clingoDL.sln
   verbosity: minimal
 test_script:
 - cmd: >-
 
-    C:/projects/build/bin/clingoDL.exe --version
-    echo "&diff{x-0} <= 42." C:/projects/build/bin/clingoDL.exe
+    cmake --build . --target install --config release
+
+    clingoDL --version
+
+    echo "&diff{x-0} <= 42." | clingoDL
