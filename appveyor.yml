@@ -22,7 +22,7 @@ before_build:
 
     conda create -q -n test-environment python=%PYTHON_VERSION%
 
-    source activate test-environment
+    activate test-environment
 
     conda install -q -n clingo cmake
 
