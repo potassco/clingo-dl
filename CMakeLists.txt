@@ -54,6 +54,7 @@ set_target_properties(clingoDL PROPERTIES FOLDER exe)
 #install(TARGETS clingoDL RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 # LIBRARY DESTINATION DOES NOT SEEM TO WORK
 add_library(libclingoDL SHARED ${libfiles})
+target_compile_definitions(libclingoDL PRIVATE CLINGO_BUILD_LIBRARY) 
 target_link_libraries(libclingoDL PRIVATE libclingo)
 set_target_properties(libclingoDL PROPERTIES PUBLIC_HEADER clingoDL.h)
 set_target_properties(libclingoDL PROPERTIES LIBRARY_OUTPUT_NAME clingoDL)
