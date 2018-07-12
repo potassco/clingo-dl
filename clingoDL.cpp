@@ -1,14 +1,43 @@
+// {{{ MIT License
+//
+// // Copyright 2018 Roland Kaminski, Philipp Wanko, Max Ostrowski
+//
+// // Permission is hereby granted, free of charge, to any person obtaining a copy
+// // of this software and associated documentation files (the "Software"), to
+// // deal in the Software without restriction, including without limitation the
+// // rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+// // sell copies of the Software, and to permit persons to whom the Software is
+// // furnished to do so, subject to the following conditions:
+//
+// // The above copyright notice and this permission notice shall be included in
+// // all copies or substantial portions of the Software.
+//
+// // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+// // IN THE SOFTWARE.
+//
+// // }}}
+
 #include "clingoDL.h"
 #include "propagator.h"
-#include <vector>
 #include <map>
-#include <memory>
-#include <iostream>
 
 #define CLINGODL_TRY try
-#define CLINGODL_CATCH catch(const std::exception& ex){clingo_set_error(clingo_error_unknown, ex.what()); return false; }catch (...){ return false; } return true
+#define CLINGODL_CATCH catch(const std::exception& ex) {\
+                           clingo_set_error(clingo_error_unknown, ex.what());\
+                           return false;\
+                       }\
+                       catch (...){\
+                           return false;\
+                       }\
+                       return true
 
-#define CLINGO_CALL(x) if (!x) throw std::runtime_error(clingo_error_message());
+#define CLINGO_CALL(x) if (!x) { throw std::runtime_error(clingo_error_message()); }
+
 template <typename T>
 bool init(clingo_propagate_init_t* i, void* data)
 {
@@ -58,8 +87,9 @@ public:
     virtual clingo_propagator* getClingoPropagator() const = 0;
     virtual Propagator* getPropagator() const = 0;
     virtual ExtendedPropagator* getExtendedPropagator() const = 0;
-    virtual void on_statistics_step(UserStatistics& step) = 0;
-    virtual void on_statistics_accu(UserStatistics& step) = 0;
+    virtual void onStatisticsStep(UserStatistics& step) = 0;
+    virtual void onStatisticsAccu(UserStatistics& accu) = 0;
+
 
 };
 
@@ -94,7 +124,7 @@ public:
     clingo_propagator* getClingoPropagator() const override { return clingoProp_.get(); }
     Propagator* getPropagator() const override { return diffProp_.get(); }
     ExtendedPropagator* getExtendedPropagator() const override { return diffProp_.get(); }
-    void on_statistics_step(UserStatistics& step) override {
+    void onStatisticsStep(UserStatistics& step) override {
         assert(step.type() == StatisticsType::Map);
         for (const auto& it : statCalls_) {
             if (!step.has_subkey(it.first)) {
@@ -129,7 +159,7 @@ public:
         stats_->reset();
     }
 
-    void on_statistics_accu(UserStatistics& accu) override {
+    void onStatisticsAccu(UserStatistics& accu) override {
         assert(accu.type() == StatisticsType::Map);
         for (const auto& it : statCalls_) {
             if (!accu.has_subkey(it.first)) {
@@ -198,7 +228,6 @@ extern "C" bool theory_create_propagator(clingo_control_t* ctl) {
         &show_assignment/0 : term, directive
         }.)"));
 
-        auto x = storage->getPropagator();
         CLINGO_CALL(clingo_control_register_propagator(ctl, storage->getClingoPropagator(),
                                              static_cast<void*>(storage->getPropagator()), false));
     }
@@ -207,6 +236,7 @@ extern "C" bool theory_create_propagator(clingo_control_t* ctl) {
 
 extern "C" bool theory_destroy_propagator() {
     CLINGODL_TRY {
+        //TODO: currently no way to unregister a propagator
         storage.reset(nullptr);
     }
     CLINGODL_CATCH;
@@ -244,16 +274,16 @@ extern "C" bool theory_on_statistics(clingo_statistics_t* step, clingo_statistic
         uint64_t root_a = 0;
         CLINGO_CALL(clingo_statistics_root(accu, &root_a));
         bool ret = false;
-        CLINGO_CALL(clingo_statistics_map_has_subkey(step, root_a, "DifferenceLogic", &ret));
+        CLINGO_CALL(clingo_statistics_map_has_subkey(accu, root_a, "DifferenceLogic", &ret));
         if (!ret) {
             uint64_t new_s = 0;
-            CLINGO_CALL(clingo_statistics_map_add_subkey(step, root_a, "DifferenceLogic", clingo_statistics_type_map, &new_s));
+            CLINGO_CALL(clingo_statistics_map_add_subkey(accu, root_a, "DifferenceLogic", clingo_statistics_type_map, &new_s));
             root_a = new_s;
         } else {
-            CLINGO_CALL(clingo_statistics_map_at(step, root_a, "DifferenceLogic", &root_a));
+            CLINGO_CALL(clingo_statistics_map_at(accu, root_a, "DifferenceLogic", &root_a));
         }
         UserStatistics a(accu, root_a);
-        storage->on_statistics_accu(a);
+        storage->onStatisticsAccu(a);
 
         uint64_t root_s = 0;
         CLINGO_CALL(clingo_statistics_root(step, &root_s));
@@ -267,8 +297,8 @@ extern "C" bool theory_on_statistics(clingo_statistics_t* step, clingo_statistic
             CLINGO_CALL(clingo_statistics_map_at(step, root_s, "DifferenceLogic", &root_s));
         }
         UserStatistics s(step, root_s);
-        storage->on_statistics_step(s);
-            }
+        storage->onStatisticsStep(s);
+    }
     CLINGODL_CATCH;
 }
 

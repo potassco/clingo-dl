@@ -1,6 +1,6 @@
 // {{{ MIT License
 //
-// // Copyright 2017 Roland Kaminski
+// // Copyright 2018 Roland Kaminski, Philipp Wanko, Max Ostrowski
 //
 // // Permission is hereby granted, free of charge, to any person obtaining a copy
 // // of this software and associated documentation files (the "Software"), to
@@ -91,7 +91,7 @@ CLINGODL_VISIBILITY_DEFAULT bool theory_on_model(clingo_model_t* model);
 
 //! callback on statistic updates
 /// please add a subkey with the name of your propagator
-CLINGO_VISIBILITY_DEFAULT bool theory_on_statistics(clingo_statistics_t* step, clingo_statistics_t* accu);
+CLINGODL_VISIBILITY_DEFAULT bool theory_on_statistics(clingo_statistics_t* step, clingo_statistics_t* accu);
 
 #ifdef __cplusplus
 }
