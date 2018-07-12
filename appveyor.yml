@@ -14,7 +14,7 @@ before_build:
 
     conda config --set always_yes yes --set changeps1 no
 
-    conda config --append channels potassco/label/dev
+    #conda config --append channels potassco/label/dev
 
     conda update -q conda
 
@@ -24,7 +24,7 @@ before_build:
 
     activate test-environment
 
-    conda install -q -n clingo cmake
+    conda install -c potassco/label/dev -n clingo cmake -vv
 
     cmake -G "%GEN%" .
 
