@@ -490,12 +490,12 @@ public:
     }
 
     void backtrack() {
-        for (auto count = changed_nodes_.size() - std::get<1>(changed_trail_.back()); count > 0; --count) {
+        for (auto count = static_cast<int>(changed_nodes_.size()) - std::get<1>(changed_trail_.back()); count > 0; --count) {
             auto &node = nodes_[changed_nodes_.back()];
             node.potential_stack.pop_back();
             changed_nodes_.pop_back();
         }
-        for (auto count = changed_edges_.size() - std::get<2>(changed_trail_.back()); count > 0; --count) {
+        for (auto count = static_cast<int>(changed_edges_.size()) - std::get<2>(changed_trail_.back()); count > 0; --count) {
             auto &edge = edges_[changed_edges_.back()];
             nodes_[edge.from].outgoing.pop_back();
             nodes_[edge.to].incoming.pop_back();

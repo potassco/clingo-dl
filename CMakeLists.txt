@@ -45,20 +45,19 @@ endif()
 
 # TODO: folder properties for main.cpp
 #       (in clingo/cmake there is a convienient script to generate those)
-set(appfiles main.cpp propagator.cpp clingoDL.cpp)
+set(appfiles main.cpp)
 set(libfiles propagator.cpp clingoDL.cpp)
 
-add_executable(clingoDL ${appfiles})
-target_link_libraries(clingoDL PRIVATE libclingo)
-set_target_properties(clingoDL PROPERTIES FOLDER exe)
-#install(TARGETS clingoDL RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-# LIBRARY DESTINATION DOES NOT SEEM TO WORK
 add_library(libclingoDL SHARED ${libfiles})
 target_compile_definitions(libclingoDL PRIVATE CLINGODL_BUILD_LIBRARY)
 target_link_libraries(libclingoDL PRIVATE libclingo)
 set_target_properties(libclingoDL PROPERTIES PUBLIC_HEADER clingoDL.h)
 set_target_properties(libclingoDL PROPERTIES LIBRARY_OUTPUT_NAME clingoDL)
 
+
+add_executable(clingoDL ${appfiles})
+target_link_libraries(clingoDL PRIVATE libclingo libclingoDL)
+set_target_properties(clingoDL PROPERTIES FOLDER exe)
 install(TARGETS clingoDL libclingoDL 
                 RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
                 LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
