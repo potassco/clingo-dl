@@ -311,7 +311,9 @@ public:
     void ensure_decision_level(int level) {
         // initialize the trail
         if (changed_trail_.empty() || static_cast<int>(std::get<0>(changed_trail_.back())) < level) {
-            changed_trail_.emplace_back(level, changed_nodes_.size(), changed_edges_.size(), inactive_edges_.size());
+            changed_trail_.emplace_back(level, static_cast<int>(changed_nodes_.size()),
+                                               static_cast<int>(changed_edges_.size()),
+                                               static_cast<int>(inactive_edges_.size()));
         }
     }
 
