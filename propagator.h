@@ -131,7 +131,7 @@ class Heap {
 public:
     template <class M>
     void push(M &m, int item) {
-        auto i = m.offset(item) = heap_.size();
+        auto i = m.offset(item) = static_cast<int>(heap_.size());
         heap_.push_back(item);
         decrease(m, i);
     }
@@ -310,7 +310,7 @@ public:
 
     void ensure_decision_level(int level) {
         // initialize the trail
-        if (changed_trail_.empty() || std::get<0>(changed_trail_.back()) < level) {
+        if (changed_trail_.empty() || static_cast<int>(std::get<0>(changed_trail_.back())) < level) {
             changed_trail_.emplace_back(level, changed_nodes_.size(), changed_edges_.size(), inactive_edges_.size());
         }
     }
@@ -488,12 +488,12 @@ public:
     }
 
     void backtrack() {
-        for (int count = changed_nodes_.size() - std::get<1>(changed_trail_.back()); count > 0; --count) {
+        for (auto count = changed_nodes_.size() - std::get<1>(changed_trail_.back()); count > 0; --count) {
             auto &node = nodes_[changed_nodes_.back()];
             node.potential_stack.pop_back();
             changed_nodes_.pop_back();
         }
-        for (int count = changed_edges_.size() - std::get<2>(changed_trail_.back()); count > 0; --count) {
+        for (auto count = changed_edges_.size() - std::get<2>(changed_trail_.back()); count > 0; --count) {
             auto &edge = edges_[changed_edges_.back()];
             nodes_[edge.from].outgoing.pop_back();
             nodes_[edge.to].incoming.pop_back();
@@ -962,7 +962,7 @@ public:
     }
 
     int map_vert(Clingo::Symbol v) {
-        auto ret = vert_map_inv_.emplace(v, vert_map_.size());
+        auto ret = vert_map_inv_.emplace(v, static_cast<int>(vert_map_.size()));
         if (ret.second) {
             vert_map_.emplace_back(ret.first->first);
         }
