@@ -38,4 +38,4 @@ test_script:
 
     clingoDL --version
 
-    echo "&diff{x-0} <= 42." | clingoDL
+    echo ^^^&diff{x-0}^^^ <= 42. | clingoDL

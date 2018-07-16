@@ -10,8 +10,16 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 include(GNUInstallDirs)
+include(CMakeDependentOption)
 
 option(CLINGODL_BUILD_WITH_SYSTEM_CLINGO "if true the local clingo copy will not be used" OFF)
+option(CLINGODL_BUILD_STATIC      "do not build shared libraries" OFF)
+option(CLINGODL_MANAGE_RPATH             "set rpath if not installed into system directory" ON)
+
+CMAKE_DEPENDENT_OPTION(CLINGODL_BUILD_SHARED     "build clingoDL library shared"      ON  "NOT CLINGODL_BUILD_STATIC"  OFF)
+
+mark_as_advanced(CLINGODL_BUILD_STATIC)
+mark_as_advanced(CLINGODL_BUILD_SHARED)
 
 if (NOT MSVC)
     if (NOT CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
@@ -35,24 +43,69 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 
+if (POLICY CMP0063 AND CLINGODL_BUILD_SHARED)
+    set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+    set(CMAKE_C_VISIBILITY_PRESET hidden)
+endif()
+
+if (NOT CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+endif()
+if (NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+endif()
+if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+endif()
+if (NOT CMAKE_IMPORT_LIBRARY_PREFIX)
+    set(CMAKE_IMPORT_LIBRARY_PREFIX import_)
+endif()
+
+if (CLINGODL_BUILD_SHARED)
+    set(clingodl_lib_type SHARED)
+else()
+    set(clingodl_lib_type STATIC)
+endif()
+
 if (NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/clingo/CMakeLists.txt OR CLINGODL_BUILD_WITH_SYSTEM_CLINGO)
     find_package(Clingo REQUIRED)
     message(STATUS "Local clingo copy not available - using system installation")
 else()
     message(STATUS "Clingo is not installed - using local copy")
+#    set(CLINGO_MANAGE_RPATH CLINGODL_MANAGE_RPATH)
+#    set(CLINGO_BUILD_STATIC CLINGODL_BUILD_STATIC)
+#    set(CLINGO_BUILD_SHARED CLINGODL_BUILD_SHARED)
+#    if (ENV{CLINGODL_NO_VISIBILITY})
+#        set(CLINGO_NO_VISIBILITY CLINGODL_NO_VISIBILITY)
+#    endif()
     add_subdirectory(clingo)
 endif()
 
-# TODO: folder properties for main.cpp
-#       (in clingo/cmake there is a convienient script to generate those)
+if (CLINGODL_MANAGE_RPATH)
+    set(CMAKE_SKIP_BUILD_RPATH FALSE)
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+    set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+    list(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CMAKE_INSTALL_FULL_LIBDIR}" isSystemDir)
+    if ("${isSystemDir}" STREQUAL "-1")
+        set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_FULL_LIBDIR}")
+    endif()
+endif()
+
 set(appfiles main.cpp)
 set(libfiles propagator.cpp clingoDL.cpp)
 
-add_library(libclingoDL SHARED ${libfiles})
+add_library(libclingoDL ${clingodl_lib_type} ${libfiles})
 target_compile_definitions(libclingoDL PRIVATE CLINGODL_BUILD_LIBRARY)
+if (NOT CLINGO_BUILD_STATIC AND CLINGO_BUILD_SHARED)
+    set_target_properties(libclingoDL PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
 target_link_libraries(libclingoDL PRIVATE libclingo)
-set_target_properties(libclingoDL PROPERTIES PUBLIC_HEADER clingoDL.h)
-set_target_properties(libclingoDL PROPERTIES LIBRARY_OUTPUT_NAME clingoDL)
+if (NOT CLINGODL_BUILD_SHARED)
+    target_compile_definitions(libclingoDL PUBLIC CLINGODL_NO_VISIBILITY)
+else()
+    set_target_properties(libclingoDL PROPERTIES PUBLIC_HEADER clingoDL.h)
+    set_target_properties(libclingoDL PROPERTIES LIBRARY_OUTPUT_NAME clingoDL)
+endif()
 
 
 add_executable(clingoDL ${appfiles})
@@ -61,4 +114,5 @@ set_target_properties(clingoDL PROPERTIES FOLDER exe)
 install(TARGETS clingoDL libclingoDL 
                 RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
                 LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+                ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
                 PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
