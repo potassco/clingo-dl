@@ -38,8 +38,8 @@ install:
   - conda create -q -n test-environment python=$PYTHON_VERSION
   - source activate test-environment
   - conda install -q clingo cmake "${COMPILER}" ninja
-  - cmake -G Ninja -DCMAKE_BUILD_TYPE=release -DCMAKE_BUILD_WITH_INSTALL_RPATH=True -DCMAKE_INSTALL_RPATH="${CONDA_PREFIX}/lib" .
-  - cmake --build .
+  - cmake -G Ninja -DCMAKE_BUILD_TYPE=release -DCMAKE_BUILD_WITH_INSTALL_RPATH=True .
+  - cmake --build . --target install --config release
 
 script:
   - echo "&diff{a-0} <= 42." | ./bin/clingoDL || [ $? = 10 ]
