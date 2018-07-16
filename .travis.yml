@@ -33,13 +33,14 @@ install:
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
   - conda config --append channels potassco
+  - conda config --append channels potassco/label/dev
   - conda update -q conda
   - conda info -a
   - conda create -q -n test-environment python=$PYTHON_VERSION
   - source activate test-environment
   - conda install -q clingo cmake "${COMPILER}" ninja
-  - cmake -G Ninja -DCMAKE_BUILD_TYPE=release -DCMAKE_BUILD_WITH_INSTALL_RPATH=True .
-  - cmake --build . --target install --config release
+  - cmake -G Ninja -DCMAKE_BUILD_TYPE=release -DCMAKE_INSTALL_PREFIX="${CONDA_PREFIX}" .
+  - cmake --build . --target install
 
 script:
-  - echo "&diff{a-0} <= 42." | ./bin/clingoDL || [ $? = 10 ]
+  - echo "&diff{a-0} <= 42." | clingoDL || [ $? = 10 ]
