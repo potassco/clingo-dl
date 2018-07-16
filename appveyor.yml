@@ -41,5 +41,5 @@ test_script:
 
     clingoDL --version
 
-    # this one should work but doesn't on appveyor ...
-    # echo ^^^&diff{x-0} ^^^<= 42. | clingoDL | findstr /b dl(x,\"0\")
+# this one should work but doesn't on appveyor ...
+# echo ^^^&diff{x-0} ^^^<= 42. | clingoDL | findstr /b dl(x,\"0\")
