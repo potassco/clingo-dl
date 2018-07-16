@@ -41,4 +41,5 @@ test_script:
 
     clingoDL --version
 
+    echo ^^^&diff{x-0} ^^^<= 42. | clingoDL | findstr /b dl(x,"0")
     echo ^^^&diff{x-0} ^^^<= 42. | clingoDL | findstr /b dl(x,\"0\")
