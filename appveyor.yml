@@ -1,10 +1,12 @@
 version: 1.0.{build}
 clone_folder: c:\projects\clingoDL
 configuration: Release
+
 environment:
   matrix:
   - GEN: Visual Studio 14 2015 Win64
     PYTHON_VERSION: 3.6
+
 before_build:
 - cmd: >-
 
@@ -31,6 +33,7 @@ before_build:
 build:
   project: clingoDL.sln
   verbosity: minimal
+
 test_script:
 - cmd: >-
 
@@ -38,6 +41,4 @@ test_script:
 
     clingoDL --version
 
-    echo ^^^&diff{x-0}^^^ <= 42. | clingoDL & IF /I "%ERRORLEVEL%" NEQ "10" (
-        echo "error" && exit /b 1
-    )
+    echo ^^^&diff{x-0} ^^^<= 42. | clingoDL | findstr /b dl(x,\"0\")
