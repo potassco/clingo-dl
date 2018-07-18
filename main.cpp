@@ -24,7 +24,7 @@
 
 #include "propagator.h"
 #include <clingo.hh>
-#include "clingoDL.h"
+#include "clingo-dl.h"
 
 using namespace Clingo;
 
@@ -45,7 +45,7 @@ public:
 class ClingoDLApp : public Clingo::Application {
 public:
     ~ClingoDLApp() { theory_destroy_propagator(); }
-    char const *program_name() const noexcept override { return "clingoDL"; }
+    char const *program_name() const noexcept override { return "clingo-dl"; }
     char const *version() const noexcept override { return CLINGODL_VERSION; }
     void main(Control &ctl, StringSpan files) override {
         CLINGO_CALL(theory_create_propagator(ctl.to_c()));

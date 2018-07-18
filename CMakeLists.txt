@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1)
-file(READ "clingoDL.h" main)
+file(READ "clingo-dl.h" main)
 string(REGEX MATCH "#define CLINGODL_VERSION \"([^\"]*)\"" clingov ${main})
 project(CLINGODL VERSION "${CMAKE_MATCH_1}" LANGUAGES CXX)
 # Enable folders in IDEs like Visual Studio
@@ -16,7 +16,7 @@ option(CLINGODL_BUILD_WITH_SYSTEM_CLINGO "if true the local clingo copy will not
 option(CLINGODL_BUILD_STATIC      "do not build shared libraries" OFF)
 option(CLINGODL_MANAGE_RPATH             "set rpath if not installed into system directory" ON)
 
-CMAKE_DEPENDENT_OPTION(CLINGODL_BUILD_SHARED     "build clingoDL library shared"      ON  "NOT CLINGODL_BUILD_STATIC"  OFF)
+CMAKE_DEPENDENT_OPTION(CLINGODL_BUILD_SHARED     "build clingo-dl library shared"      ON  "NOT CLINGODL_BUILD_STATIC"  OFF)
 
 mark_as_advanced(CLINGODL_BUILD_STATIC)
 mark_as_advanced(CLINGODL_BUILD_SHARED)
@@ -70,20 +70,6 @@ else()
     set(clingodl_lib_type STATIC)
 endif()
 
-if (NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/clingo/CMakeLists.txt OR CLINGODL_BUILD_WITH_SYSTEM_CLINGO)
-    find_package(Clingo REQUIRED)
-    message(STATUS "Local clingo copy not available - using system installation")
-else()
-    message(STATUS "Clingo is not installed - using local copy")
-#    set(CLINGO_MANAGE_RPATH CLINGODL_MANAGE_RPATH)
-#    set(CLINGO_BUILD_STATIC CLINGODL_BUILD_STATIC)
-#    set(CLINGO_BUILD_SHARED CLINGODL_BUILD_SHARED)
-#    if (ENV{CLINGODL_NO_VISIBILITY})
-#        set(CLINGO_NO_VISIBILITY CLINGODL_NO_VISIBILITY)
-#    endif()
-    add_subdirectory(clingo)
-endif()
-
 if (CLINGODL_MANAGE_RPATH)
     set(CMAKE_SKIP_BUILD_RPATH FALSE)
     set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
@@ -94,27 +80,39 @@ if (CLINGODL_MANAGE_RPATH)
     endif()
 endif()
 
-set(appfiles main.cpp)
-set(libfiles propagator.cpp clingoDL.cpp)
-
-add_library(libclingoDL ${clingodl_lib_type} ${libfiles})
-target_compile_definitions(libclingoDL PRIVATE CLINGODL_BUILD_LIBRARY)
-if (NOT CLINGO_BUILD_STATIC AND CLINGO_BUILD_SHARED)
-    set_target_properties(libclingoDL PROPERTIES POSITION_INDEPENDENT_CODE ON)
-endif()
-target_link_libraries(libclingoDL PRIVATE libclingo)
-if (NOT CLINGODL_BUILD_SHARED)
-    target_compile_definitions(libclingoDL PUBLIC CLINGODL_NO_VISIBILITY)
+if (NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/clingo/CMakeLists.txt OR CLINGODL_BUILD_WITH_SYSTEM_CLINGO)
+    find_package(Clingo REQUIRED)
+    message(STATUS "Local clingo copy not available - using system installation")
 else()
-    set_target_properties(libclingoDL PROPERTIES PUBLIC_HEADER clingoDL.h)
-    set_target_properties(libclingoDL PROPERTIES LIBRARY_OUTPUT_NAME clingoDL)
+    message(STATUS "Clingo is not installed - using local copy")
+    set(CLINGO_MANAGE_RPATH OFF)
+    set(CLINGO_BUILD_STATIC ${CLINGODL_BUILD_STATIC})
+    set(CLINGO_BUILD_SHARED ${CLINGODL_BUILD_SHARED})
+    add_subdirectory(clingo)
 endif()
 
 
-add_executable(clingoDL ${appfiles})
-target_link_libraries(clingoDL PRIVATE libclingo libclingoDL)
-set_target_properties(clingoDL PROPERTIES FOLDER exe)
-install(TARGETS clingoDL libclingoDL 
+set(appfiles main.cpp)
+set(libfiles propagator.cpp clingo-dl.cpp)
+
+add_library(libclingo-dl ${clingodl_lib_type} ${libfiles})
+target_compile_definitions(libclingo-dl PRIVATE CLINGODL_BUILD_LIBRARY)
+if (NOT CLINGO_BUILD_STATIC AND CLINGO_BUILD_SHARED)
+    set_target_properties(libclingo-dl PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
+target_link_libraries(libclingo-dl PRIVATE libclingo)
+if (NOT CLINGODL_BUILD_SHARED)
+    target_compile_definitions(libclingo-dl PUBLIC CLINGODL_NO_VISIBILITY)
+else()
+    set_target_properties(libclingo-dl PROPERTIES PUBLIC_HEADER clingo-dl.h)
+    set_target_properties(libclingo-dl PROPERTIES LIBRARY_OUTPUT_NAME clingo-dl)
+endif()
+
+
+add_executable(clingo-dl ${appfiles})
+target_link_libraries(clingo-dl PRIVATE libclingo libclingo-dl)
+set_target_properties(clingo-dl PROPERTIES FOLDER exe)
+install(TARGETS clingo-dl libclingo-dl 
                 RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
                 LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
                 ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
