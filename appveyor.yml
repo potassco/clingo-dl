@@ -41,5 +41,7 @@ test_script:
 
     clingoDL --version
 
+    python scratch/runtests.py
+
 # this one should work but doesn't on appveyor ...
 # echo ^^^&diff{x-0} ^^^<= 42. | clingoDL | findstr /b dl(x,\"0\")
