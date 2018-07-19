@@ -31,7 +31,7 @@ before_build:
     cmake -G "%GEN%" . -DCMAKE_INSTALL_PREFIX=%CONDA_PREFIX%\Library
 
 build:
-  project: clingo-dl.sln
+  project: clingodl.sln
   verbosity: minimal
 
 test_script:
