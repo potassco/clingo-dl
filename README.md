@@ -1,47 +1,27 @@
-ASP modulo Difference Constraints
-=================================
+# Clingo-dl: A grounder and solver for solving ASP modulo Difference Constraints
 
-This project comprises a small prototype to extend clingo with difference constraints
-using its C++ API and theory language.
+Clingo-dl is part of the [Potassco](https://potassco.org) project for *Answer Set
+Programming* (ASP). 
+It extends ASP with constraints over difference logic
+and extends the ASP grounder and solver [clingo](https://potassco.org/clingo/).
 
-Usage
------
+
+Please consult the following resources for further information:
+
+  - [**Downloading source and binary releases**](https://github.com/potassco/clingo-dl/releases)
+  - [**Installation and software requirements**](INSTALL.md)
+  - [Changes between releases](CHANGES.md)
+  - [Potassco clingo-dl page](https://potassco.org/labs/clingodl/)
+
+Clingo-dl is distributed under the [MIT License](LICENSE.md).
+
+### Usage
 
     clingo-dl [CLINGO OPTION]... [-p] [--strict] [--rdl] [FILE]...
 
 Option `-p` can be used to enable propagation of difference constraints,
 `--strict` to turn on strict mode, and `--rdl` to use real numbers.
 
-Example
--------
+### Example
 
     clingo-dl -c n=132 -p examples/taskassignment/encoding-dl.lp examples/taskassignment/tai4_4_1.lp
-
-Development
------------
-
-### Compiling
-
-The clingo-dl system needs a C++14 conforming compiler and at least clingo version 5.3.
-First run
-
-    cmake -H. -Bbuild
-
-to create the default configuration for building in `./build`.
-
-    cmake --build build
-
-to build clingo-dl.
-
-### TODO
-
-There are still some things that could be done to improve the implementation.
-
-- For summing up paths, 64 bit integers could be used to avoid all possible
-  overflows in practice.
-- By introducing an epsilon, real valued constraints can be made to work with
-  strict semantics, too.
-- Some kind of preprocessing on the difference constraints might be
-  interesting.
-- Operators and operations in difference constraints should be made more
-  flexible.
