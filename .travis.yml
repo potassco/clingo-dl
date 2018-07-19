@@ -43,5 +43,5 @@ install:
   - cmake --build . --target install
 
 script:
-  - echo "&diff{a-0} <= 42." | clingoDL || [ $? = 10 ]
+  - echo "&diff{a-0} <= 42." | clingo-dl || [ $? = 10 ]
   - python scratch/runtests.py

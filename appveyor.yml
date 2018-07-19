@@ -1,5 +1,5 @@
 version: 1.0.{build}
-clone_folder: c:\projects\clingoDL
+clone_folder: c:\projects\clingo-dl
 configuration: Release
 
 environment:
@@ -31,7 +31,7 @@ before_build:
     cmake -G "%GEN%" . -DCMAKE_INSTALL_PREFIX=%CONDA_PREFIX%\Library
 
 build:
-  project: clingoDL.sln
+  project: clingo-dl.sln
   verbosity: minimal
 
 test_script:
@@ -39,9 +39,9 @@ test_script:
 
     cmake --build . --target install --config release
 
-    clingoDL --version
+    clingo-dl --version
 
     python scratch/runtests.py
 
 # this one should work but doesn't on appveyor ...
-# echo ^^^&diff{x-0} ^^^<= 42. | clingoDL | findstr /b dl(x,\"0\")
+# echo ^^^&diff{x-0} ^^^<= 42. | clingo-dl | findstr /b dl(x,\"0\")
