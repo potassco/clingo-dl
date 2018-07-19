@@ -8,7 +8,7 @@ and extends the ASP grounder and solver [clingo](https://potassco.org/clingo/).
 
 Please consult the following resources for further information:
 
-  - [**Downloading source and binary releases**](https://github.com/potassco/clingo-dl/releases)
+  - [**Downloading source and binary releases**](https://github.com/potassco/clingoDL/releases)
   - [**Installation and software requirements**](INSTALL.md)
   - [Changes between releases](CHANGES.md)
   - [Potassco clingo-dl page](https://potassco.org/labs/clingodl/)
@@ -19,7 +19,7 @@ Clingo-dl is distributed under the [MIT License](LICENSE.md).
 
     clingo-dl [CLINGO OPTION]... [-p] [--strict] [--rdl] [FILE]...
 
-Option `-p` can be used to enable propagation of difference constraints,
+Option `--propagate` can be used to enable propagation of difference constraints,
 `--strict` to turn on strict mode, and `--rdl` to use real numbers.
 
 ### Example

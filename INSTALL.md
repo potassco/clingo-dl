@@ -47,7 +47,7 @@ prefix (see the [build options](#build-options)), run:
 ## Build Options
 
 Cmake's `-L` option can be used to get an overview over the variables that can
-be set for building gringo/clingo. To get gringo/clingo specific options, run
+be set for building clingo-dl. To get clingo-dl specific options, run
 
     cmake -H<SOURCE_DIR> -B<BUILD_DIR> -DCMAKE_BUILD_TYPE=Release -LH
     
@@ -69,11 +69,11 @@ In the following, the most important options to control the build are listed.
 ### Generic Options
 
 - Variable `CMAKE_BUILD_TYPE` should be set to `Release`.
-- Variable `CMAKE_INSTALL_PREFIX` controls where to install clingo.
+- Variable `CMAKE_INSTALL_PREFIX` controls where to install clingo-dl.
 - Option `CLINGODL_BUILD_WITH_SYSTEM_CLINGO` to build with the already installed clingo version. Otherwise the local source copy will be used
 - Option `CLINGODL_MANAGE_RPATH` controls how to find libraries on platforms
   where this is supported, like Linux, macOS, or BSD but not Windows. This
-  option should be enabled if clingo is installed in a non-default location,
+  option should be enabled if clingo-dl is installed in a non-default location,
   like the users home directory; otherwise it has no effect.
   (Default: `ON`)
 
