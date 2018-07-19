@@ -97,7 +97,7 @@ set(libfiles propagator.cpp clingo-dl.cpp)
 
 add_library(libclingo-dl ${clingodl_lib_type} ${libfiles})
 target_compile_definitions(libclingo-dl PRIVATE CLINGODL_BUILD_LIBRARY)
-if (NOT CLINGO_BUILD_STATIC AND CLINGO_BUILD_SHARED)
+if (NOT CLINGODL_BUILD_STATIC AND CLINGODL_BUILD_SHARED)
     set_target_properties(libclingo-dl PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 target_link_libraries(libclingo-dl PRIVATE libclingo)
@@ -105,8 +105,11 @@ if (NOT CLINGODL_BUILD_SHARED)
     target_compile_definitions(libclingo-dl PUBLIC CLINGODL_NO_VISIBILITY)
 else()
     set_target_properties(libclingo-dl PROPERTIES PUBLIC_HEADER clingo-dl.h)
-    set_target_properties(libclingo-dl PROPERTIES LIBRARY_OUTPUT_NAME clingo-dl)
 endif()
+set_target_properties(libclingo-dl PROPERTIES
+    OUTPUT_NAME clingo-dl
+    LIBRARY_OUTPUT_NAME clingo-dl
+    FOLDER lib)
 
 
 add_executable(clingo-dl ${appfiles})
