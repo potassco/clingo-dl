@@ -901,7 +901,9 @@ public:
     DifferenceLogicPropagator(Stats &stats, bool strict, bool propagate)
         : stats_(stats)
         , strict_(strict)
-        , propagate_(propagate) {}
+        , propagate_(propagate)
+        , first_time_(true)
+        , reinit_(false) {}
 
 public:
     // initialization
@@ -915,6 +917,7 @@ public:
             }
         }
         initialize_states(init);
+        reinit_ = !first_time_;
     }
 
     void add_edge_atom(PropagateInit &init, TheoryAtom const &atom) {
@@ -982,6 +985,14 @@ public:
     // propagation
 
     void propagate(PropagateControl &ctl, LiteralSpan changes) override {
+        if (first_time_) {
+            facts_.insert(facts_.begin(), changes.begin(), changes.end());
+            first_time_ = false;
+        }
+        else if (reinit_) {
+            reinit_ = false;
+            propagate(ctl, facts_);
+        }
         auto &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_propagate};
         auto level = ctl.assignment().decision_level();
@@ -1078,6 +1089,9 @@ private:
     Stats &stats_;
     bool strict_;
     bool propagate_;
+    bool first_time_;
+    bool reinit_;
+    std::vector<Clingo::literal_t> facts_;
 };
 
 
