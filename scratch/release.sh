@@ -68,9 +68,10 @@ function copy_files() {
     done
     run_rsync "${SRC}/"{CHANGES.md,LICENSE.md,examples} "${3}"
     (setopt NULL_GLOB; rm -rf "${3}"/**/CMakeLists.txt)
-    for x in c cc; do
-        rm -rf "${3}"/**/"$x"
-    done
+    # WHAT IS THIS ABOUT
+    #for x in c cc; do
+    #    rm -rf "${3}"/**/"$x"
+    #done
     if [[ ${1} = "zip" ]]; then
         zip -r "${3}.zip" "${3}"
     else
@@ -169,8 +170,6 @@ if [[ ! -e ${SRC} ]]; then
     find lua -print0 | xargs -0 touch
 fi
 
-(setopt NULL_GLOB; rm -rf ${SRC}/{.ycm_extra_conf.py*,.travis.yml,.git*,scratch,TODO,Makefile})
-
 # {{{1 Linux
 
 EXTRA_FLAGS='-DCMAKE_EXE_LINKER_FLAGS="-pthread -static -s -Wl,-u,pthread_cond_broadcast,-u,pthread_cond_destroy,-u,pthread_cond_signal,-u,pthread_cond_timedwait,-u,pthread_cond_wait,-u,pthread_create,-u,pthread_detach,-u,pthread_equal,-u,pthread_getspecific,-u,pthread_join,-u,pthread_key_create,-u,pthread_key_delete,-u,pthread_mutex_lock,-u,pthread_mutex_unlock,-u,pthread_once,-u,pthread_setspecific"'
@@ -202,7 +201,7 @@ TEMP="/home/kaminski/git/tmp/${GRINGO}-work"
 CMAKE='/mnt/c/Program Files (x86)/Microsoft Visual Studio/2017/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe'
 SSH_ARGS=("-p" "2222")
 RSYNC_ARGS=("-e" "ssh -p 2222")
-#package
+package
 
 # {{{1 MacOS
 
@@ -218,4 +217,8 @@ TEMP="/tmp/${GRINGO}-work"
 CMAKE='cmake'
 SSH_ARGS=()
 RSYNC_ARGS=()
-#package
+package
+
+(setopt NULL_GLOB; rm -rf ${SRC}/{.ycm_extra_conf.py*,.travis.yml,.git*,scratch,TODO,Makefile,clingo,appveyor.yml})
+zip -r "${SRC}.zip" "${SRC}"
+tar czf "${SRC}.tar.gz" "${SRC}"
