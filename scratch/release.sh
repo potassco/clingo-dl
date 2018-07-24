@@ -113,7 +113,8 @@ function convert_path() {
 
 cd "${TEMP}"
 
-mkdir -p lua/{build,install}
+"${CMAKE}" -E make_directory lua/build
+"${CMAKE}" -E make_directory lua/install
 
 "${CMAKE}" \\
     -H"\$(convert_path lua)" \\
@@ -123,7 +124,7 @@ mkdir -p lua/{build,install}
     -DCMAKE_INSTALL_PREFIX="\$(convert_path lua/install)" ${EXTRA_FLAGS}
 "${CMAKE}" --build "\$(convert_path lua/build)" --target install --config Release
 
-mkdir -p build
+"${CMAKE}" -E make_directory build
 "${CMAKE}" \\
     -H"\$(convert_path source)" \\
     -B"\$(convert_path build)" \\
@@ -174,12 +175,12 @@ fi
 
 EXTRA_FLAGS='-DCMAKE_EXE_LINKER_FLAGS="-pthread -static -s -Wl,-u,pthread_cond_broadcast,-u,pthread_cond_destroy,-u,pthread_cond_signal,-u,pthread_cond_timedwait,-u,pthread_cond_wait,-u,pthread_create,-u,pthread_detach,-u,pthread_equal,-u,pthread_getspecific,-u,pthread_join,-u,pthread_key_create,-u,pthread_key_delete,-u,pthread_mutex_lock,-u,pthread_mutex_unlock,-u,pthread_once,-u,pthread_setspecific"'
 PACKAGE="${GRINGO}-linux-x86_64"
-GENERATOR="Unix Makefiles"
+GENERATOR="Ninja"
 PLATFORM="Linux"
 ARCHIVE="tgz"
 EXTRA=
 EXT=
-BUILD_HOST="minquiers"
+BUILD_HOST="ouessant"
 TEMP="/tmp/${GRINGO}-work"
 CMAKE='cmake'
 SSH_ARGS=()
