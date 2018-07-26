@@ -1066,7 +1066,7 @@ public:
         auto &state = states_[model.thread_id()];
         T adjust = 0;
         assert(vert_map_[0] = Clingo::Number(0));
-        if (state.dl_graph.node_value_defined(0)) {
+        if (!state.dl_graph.empty() && state.dl_graph.node_value_defined(0)) {
             adjust = state.dl_graph.node_value(0);
         }
 
