@@ -57,6 +57,15 @@ public:
         }
 
         ctl.ground({{"base", {}}});
+
+        //std::cout << "conf description " << std::endl;
+        //std::cout << "isMap: " << ctl.configuration().is_map() << std::endl;
+        //std::cout << "size: " << ctl.configuration().keys().size() << std::endl;
+        //auto x = ctl.configuration().keys();
+        //for (auto i :x) {
+        //    std::cout << "key: " << std::endl;
+        //}
+        ///TODO: check configuration for --text output and do not solve
         MyHandler h;
         ctl.solve(Clingo::SymbolicLiteralSpan{}, &h, false, false).get();
     }

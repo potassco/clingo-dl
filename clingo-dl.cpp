@@ -81,6 +81,7 @@ bool check(clingo_propagate_control_t* i, void* data)
 class Storage {
 
 public:
+    Storage() : currentVar_(0) {}
     virtual ~Storage() {};
     virtual void create(clingo_control_t* ctl) = 0;
     virtual clingo_control_t* getControl() const = 0;
@@ -89,8 +90,19 @@ public:
     virtual ExtendedPropagator* getExtendedPropagator() const = 0;
     virtual void onStatisticsStep(UserStatistics& step) = 0;
     virtual void onStatisticsAccu(UserStatistics& accu) = 0;
+    char const* valueToString(double value) {
+        auto x = valueToString_.find(value);
+        if (x != valueToString_.end()) {
+            return &(x->second[0]);
+        }
+        valueToString_[value].resize(snprintf( nullptr, 0, "%f.10", value));
+        snprintf( &(valueToString_[value][0]), 0, "%f.10", value);
+        return &(valueToString_[value][0]);
+    }
 
-
+    uint32_t currentThread_;
+    size_t currentVar_;
+    std::map<double, std::vector<char> > valueToString_;
 };
 
 static std::unique_ptr<Storage> storage(nullptr);
@@ -101,7 +113,7 @@ static bool prop(false);
 template<typename T>
 class PropagatorStorage : public Storage {
 public:
-    PropagatorStorage() : clingoProp_(nullptr), diffProp_(nullptr), ctl_(nullptr){
+    PropagatorStorage() : Storage(), clingoProp_(nullptr), diffProp_(nullptr), ctl_(nullptr){
     }
     void create(clingo_control_t* ctl) override {
         stats_      = std::make_unique<Stats>();
@@ -262,9 +274,38 @@ extern "C" bool theory_validate_options() {
 }
 
 extern "C" bool theory_on_model(clingo_model_t* model) {
-    CLINGODL_TRY {
+     CLINGODL_TRY {
         Model m(model);
         return storage->getExtendedPropagator()->extend_model(m);
+     }
+     CLINGODL_CATCH;
+ }
+ 
+extern "C" bool theory_assignment_first(uint32_t threadId, char const** name, char const** comp, char const** value) {
+    CLINGODL_TRY {
+        storage->currentThread_ = threadId;
+        storage->currentVar_ = 1;
+        CLINGO_CALL(theory_assignment_next(name, comp, value));
+	}
+    CLINGODL_CATCH;
+}
+
+extern "C" bool theory_assignment_next(char const** name, char const** comp, char const** value) {
+    CLINGODL_TRY {
+        auto x = storage->getExtendedPropagator();
+        while (! x->hasLowerBound(storage->currentThread_, storage->currentVar_)) {
+            ++storage->currentVar_;
+            if (storage->currentVar_ >= x->numVars()) {
+                name = comp = value = 0;
+                return true;
+            }
+        }
+        auto lb = x->lowerBound(storage->currentThread_, storage->currentVar_);
+        *name = x->name(storage->currentVar_);
+        static char const* c = "<=";
+        *comp = c;
+        *value = storage->valueToString(lb);
+        ++storage->currentVar_;
     }
     CLINGODL_CATCH;
 }

@@ -894,6 +894,15 @@ Clingo::Symbol evaluate_term(Clingo::TheoryTerm term);
 class ExtendedPropagator {
 public:
     virtual bool extend_model(Model &model) = 0;   
+    void addName(std::string& s) {
+        names_.emplace_back(s);
+    }
+    char const* name(size_t index) { return names_[index].c_str(); }
+    virtual size_t numVars() const = 0;
+    virtual bool hasLowerBound(uint32_t threadId, size_t index) = 0;
+    virtual double lowerBound(uint32_t threadId, size_t index) = 0;
+private:
+    std::vector<std::string> names_;
 };
 template <typename T>
 class DifferenceLogicPropagator : public Propagator, public ExtendedPropagator {
@@ -903,7 +912,9 @@ public:
         , strict_(strict)
         , propagate_(propagate)
         , first_time_(true)
-        , reinit_(false) {}
+        , reinit_(false) {
+            map_vert(Clingo::Number(0));
+        }
 
 public:
     // initialization
@@ -997,10 +1008,7 @@ public:
         Timer t{state.stats.time_propagate};
         auto level = ctl.assignment().decision_level();
         state.dl_graph.ensure_decision_level(level);
-        // NOTE: vector copy only because clasp bug
-        //       can only be triggered with propagation
-        //       (will be fixed with 5.2.1)
-        for (auto lit : std::vector<Clingo::literal_t>(changes.begin(), changes.end())) {
+        for (auto lit : changes) {
             for (auto it = false_lit_to_edges_.find(lit), ie = false_lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
                 if (state.dl_graph.edge_is_active(it->second)) {
                     state.dl_graph.remove_candidate_edge(it->second);
@@ -1053,29 +1061,43 @@ public:
     bool extend_model(Model &model) override {
         auto &state = states_[model.thread_id()];
         T adjust = 0;
-        int idx = 0;
-        auto null = Clingo::Number(0);
-        for (auto &name : vert_map_) {
-            if (state.dl_graph.node_value_defined(idx) && name == null) {
-                adjust = state.dl_graph.node_value(idx);
-                break;
-            }
-            ++idx;
+        assert(vert_map_[0] = Clingo::Number(0));
+        if (state.dl_graph.node_value_defined(0)) {
+            adjust = state.dl_graph.node_value(0);
         }
 
-        idx = 0;
         SymbolVector vec;
-        for (auto &name : vert_map_) {
-            if (state.dl_graph.node_value_defined(idx) && name != null) {
+        for (auto idx = 1; idx < vert_map_.size(); ++idx) {
+            if (state.dl_graph.node_value_defined(idx)) {
                 SymbolVector params;
-                params.emplace_back(name);
+                params.emplace_back(vert_map_[idx]);
                 params.emplace_back(String(std::to_string(adjust + state.dl_graph.node_value(idx)).c_str()));
                 vec.emplace_back(Function("dl",params));
             }
-            ++idx;
         }
         model.extend(vec);
         return true;
+    }
+
+    size_t numVars() const {
+        return vert_map_.size();
+    }
+
+    bool hasLowerBound(uint32_t threadId, size_t index) {
+        assert(index < vert_map_.size());
+        auto &state = states_[threadId];
+        return index > 0 && states_[threadId].dl_graph.node_value_defined(index);
+
+    }
+    virtual double lowerBound(uint32_t threadId, size_t index) {
+        assert(hasLowerBound(threadId, index));
+        auto &state = states_[threadId];
+        T adjust = 0;
+        assert(vert_map_[0] = Clingo::Number(0));
+        if (state.dl_graph.node_value_defined(0)) {
+            adjust = state.dl_graph.node_value(0);
+        }
+        return state.dl_graph.node_value(index) + adjust;
     }
 
 

@@ -89,6 +89,12 @@ CLINGODL_VISIBILITY_DEFAULT bool theory_validate_options();
 //! callback on every model 
 CLINGODL_VISIBILITY_DEFAULT bool theory_on_model(clingo_model_t* model);
 
+//! return pointer to first element of the current (partial) assignment, 0 if not existent
+CLINGODL_VISIBILITY_DEFAULT bool theory_assignment_first(uint32_t threadId, char const** name, char const** comp, char const** value);
+
+//! return pointer to next element of the current (partial) assignment 0 if not existent
+CLINGODL_VISIBILITY_DEFAULT bool theory_assignment_next(char const** name, char const** comp, char const** value);
+
 //! callback on statistic updates
 /// please add a subkey with the name of your propagator
 CLINGODL_VISIBILITY_DEFAULT bool theory_on_statistics(clingo_statistics_t* step, clingo_statistics_t* accu);
