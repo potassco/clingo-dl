@@ -894,7 +894,7 @@ Clingo::Symbol evaluate_term(Clingo::TheoryTerm term);
 class ExtendedPropagator {
 public:
     virtual bool extend_model(Model &model) = 0;   
-    void addName(std::string& s) {
+    void addName(const std::string& s) {
         names_.emplace_back(s);
     }
     char const* name(size_t index) { return names_[index].c_str(); }
@@ -954,8 +954,12 @@ public:
         if (args.size() != 2) {
             throw std::runtime_error(msg);
         }
-        auto u_id = map_vert(evaluate_term(args[0]));
-        auto v_id = map_vert(evaluate_term(args[1]));
+        auto x = evaluate_term(args[0]);
+        addName(x.to_string()); 
+        auto u_id = map_vert(x);
+        x = evaluate_term(args[1]);
+        addName(x.to_string()); 
+        auto v_id = map_vert(x);
         auto id = numeric_cast<int>(edges_.size());
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
