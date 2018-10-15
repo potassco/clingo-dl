@@ -12,16 +12,19 @@ matrix:
         - PYTHON_VERSION=3.6
         - COMPILER=gxx_linux-64
         - ANACONDA=https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
-    - os: osx
-      env:
-        - PYTHON_VERSION=2.7
-        - COMPILER=clangxx_osx-64
-        - ANACONDA=https://repo.continuum.io/miniconda/Miniconda2-latest-MacOSX-x86_64.sh
-    - os: osx
-      env:
-        - PYTHON_VERSION=3.6
-        - COMPILER=clangxx_osx-64
-        - ANACONDA=https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
+# does not work because the 10.9 macos sdk is not available on travis (it could be installed)
+# - https://github.com/phracker/MacOSX-SDKs/releases
+# - https://stackoverflow.com/questions/10165335/can-cmake-specify-the-base-sdk-on-mac-os-x
+#    - os: osx
+#      env:
+#        - PYTHON_VERSION=2.7
+#        - COMPILER=clangxx_osx-64
+#        - ANACONDA=https://repo.continuum.io/miniconda/Miniconda2-latest-MacOSX-x86_64.sh
+#    - os: osx
+#      env:
+#        - PYTHON_VERSION=3.6
+#        - COMPILER=clangxx_osx-64
+#        - ANACONDA=https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
 
 git:
   submodules: false
@@ -39,7 +42,7 @@ install:
   - conda create -q -n test-environment python=$PYTHON_VERSION
   - source activate test-environment
   - conda install -q clingo cmake "${COMPILER}" ninja
-  - cmake -G Ninja -DCMAKE_BUILD_TYPE=release -DCMAKE_INSTALL_PREFIX="${CONDA_PREFIX}" -DCMAKE_OSX_DEPLOYMENT_TARGET=10.9 .
+  - cmake -G Ninja -DCMAKE_BUILD_TYPE=release -DCMAKE_INSTALL_PREFIX="${CONDA_PREFIX}" .
   - cmake --build . --target install
 
 script:
