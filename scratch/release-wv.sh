@@ -30,7 +30,7 @@ mkdir -p build/${VERSION}
 
 cd /home/wv/bin/linux/64
 (
-    rm -f clingo-dl{-${VERSION},-${MAJOR},-${MINOR},}
+    rm -f clingo-dl{-${VERSION},-${MAJOR},-${MINOR}}
 
     for x in clingo-dl; do
         ln -s ${prefix}/bin/${x} ${x}-${VERSION}
