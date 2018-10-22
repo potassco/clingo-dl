@@ -893,7 +893,7 @@ Clingo::Symbol evaluate_term(Clingo::TheoryTerm term);
 
 class ExtendedPropagator {
 public:
-    virtual bool extend_model(Model &model) = 0;   
+    virtual bool extend_model(Model &model) = 0;
     void addName(const std::string& s) {
         names_.emplace_back(s);
     }
@@ -955,10 +955,10 @@ public:
             throw std::runtime_error(msg);
         }
         auto x = evaluate_term(args[0]);
-        addName(x.to_string()); 
+        addName(x.to_string());
         auto u_id = map_vert(x);
         x = evaluate_term(args[1]);
-        addName(x.to_string()); 
+        addName(x.to_string());
         auto v_id = map_vert(x);
         auto id = numeric_cast<int>(edges_.size());
         edges_.push_back({u_id, v_id, weight, lit});
@@ -1065,7 +1065,7 @@ public:
     bool extend_model(Model &model) override {
         auto &state = states_[model.thread_id()];
         T adjust = 0;
-        assert(vert_map_[0] = Clingo::Number(0));
+        assert(vert_map_[0] == Clingo::Number(0));
         if (!state.dl_graph.empty() && state.dl_graph.node_value_defined(0)) {
             adjust = state.dl_graph.node_value(0);
         }
@@ -1097,7 +1097,7 @@ public:
         assert(hasLowerBound(threadId, index));
         auto &state = states_[threadId];
         T adjust = 0;
-        assert(vert_map_[0] = Clingo::Number(0));
+        assert(vert_map_[0] == Clingo::Number(0));
         if (state.dl_graph.node_value_defined(0)) {
             adjust = state.dl_graph.node_value(0);
         }
