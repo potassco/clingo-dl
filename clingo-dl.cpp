@@ -59,10 +59,10 @@ bool propagate(clingo_propagate_control_t* i, const clingo_literal_t *changes, s
 }
 
 template <typename T>
-bool undo(clingo_propagate_control_t* i, const clingo_literal_t *changes, size_t size, void* data)
+bool undo(clingo_propagate_control_t const* i, const clingo_literal_t *changes, size_t size, void* data)
 {
     CLINGODL_TRY {
-        PropagateControl in(i);
+        PropagateControl in(const_cast<clingo_propagate_control_t *>(i));
         static_cast<DifferenceLogicPropagator<T>*>(data)->undo(in, {changes, size});
     }
     CLINGODL_CATCH;
@@ -119,10 +119,10 @@ public:
         stats_      = std::make_unique<Stats>();
         diffProp_   = std::make_unique<DifferenceLogicPropagator<T>>(*(stats_.get()),strict,prop);
         clingoProp_ = std::make_unique<clingo_propagator>();
-        clingoProp_->init = (bool (*) (clingo_propagate_init_t *, void *))init<int>;
-        clingoProp_->propagate = (bool (*) (clingo_propagate_control_t *, clingo_literal_t const *, size_t, void *))propagate<int>;
-        clingoProp_->undo = (bool (*) (clingo_propagate_control_t *, clingo_literal_t const *, size_t, void *))undo<int>;
-        clingoProp_->check = (bool (*) (clingo_propagate_control_t *, void *))check<int>;
+        clingoProp_->init = init<int>;
+        clingoProp_->propagate = propagate<int>;
+        clingoProp_->undo = undo<int>;
+        clingoProp_->check = check<int>;
         ctl_ = ctl;
         statCalls_["Time init(s)"] = [this]() { return static_cast<double>(stats_->time_init.count()); };
         statCallsThread_["Propagation(s)"] = [this](size_t thread) { return static_cast<double>(stats_->dl_stats[thread].time_propagate.count()); };
@@ -266,7 +266,7 @@ extern "C" bool theory_add_options(clingo_options_t* options) {
 
 extern "C" bool theory_validate_options() {
     CLINGODL_TRY {
-        if (strict && rdl) { 
+        if (strict && rdl) {
             throw std::runtime_error("real difference logic not available with strict semantics");
         }
     }
@@ -280,13 +280,13 @@ extern "C" bool theory_on_model(clingo_model_t* model) {
      }
      CLINGODL_CATCH;
  }
- 
+
 extern "C" bool theory_assignment_first(uint32_t threadId, char const** name, char const** comp, char const** value) {
     CLINGODL_TRY {
         storage->currentThread_ = threadId;
         storage->currentVar_ = 1;
         CLINGO_CALL(theory_assignment_next(name, comp, value));
-	}
+    }
     CLINGODL_CATCH;
 }
 
