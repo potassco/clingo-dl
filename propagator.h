@@ -341,7 +341,7 @@ public:
             auto vu_idx = rng.first->second;
             auto &vu = edges_[vu_idx];
             assert(vu.to == u_idx && vu.from == v_idx);
-            if (vu.weight < weight) {
+            if (vu.weight + weight < 0) {
                 assert(edge_states_[vu_idx].active);
                 ++stats_.false_edges;
                 T check = 0;
