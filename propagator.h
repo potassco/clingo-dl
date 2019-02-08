@@ -336,6 +336,7 @@ public:
         auto &v = nodes_[v_idx];
         auto uv_idx = v.path_from;
         T weight = v.potential() - u.potential();
+        std::vector<int> removed;
         // NOTE: maybe a shared static candidate edge dictionary would work too (only having to filter active edges)
         for (auto rng = candidate_edges_.equal_range(std::make_pair(v_idx, u_idx)); rng.first != rng.second; ++rng.first) {
             auto vu_idx = rng.first->second;
@@ -356,10 +357,14 @@ public:
                 }
                 assert(weight == check);
                 neg_cycle.emplace_back(vu_idx);
+                removed.emplace_back(vu_idx);
                 if (!f(neg_cycle)) {
                     return false;
                 }
             }
+        }
+        for (auto &vu_idx : removed) {
+            remove_candidate_edge(vu_idx);
         }
         return true;
     }
