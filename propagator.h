@@ -35,6 +35,17 @@
 using namespace Clingo;
 using std::chrono::steady_clock;
 
+namespace std {
+
+template<>
+struct hash<std::pair<int, int>> {
+    size_t operator()(std::pair<int, int> const &p) const {
+        return static_cast<size_t>(p.first) + (static_cast<size_t>(p.second) >> 32);
+    }
+};
+
+}
+
 namespace Detail {
 
 template <int X>
@@ -317,7 +328,44 @@ public:
         }
     }
 
-    std::vector<int> add_edge(int uv_idx) {
+    template <class F>
+    bool cheap_propagate(int u_idx, int v_idx, F f) {
+        // this function can be called during the dijkstra algorithm
+        // a path together with its cost can be extracted from the state
+        auto &u = nodes_[u_idx];
+        auto &v = nodes_[v_idx];
+        auto uv_idx = v.path_from;
+        T weight = v.potential() - u.potential();
+        // NOTE: maybe a shared static candidate edge dictionary would work too (only having to filter active edges)
+        for (auto rng = candidate_edges_.equal_range(std::make_pair(v_idx, u_idx)); rng.first != rng.second; ++rng.first) {
+            auto vu_idx = rng.first->second;
+            auto &vu = edges_[vu_idx];
+            assert(vu.to == u_idx && vu.from == v_idx);
+            if (vu.weight < weight) {
+                assert(edge_states_[vu_idx].active);
+                ++stats_.false_edges;
+                T check = 0;
+                auto t_idx = v_idx;
+                std::vector<int> neg_cycle;
+                while (u_idx != t_idx) {
+                    auto &t = nodes_[t_idx];
+                    auto &st = edges_[t.path_from];
+                    neg_cycle.emplace_back(t.path_from);
+                    t_idx = st.from;
+                    check += st.weight;
+                }
+                assert(weight == check);
+                neg_cycle.emplace_back(vu_idx);
+                if (!f(neg_cycle)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    template <class F>
+    bool add_edge(int uv_idx, F f) {
 #ifdef CROSSCHECK
         for (auto &node : nodes_) {
             assert(!node.visited_from);
@@ -348,12 +396,16 @@ public:
             v.path_from = uv_idx;
         }
 
+        bool consistent = true;
         // detect negative cycles
         while (!costs_heap_.empty() && !u.visited_from) {
             auto s_idx = costs_heap_.pop(m);
             auto &s = nodes_[s_idx];
             assert(s.visited_from);
             set_potential(s, level, s.potential() + s.cost_from);
+            // NOTE: here we should have a cost from u to t
+            //       and can check for an edge t to v
+            consistent = consistent && cheap_propagate(uv.from, s_idx, f);
             for (auto st_idx : s.outgoing) {
                 assert(st_idx < numeric_cast<int>(edges_.size()));
                 auto &st = edges_[st_idx];
@@ -375,9 +427,19 @@ public:
             }
         }
 
-        std::vector<int> neg_cycle;
-        if (u.visited_from) {
+        if (!u.visited_from) {
+            // add the edge to the graph
+            u.outgoing.emplace_back(uv_idx);
+            v.incoming.emplace_back(uv_idx);
+            changed_edges_.emplace_back(uv_idx);
+#ifdef CROSSCHECK
+            // NOTE: just a check that will throw if there is a cycle
+            bellman_ford(changed_edges_, uv.from);
+#endif
+        }
+        else if (consistent) {
             // gather the edges in the negative cycle
+            std::vector<int> neg_cycle;
             neg_cycle.push_back(v.path_from);
             auto next_idx = edges_[v.path_from].from;
             while (uv.to != next_idx) {
@@ -392,16 +454,7 @@ public:
             }
             assert(weight < 0);
 #endif
-        }
-        else {
-            // add the edge to the graph
-            u.outgoing.emplace_back(uv_idx);
-            v.incoming.emplace_back(uv_idx);
-            changed_edges_.emplace_back(uv_idx);
-#ifdef CROSSCHECK
-            // NOTE: just a check that will throw if there is a cycle
-            bellman_ford(changed_edges_, uv.from);
-#endif
+            consistent = f(neg_cycle);
         }
 
         // reset visited flags
@@ -411,7 +464,7 @@ public:
         visited_from_.clear();
         costs_heap_.clear();
 
-        return neg_cycle;
+        return consistent;
     }
 
     bool propagate(int xy_idx, Clingo::PropagateControl &ctl) {
@@ -518,6 +571,12 @@ public:
         inactive_edges_.push_back(uv_idx);
         assert(edge_states_[uv_idx].active);
         edge_states_[uv_idx].active = false;
+        for (auto rng = candidate_edges_.equal_range(std::make_pair(uv.from, uv.to)); rng.first != rng.second; ++rng.first) {
+            if (rng.first->second == uv_idx) {
+                candidate_edges_.erase(rng.first);
+                break;
+            }
+        }
     }
 
 private:
@@ -538,6 +597,7 @@ private:
             uv_state.removed_incoming = false;
             v.candidate_incoming.emplace_back(uv_idx);
         }
+        candidate_edges_.emplace(std::make_pair(uv.from, uv.to), uv_idx);
     }
 
     bool propagate_edge_true(int uv_idx, int xy_idx) {
@@ -832,6 +892,7 @@ private:
     std::vector<std::tuple<int, int, int, int>> changed_trail_;
     std::vector<int> inactive_edges_;
     std::vector<EdgeState> edge_states_;
+    std::unordered_multimap<std::pair<int,int>,int> candidate_edges_;
     DLStats &stats_;
 };
 
@@ -1010,21 +1071,17 @@ public:
             }
             for (auto it = lit_to_edges_.find(lit), ie = lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
                 if (state.dl_graph.edge_is_active(it->second)) {
-                    auto neg_cycle = state.dl_graph.add_edge(it->second);
-                    if (!neg_cycle.empty()) {
+                    if (!state.dl_graph.add_edge(it->second, [&](std::vector<int> const &neg_cycle) {
                         std::vector<literal_t> clause;
                         for (auto eid : neg_cycle) {
                             clause.emplace_back(-edges_[eid].lit);
                         }
-                        if (!ctl.add_clause(clause) || !ctl.propagate()) {
-                            return;
-                        }
-                        assert(false && "must not happen");
+                        return ctl.add_clause(clause) && ctl.propagate();
+                    })) {
+                        return;
                     }
-                    else if (propagate_) {
-                        if (!state.dl_graph.propagate(it->second, ctl)) {
-                            return;
-                        }
+                    else if (propagate_ && !state.dl_graph.propagate(it->second, ctl)) {
+                        return;
                     }
                 }
             }
