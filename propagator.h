@@ -329,20 +329,21 @@ public:
     }
 
     template <class F>
-    bool cheap_propagate(int u_idx, int v_idx, F f) {
+    bool cheap_propagate(int u_idx, F f) {
         // this function can be called during the dijkstra algorithm
         // a path together with its cost can be extracted from the state
         auto &u = nodes_[u_idx];
-        auto &v = nodes_[v_idx];
-        auto uv_idx = v.path_from;
-        T weight = v.potential() - u.potential();
-        std::vector<int> removed;
-        // NOTE: maybe a shared static candidate edge dictionary would work too (only having to filter active edges)
-        for (auto rng = candidate_edges_.equal_range(std::make_pair(v_idx, u_idx)); rng.first != rng.second; ++rng.first) {
-            auto vu_idx = rng.first->second;
+        auto &in = u.candidate_incoming;
+        auto jt = in.begin();
+        for (auto it = jt, ie = in.end(); it != ie; ++it) {
+            auto vu_idx = *it;
             auto &vu = edges_[vu_idx];
-            assert(vu.to == u_idx && vu.from == v_idx);
+            assert(u_idx == vu.to);
+            auto v_idx = vu.from;
+            auto &v = nodes_[v_idx];
+            T weight = v.visited_from ? v.potential() - u.potential() : -vu.weight;
             if (vu.weight + weight < 0) {
+                edge_states_[vu_idx].removed_incoming = true;
                 assert(edge_states_[vu_idx].active);
                 ++stats_.false_edges;
                 T check = 0;
@@ -357,15 +358,16 @@ public:
                 }
                 assert(weight == check);
                 neg_cycle.emplace_back(vu_idx);
-                removed.emplace_back(vu_idx);
                 if (!f(neg_cycle)) {
+                    in.erase(jt, it+1);
                     return false;
                 }
             }
+            else if (jt != it) {
+                *jt++ = *it;
+            }
         }
-        for (auto &vu_idx : removed) {
-            remove_candidate_edge(vu_idx);
-        }
+        in.erase(jt, in.end());
         return true;
     }
 
@@ -410,7 +412,6 @@ public:
             set_potential(s, level, s.potential() + s.cost_from);
             // NOTE: here we should have a cost from u to t
             //       and can check for an edge t to v
-            consistent = consistent && cheap_propagate(uv.from, s_idx, f);
             for (auto st_idx : s.outgoing) {
                 assert(st_idx < numeric_cast<int>(edges_.size()));
                 auto &st = edges_[st_idx];
@@ -462,6 +463,7 @@ public:
             consistent = f(neg_cycle);
         }
 
+        consistent = consistent && cheap_propagate(uv.from, f);
         // reset visited flags
         for (auto &x : visited_from_) {
             nodes_[x].visited_from = false;
