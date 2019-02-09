@@ -285,6 +285,9 @@ struct DLStats {
         propagate_cost_add  = 0;
         propagate_cost_from = 0;
         propagate_cost_to   = 0;
+        edges_added      = 0;
+        edges_skipped    = 0;
+        edges_propagated = 0;
     }
     void accu(DLStats const &x) {
         time_propagate+= x.time_propagate;
@@ -295,6 +298,9 @@ struct DLStats {
         propagate_cost_add += x.propagate_cost_add;
         propagate_cost_from+= x.propagate_cost_from;
         propagate_cost_to  += x.propagate_cost_to;
+        edges_added      += x.edges_added;
+        edges_skipped    += x.edges_skipped;
+        edges_propagated += x.edges_propagated;
     }
     Duration time_propagate = Duration{0};
     Duration time_undo = Duration{0};
@@ -304,6 +310,9 @@ struct DLStats {
     uint64_t propagate_cost_add{0};
     uint64_t propagate_cost_from{0};
     uint64_t propagate_cost_to{0};
+    uint64_t edges_added{0};
+    uint64_t edges_skipped{0};
+    uint64_t edges_propagated{0};
 };
 
 struct EdgeState {
@@ -417,11 +426,15 @@ public:
             set_potential(v, level, 0);
         }
         v.cost_from = u.potential() + uv.weight - v.potential();
+        ++stats_.edges_added;
         if (v.cost_from < 0) {
             costs_heap_.push(m, uv.to);
             visited_from_.emplace_back(uv.to);
             v.visited_from = true;
             v.path_from = uv_idx;
+        }
+        else {
+            ++stats_.edges_skipped;
         }
 
         // detect negative cycles
@@ -497,6 +510,7 @@ public:
     }
 
     bool propagate(int xy_idx, Clingo::PropagateControl &ctl) {
+        ++stats_.edges_propagated;
         remove_candidate_edge(xy_idx);
         auto &xy = edges_[xy_idx];
         auto &x = nodes_[xy.from];
@@ -1095,18 +1109,15 @@ public:
             }
             for (auto it = lit_to_edges_.find(lit), ie = lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
                 if (state.dl_graph.edge_is_active(it->second)) {
-                    if (!state.dl_graph.add_edge(it->second, [&](std::vector<int> const &neg_cycle) {
+                    auto ret = state.dl_graph.add_edge(it->second, [&](std::vector<int> const &neg_cycle) {
                         std::vector<literal_t> clause;
                         for (auto eid : neg_cycle) {
                             clause.emplace_back(-edges_[eid].lit);
                         }
                         return ctl.add_clause(clause) && ctl.propagate();
-                    })) {
-                        return;
-                    }
-                    else if (propagate_ && !state.dl_graph.propagate(it->second, ctl)) {
-                        return;
-                    }
+                    });
+                    if (!ret) { return; }
+                    if (propagate_ && !state.dl_graph.propagate(it->second, ctl)) { return; }
                 }
             }
         }

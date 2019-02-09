@@ -146,6 +146,9 @@ public:
             thread.add_subkey("Undo(s)", StatisticsType::Value).set_value(stat.time_undo.count());
             thread.add_subkey("True edges", StatisticsType::Value).set_value(stat.true_edges);
             thread.add_subkey("False edges", StatisticsType::Value).set_value(stat.false_edges);
+            thread.add_subkey("Edges added", StatisticsType::Value).set_value(stat.edges_added);
+            thread.add_subkey("Edges skipped", StatisticsType::Value).set_value(stat.edges_skipped);
+            thread.add_subkey("Edges propagated", StatisticsType::Value).set_value(stat.edges_propagated);
             thread.add_subkey("Cost consistency", StatisticsType::Value).set_value(stat.propagate_cost_add);
             thread.add_subkey("Cost forward", StatisticsType::Value).set_value(stat.propagate_cost_from);
             thread.add_subkey("Cost backward", StatisticsType::Value).set_value(stat.propagate_cost_to);
