@@ -342,8 +342,10 @@ public:
             auto v_idx = vu.from;
             auto &v = nodes_[v_idx];
             T weight = v.visited_from ? v.potential() - u.potential() : -vu.weight;
-            if (vu.weight + weight < 0) {
-                assert(edge_states_[vu_idx].active);
+            if (!edge_states_[vu_idx].active) {
+                edge_states_[vu_idx].removed_incoming = true;
+            }
+            else if (vu.weight + weight < 0) {
                 edge_states_[vu_idx].removed_incoming = true;
                 remove_candidate_edge(vu_idx);
                 ++stats_.false_edges;
