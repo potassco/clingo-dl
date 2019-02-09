@@ -17,11 +17,12 @@ Clingo-dl is distributed under the [MIT License](LICENSE.md).
 
 ### Usage
 
-    clingo-dl [CLINGO OPTION]... [-p] [--strict] [--rdl] [FILE]...
+    clingo-dl [CLINGO OPTION]... [--propagate MODE] [--strict] [--rdl] [FILE]...
 
-Option `--propagate` can be used to enable propagation of difference constraints,
-`--strict` to turn on strict mode, and `--rdl` to use real numbers.
+Option `--propagate MODE` can be used to enable propagation of difference
+constraints, `--strict` to turn on strict mode, and `--rdl` to use real
+numbers.
 
 ### Example
 
-    clingo-dl -c n=132 -p examples/taskassignment/encoding-dl.lp examples/taskassignment/tai4_4_1.lp
+    clingo-dl -c n=132 -propagate=full examples/taskassignment/encoding-dl.lp examples/taskassignment/tai4_4_1.lp
