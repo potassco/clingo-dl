@@ -225,7 +225,7 @@ struct HeapFromM {
     int from(int idx) { return static_cast<P *>(this)->edges_[idx].from; }
     std::vector<int> &out(int idx) { return static_cast<P *>(this)->nodes_[idx].outgoing; }
     int &path(int idx) { return static_cast<P *>(this)->nodes_[idx].path_from; }
-    bool &visited(int idx) { return static_cast<P *>(this)->nodes_[idx].visited_from; }
+    int &visited(int idx) { return static_cast<P *>(this)->nodes_[idx].visited_from; }
     bool &relevant(int idx) { return static_cast<P *>(this)->nodes_[idx].relevant_from; }
     std::vector<int> &visited_set() { return static_cast<P *>(this)->visited_from_; }
     std::vector<int> &candidate_outgoing(int idx) { return static_cast<P *>(this)->nodes_[idx].candidate_outgoing; }
@@ -269,9 +269,9 @@ struct DifferenceLogicNode {
     int path_to = 0;
     int degree_out = 0;
     int degree_in = 0;
+    int visited_from = 0;
     bool relevant_from = false;
     bool relevant_to = false;
-    bool visited_from = false;
     bool visited_to = false;
 };
 
@@ -280,8 +280,11 @@ struct DLStats {
         time_propagate = steady_clock::duration::zero();
         time_undo      = steady_clock::duration::zero();
         time_dijkstra  = steady_clock::duration::zero();
-        true_edges     = 0;
-        false_edges    = 0;
+        true_edges            = 0;
+        false_edges           = 0;
+        false_edges_trivial   = 0;
+        false_edges_weak      = 0;
+        false_edges_weak_plus = 0;
         propagate_cost_add  = 0;
         propagate_cost_from = 0;
         propagate_cost_to   = 0;
@@ -295,6 +298,9 @@ struct DLStats {
         time_dijkstra += x.time_dijkstra;
         true_edges    += x.true_edges;
         false_edges   += x.false_edges;
+        false_edges_trivial   = x.false_edges_trivial;
+        false_edges_weak      = x.false_edges_weak;
+        false_edges_weak_plus = x.false_edges_weak_plus;
         propagate_cost_add += x.propagate_cost_add;
         propagate_cost_from+= x.propagate_cost_from;
         propagate_cost_to  += x.propagate_cost_to;
@@ -307,6 +313,9 @@ struct DLStats {
     Duration time_dijkstra = Duration{0};
     uint64_t true_edges{0};
     uint64_t false_edges{0};
+    uint64_t false_edges_trivial{0};
+    uint64_t false_edges_weak{0};
+    uint64_t false_edges_weak_plus{0};
     uint64_t propagate_cost_add{0};
     uint64_t propagate_cost_from{0};
     uint64_t propagate_cost_to{0};
@@ -321,7 +330,7 @@ struct EdgeState {
     uint8_t active : 1;
 };
 
-enum class PropagationMode { Check = 0, Weak = 1, Strong = 2 };
+enum class PropagationMode { Check = 0, Trivial = 1, Weak = 2, WeakPlus = 3, Strong = 4 };
 
 template <typename T>
 class DifferenceLogicGraph : private HeapToM<T, DifferenceLogicGraph<T>>, private HeapFromM<T, DifferenceLogicGraph<T>> {
@@ -358,50 +367,74 @@ public:
         }
     }
 
-    template <class F>
-    bool cheap_propagate(int u_idx, F f) {
-        // this function can be called during the dijkstra algorithm
-        // a path together with its cost can be extracted from the state
-        auto &u = nodes_[u_idx];
-        auto &in = u.candidate_incoming;
+    std::vector<int> neg_cycle;
+    template <class P, class F>
+    bool with_incoming(int s_idx, P p, F f) {
+        auto &s = nodes_[s_idx];
+        auto &in = s.candidate_incoming;
         auto jt = in.begin();
         for (auto it = jt, ie = in.end(); it != ie; ++it) {
-            auto vu_idx = *it;
-            auto &vu = edges_[vu_idx];
-            assert(u_idx == vu.to);
-            auto v_idx = vu.from;
-            auto &v = nodes_[v_idx];
-            T weight = v.visited_from ? v.potential() - u.potential() : -vu.weight;
-            if (!edge_states_[vu_idx].active) {
-                edge_states_[vu_idx].removed_incoming = true;
+            auto &ts_idx = *it;
+            auto &ts = edges_[ts_idx];
+            auto t_idx = ts.from;
+            auto &t = nodes_[t_idx];
+            if (!edge_states_[ts_idx].active) {
+                edge_states_[ts_idx].removed_incoming = true;
+                continue;
             }
-            else if (vu.weight + weight < 0) {
-                edge_states_[vu_idx].removed_incoming = true;
-                remove_candidate_edge(vu_idx);
-                ++stats_.false_edges;
-                T check = 0;
-                auto t_idx = v_idx;
-                std::vector<int> neg_cycle;
-                while (u_idx != t_idx) {
-                    auto &t = nodes_[t_idx];
-                    auto &st = edges_[t.path_from];
-                    neg_cycle.emplace_back(t.path_from);
-                    t_idx = st.from;
-                    check += st.weight;
-                }
-                assert(weight == check);
-                neg_cycle.emplace_back(vu_idx);
-                if (!f(neg_cycle)) {
+            neg_cycle.clear();
+            if (f(t_idx, ts_idx)) {
+                edge_states_[ts_idx].removed_incoming = true;
+                remove_candidate_edge(ts_idx);
+                if (!p(neg_cycle)) {
                     in.erase(jt, it+1);
                     return false;
                 }
+                continue;
             }
-            else {
-                *jt++ = *it;
-            }
+            *jt++ = *it;
         }
         in.erase(jt, in.end());
         return true;
+    }
+
+    template <class F>
+    bool cheap_propagate(int u_idx, int s_idx, F f) {
+        // we check for the following case:
+        // u ->* s -> * t
+        //       ^-----/
+        //          ts
+        return with_incoming(s_idx, f, [&](int t_idx, int ts_idx) {
+            auto &s = nodes_[s_idx];
+            auto &t = nodes_[t_idx];
+            auto &ts = edges_[ts_idx];
+            if (s.visited_from < t.visited_from) {
+                T weight = t.potential() - s.potential();
+                if (weight + ts.weight < 0) {
+                    T check = 0;
+                    auto r_idx = t_idx;
+                    while (u_idx != r_idx && s_idx != r_idx) {
+                        auto &r = nodes_[r_idx];
+                        auto &rr = edges_[r.path_from];
+                        neg_cycle.emplace_back(r.path_from);
+                        r_idx = rr.from;
+                        check += rr.weight;
+                    }
+                    if (r_idx == s_idx) {
+                        if (u_idx == s_idx) {
+                            ++stats_.false_edges_weak;
+                        }
+                        else {
+                            ++stats_.false_edges_weak_plus;
+                        }
+                        assert(weight == check);
+                        neg_cycle.emplace_back(ts_idx);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        });
     }
 
     template <class F>
@@ -433,21 +466,21 @@ public:
         if (v.cost_from < 0) {
             costs_heap_.push(m, uv.to);
             visited_from_.emplace_back(uv.to);
-            v.visited_from = true;
+            v.visited_from = 1;
             v.path_from = uv_idx;
         }
         else {
             ++stats_.edges_skipped;
         }
 
+        int dfs = 0;
         // detect negative cycles
         while (!costs_heap_.empty() && !u.visited_from) {
             auto s_idx = costs_heap_.pop(m);
             auto &s = nodes_[s_idx];
             assert(s.visited_from);
+            s.visited_from = ++dfs;
             set_potential(s, level, s.potential() + s.cost_from);
-            // NOTE: here we should have a cost from u to t
-            //       and can check for an edge t to v
             for (auto st_idx : s.outgoing) {
                 ++stats_.propagate_cost_add;
                 assert(st_idx < numeric_cast<int>(edges_.size()));
@@ -459,7 +492,7 @@ public:
                     t.path_from = st_idx;
                     t.cost_from = c;
                     if (!t.visited_from) {
-                        t.visited_from = true;
+                        t.visited_from = 1;
                         visited_from_.emplace_back(st.to);
                         costs_heap_.push(m, st.to);
                     }
@@ -483,7 +516,7 @@ public:
         }
         else {
             // gather the edges in the negative cycle
-            std::vector<int> neg_cycle;
+            neg_cycle.clear();
             neg_cycle.push_back(v.path_from);
             auto next_idx = edges_[v.path_from].from;
             while (uv.to != next_idx) {
@@ -501,12 +534,34 @@ public:
             consistent = f(neg_cycle);
         }
 
-        if (propagate_ >= PropagationMode::Weak) {
-            consistent = consistent && cheap_propagate(uv.from, f);
+        if (propagate_ >= PropagationMode::Trivial && consistent) {
+            if (visited_from_.empty() || propagate_ == PropagationMode::Trivial) {
+                consistent = with_incoming(uv.from, f, [&](int t_idx, int ts_idx) {
+                    auto &ts = edges_[ts_idx];
+                    if (t_idx == uv.to && uv.weight + ts.weight < 0) {
+                        neg_cycle.emplace_back(uv_idx);
+                        neg_cycle.emplace_back(ts_idx);
+                        ++stats_.false_edges_trivial;
+                        return true;
+                    }
+                    return false;
+                });
+            }
+            else if (propagate_ >= PropagationMode::Weak) {
+                consistent = cheap_propagate(uv.from, uv.from, f);
+                if (propagate_ >= PropagationMode::WeakPlus && consistent) {
+                    for (auto &s_idx : visited_from_) {
+                        if (!cheap_propagate(uv.from, s_idx, f)) {
+                            consistent = false;
+                            break;
+                        }
+                    }
+                }
+            }
         }
         // reset visited flags
         for (auto &x : visited_from_) {
-            nodes_[x].visited_from = false;
+            nodes_[x].visited_from = 0;
         }
         visited_from_.clear();
         costs_heap_.clear();

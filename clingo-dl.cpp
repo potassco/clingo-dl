@@ -106,7 +106,6 @@ public:
 static std::unique_ptr<Storage> storage(nullptr);
 static bool strict(false);
 static bool rdl(false);
-static bool full_prop(false);
 static PropagationMode prop(PropagationMode::Check);
 
 template<typename T>
@@ -147,6 +146,9 @@ public:
             thread.add_subkey("Undo(s)", StatisticsType::Value).set_value(stat.time_undo.count());
             thread.add_subkey("True edges", StatisticsType::Value).set_value(stat.true_edges);
             thread.add_subkey("False edges", StatisticsType::Value).set_value(stat.false_edges);
+            thread.add_subkey("False edges (inverse)", StatisticsType::Value).set_value(stat.false_edges_trivial);
+            thread.add_subkey("False edges (partial)", StatisticsType::Value).set_value(stat.false_edges_weak);
+            thread.add_subkey("False edges (partial+)", StatisticsType::Value).set_value(stat.false_edges_weak_plus);
             thread.add_subkey("Edges added", StatisticsType::Value).set_value(stat.edges_added);
             thread.add_subkey("Edges skipped", StatisticsType::Value).set_value(stat.edges_skipped);
             thread.add_subkey("Edges propagated", StatisticsType::Value).set_value(stat.edges_propagated);
@@ -213,8 +215,16 @@ static bool parse_mode(const char *value, void *data) {
         mode = PropagationMode::Check;
         return true;
     }
+    else if (iequals(value, "inverse")) {
+        mode = PropagationMode::Trivial;
+        return true;
+    }
     else if (iequals(value, "partial")) {
         mode = PropagationMode::Weak;
+        return true;
+    }
+    else if (iequals(value, "partial+")) {
+        mode = PropagationMode::WeakPlus;
         return true;
     }
     else if (iequals(value, "full")) {
@@ -228,13 +238,14 @@ static bool parse_mode(const char *value, void *data) {
 extern "C" bool theory_add_options(clingo_options_t* options) {
     CLINGODL_TRY {
         char const * group = "Clingo.DL Options";
-        CLINGO_CALL(clingo_options_add_flag(options, group, "p", "Enable full propagation.", &full_prop));
         CLINGO_CALL(clingo_options_add(options, group, "propagate",
             "Set propagation mode [no]\n"
             "    <mode>: {no,partial,full}\n"
-            "      no     : No propagation; only detect conflicts\n"
-            "      partial: Detect some conflicting constraints\n"
-            "      full   : Detect all conflicting constraints",
+            "      no      : No propagation; only detect conflicts\n"
+            "      inverse : Check inverse constraints\n"
+            "      partial : Detect some conflicting constraints\n"
+            "      partial+: Detect some more conflicting constraints\n"
+            "      full    : Detect all conflicting constraints",
             &parse_mode, &prop, false, "mode"));
         CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers.", &rdl));
         CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode.", &strict));
@@ -244,9 +255,6 @@ extern "C" bool theory_add_options(clingo_options_t* options) {
 
 extern "C" bool theory_validate_options() {
     CLINGODL_TRY {
-        if (full_prop) {
-            prop = PropagationMode::Strong;
-        }
         if (strict && rdl) {
             throw std::runtime_error("real difference logic not available with strict semantics");
         }
