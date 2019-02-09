@@ -343,8 +343,9 @@ public:
             auto &v = nodes_[v_idx];
             T weight = v.visited_from ? v.potential() - u.potential() : -vu.weight;
             if (vu.weight + weight < 0) {
-                edge_states_[vu_idx].removed_incoming = true;
                 assert(edge_states_[vu_idx].active);
+                edge_states_[vu_idx].removed_incoming = true;
+                remove_candidate_edge(vu_idx);
                 ++stats_.false_edges;
                 T check = 0;
                 auto t_idx = v_idx;
@@ -363,7 +364,7 @@ public:
                     return false;
                 }
             }
-            else if (jt != it) {
+            else {
                 *jt++ = *it;
             }
         }
@@ -403,7 +404,6 @@ public:
             v.path_from = uv_idx;
         }
 
-        bool consistent = true;
         // detect negative cycles
         while (!costs_heap_.empty() && !u.visited_from) {
             auto s_idx = costs_heap_.pop(m);
@@ -433,6 +433,7 @@ public:
             }
         }
 
+        bool consistent = true;
         if (!u.visited_from) {
             // add the edge to the graph
             u.outgoing.emplace_back(uv_idx);
@@ -443,7 +444,7 @@ public:
             bellman_ford(changed_edges_, uv.from);
 #endif
         }
-        else if (consistent) {
+        else {
             // gather the edges in the negative cycle
             std::vector<int> neg_cycle;
             neg_cycle.push_back(v.path_from);
@@ -578,12 +579,6 @@ public:
         inactive_edges_.push_back(uv_idx);
         assert(edge_states_[uv_idx].active);
         edge_states_[uv_idx].active = false;
-        for (auto rng = candidate_edges_.equal_range(std::make_pair(uv.from, uv.to)); rng.first != rng.second; ++rng.first) {
-            if (rng.first->second == uv_idx) {
-                candidate_edges_.erase(rng.first);
-                break;
-            }
-        }
     }
 
 private:
@@ -604,7 +599,6 @@ private:
             uv_state.removed_incoming = false;
             v.candidate_incoming.emplace_back(uv_idx);
         }
-        candidate_edges_.emplace(std::make_pair(uv.from, uv.to), uv_idx);
     }
 
     bool propagate_edge_true(int uv_idx, int xy_idx) {
@@ -899,7 +893,6 @@ private:
     std::vector<std::tuple<int, int, int, int>> changed_trail_;
     std::vector<int> inactive_edges_;
     std::vector<EdgeState> edge_states_;
-    std::unordered_multimap<std::pair<int,int>,int> candidate_edges_;
     DLStats &stats_;
 };
 
