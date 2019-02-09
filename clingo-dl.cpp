@@ -83,13 +83,11 @@ class Storage {
 public:
     Storage() : currentVar_(0) {}
     virtual ~Storage() {};
-    virtual void create(clingo_control_t* ctl) = 0;
-    virtual clingo_control_t* getControl() const = 0;
-    virtual clingo_propagator* getClingoPropagator() const = 0;
-    virtual Propagator* getPropagator() const = 0;
-    virtual ExtendedPropagator* getExtendedPropagator() const = 0;
-    virtual void onStatisticsStep(UserStatistics& step) = 0;
-    virtual void onStatisticsAccu(UserStatistics& accu) = 0;
+    virtual clingo_control_t *getControl() = 0;
+    virtual clingo_propagator_t *getClingoPropagator() = 0;
+    virtual Propagator* getPropagator() = 0;
+    virtual ExtendedPropagator* getExtendedPropagator() = 0;
+    virtual void onStatistics(UserStatistics& step, UserStatistics &accu) = 0;
     char const* valueToString(double value) {
         auto x = valueToString_.find(value);
         if (x != valueToString_.end()) {
@@ -113,132 +111,77 @@ static bool prop(false);
 template<typename T>
 class PropagatorStorage : public Storage {
 public:
-    PropagatorStorage() : Storage(), clingoProp_(nullptr), diffProp_(nullptr), ctl_(nullptr){
+    PropagatorStorage(clingo_control_t *ctl, bool strict, bool prop)
+    : Storage()
+    , clingoProp_ {
+        init<int>,
+        propagate<int>,
+        undo<int>,
+        check<int>,
+        nullptr
     }
-    void create(clingo_control_t* ctl) override {
-        stats_      = std::make_unique<Stats>();
-        diffProp_   = std::make_unique<DifferenceLogicPropagator<T>>(*(stats_.get()),strict,prop);
-        clingoProp_ = std::make_unique<clingo_propagator>();
-        clingoProp_->init = init<int>;
-        clingoProp_->propagate = propagate<int>;
-        clingoProp_->undo = undo<int>;
-        clingoProp_->check = check<int>;
-        ctl_ = ctl;
-        statCalls_["Time init(s)"] = [this]() { return static_cast<double>(stats_->time_init.count()); };
-        statCallsThread_["Propagation(s)"] = [this](size_t thread) { return static_cast<double>(stats_->dl_stats[thread].time_propagate.count()); };
-        statCallsThread_["Dijkstra(s)"] = [this](size_t thread) { return static_cast<double>(stats_->dl_stats[thread].time_dijkstra.count()); };
-        statCallsThread_["True edges"] = [this](size_t thread) { return static_cast<double>(stats_->dl_stats[thread].true_edges); };
-        statCallsThread_["False edges"] = [this](size_t thread) { return static_cast<double>(stats_->dl_stats[thread].false_edges); };
-        statCallsThread_["Undo(s)"] = [this](size_t thread) { return static_cast<double>(stats_->dl_stats[thread].time_undo.count()); };
+    , diffProp_{step_, strict, prop}
+    , ctl_(ctl) { }
+
+    clingo_control_t *getControl() override { return ctl_; }
+    clingo_propagator_t *getClingoPropagator() override { return &clingoProp_; }
+    Propagator* getPropagator() override { return &diffProp_; }
+    ExtendedPropagator* getExtendedPropagator() override { return &diffProp_; }
+
+    void onStatistics(UserStatistics& step, UserStatistics &accu) override {
+        accu_.accu(step_);
+        addStatistics(step, step_);
+        addStatistics(accu, accu_);
+        step_.reset();
     }
 
-    clingo_control_t* getControl() const override { return ctl_; }
-    clingo_propagator* getClingoPropagator() const override { return clingoProp_.get(); }
-    Propagator* getPropagator() const override { return diffProp_.get(); }
-    ExtendedPropagator* getExtendedPropagator() const override { return diffProp_.get(); }
-    void onStatisticsStep(UserStatistics& step) override {
-        assert(step.type() == StatisticsType::Map);
-        for (const auto& it : statCalls_) {
-            if (!step.has_subkey(it.first)) {
-                auto t = step.add_subkey(it.first, StatisticsType::Value);
-                t.set_value(it.second());
-            } else {
-                auto t = step[it.first];
-                t.set_value(it.second());
-            }
-        }
-        size_t num = 0;
-        for (auto& stat : stats_->dl_stats) {
-            std::string threadname("Thread[");
-            threadname += std::to_string(num) + "]";
-            UserStatistics thread(0,0);
-            if (!step.has_subkey(threadname.c_str())) {
-                thread = step.add_subkey(threadname.c_str(), StatisticsType::Map);
-            } else {
-                thread = step[threadname.c_str()];
-            }
-            for (const auto& it : statCallsThread_) {
-                if (!thread.has_subkey(it.first)) {
-                    auto t = thread.add_subkey(it.first, StatisticsType::Value);
-                    t.set_value(it.second(num));
-                } else {
-                    auto t = thread[it.first];
-                    t.set_value(it.second(num));
-                }
-            }
-            ++num;
-        }
-        stats_->reset();
-    }
-
-    void onStatisticsAccu(UserStatistics& accu) override {
-        assert(accu.type() == StatisticsType::Map);
-        for (const auto& it : statCalls_) {
-            if (!accu.has_subkey(it.first)) {
-                auto t = accu.add_subkey(it.first, StatisticsType::Value);
-                t.set_value(it.second());
-            } else {
-                auto t = accu[it.first];
-                t.set_value(t.value() + it.second());
-            }
-        }
-        size_t num = 0;
-        for (auto& stat : stats_->dl_stats) {
-            std::string threadname("Thread[");
-            threadname += std::to_string(num) + "]";
-            UserStatistics thread(0,0);
-            if (!accu.has_subkey(threadname.c_str())) {
-                thread = accu.add_subkey(threadname.c_str(), StatisticsType::Map);
-            } else {
-                thread = accu[threadname.c_str()];
-            }
-            for (const auto& it : statCallsThread_) {
-                if (!thread.has_subkey(it.first)) {
-                    auto t = thread.add_subkey(it.first, StatisticsType::Value);
-                    t.set_value(it.second(num));
-                } else {
-                    auto t = thread[it.first];
-                    t.set_value(t.value() + it.second(num));
-                }
-            }
-            ++num;
+    void addStatistics(UserStatistics& root, Stats const &stats) {
+        UserStatistics diff = root.add_subkey("DifferenceLogic", StatisticsType::Map);
+        diff.add_subkey("Time init(s)", StatisticsType::Value).set_value(stats.time_init.count());
+        UserStatistics threads = diff.add_subkey("Thread", StatisticsType::Array);
+        for (DLStats& stat : step_.dl_stats) {
+            auto thread = threads.push(StatisticsType::Map);
+            thread.add_subkey("Propagation(s)", StatisticsType::Value).set_value(stat.time_propagate.count());
+            thread.add_subkey("Dijkstra(s)", StatisticsType::Value).set_value(stat.time_dijkstra.count());
+            thread.add_subkey("Undo(s)", StatisticsType::Value).set_value(stat.time_undo.count());
+            thread.add_subkey("True edges", StatisticsType::Value).set_value(stat.true_edges);
+            thread.add_subkey("False edges", StatisticsType::Value).set_value(stat.false_edges);
+            thread.add_subkey("Cost consistency", StatisticsType::Value).set_value(stat.propagate_cost_add);
+            thread.add_subkey("Cost forward", StatisticsType::Value).set_value(stat.propagate_cost_from);
+            thread.add_subkey("Cost backward", StatisticsType::Value).set_value(stat.propagate_cost_to);
         }
     }
-
 
 private:
-    std::unique_ptr<Stats> stats_;
-    std::unique_ptr<clingo_propagator> clingoProp_;
-    std::unique_ptr<DifferenceLogicPropagator<T>> diffProp_;
+    Stats step_;
+    Stats accu_;
+    clingo_propagator_t clingoProp_;
+    DifferenceLogicPropagator<T> diffProp_;
     clingo_control_t* ctl_;
-    std::map<const char*, std::function<double()>> statCalls_;
-    std::map<const char*, std::function<double(size_t)>> statCallsThread_;
 };
 
 extern "C" bool theory_create_propagator(clingo_control_t* ctl) {
     CLINGODL_TRY {
         if (!rdl) {
-            storage = std::make_unique<PropagatorStorage<int>>();
+            storage = std::make_unique<PropagatorStorage<int>>(ctl, strict, prop);
         }
         else {
-            storage = std::make_unique<PropagatorStorage<double>>();
+            storage = std::make_unique<PropagatorStorage<double>>(ctl, strict, prop);
         }
 
-        storage->create(ctl);
-
         CLINGO_CALL(clingo_control_add(ctl,"base", nullptr, 0, R"(#theory dl {
-        term{};
-        constant {
-          + : 1, binary, left;
-          - : 1, binary, left;
-          * : 2, binary, left;
-          / : 2, binary, left;
-          - : 3, unary
-        };
-        diff_term {- : 1, binary, left};
-        &diff/0 : diff_term, {<=}, constant, any;
-        &show_assignment/0 : term, directive
-        }.)"));
+term{};
+constant {
+  + : 1, binary, left;
+  - : 1, binary, left;
+  * : 2, binary, left;
+  / : 2, binary, left;
+  - : 3, unary
+};
+diff_term {- : 1, binary, left};
+&diff/0 : diff_term, {<=}, constant, any;
+&show_assignment/0 : term, directive
+}.)"));
 
         CLINGO_CALL(clingo_control_register_propagator(ctl, storage->getClingoPropagator(),
                                              static_cast<void*>(storage->getPropagator()), false));
@@ -254,6 +197,7 @@ extern "C" bool theory_destroy_propagator() {
     CLINGODL_CATCH;
 }
 
+// FIXME: storing prop, strict, and rdl in static variables is stark ugly
 extern "C" bool theory_add_options(clingo_options_t* options) {
     CLINGODL_TRY {
         char const * group = "DLPropagator";
@@ -312,33 +256,12 @@ extern "C" bool theory_assignment_next(char const** name, char const** comp, cha
 
 extern "C" bool theory_on_statistics(clingo_statistics_t* step, clingo_statistics_t* accu) {
     CLINGODL_TRY {
-        uint64_t root_a = 0;
-        CLINGO_CALL(clingo_statistics_root(accu, &root_a));
-        bool ret = false;
-        CLINGO_CALL(clingo_statistics_map_has_subkey(accu, root_a, "DifferenceLogic", &ret));
-        if (!ret) {
-            uint64_t new_s = 0;
-            CLINGO_CALL(clingo_statistics_map_add_subkey(accu, root_a, "DifferenceLogic", clingo_statistics_type_map, &new_s));
-            root_a = new_s;
-        } else {
-            CLINGO_CALL(clingo_statistics_map_at(accu, root_a, "DifferenceLogic", &root_a));
-        }
-        UserStatistics a(accu, root_a);
-        storage->onStatisticsAccu(a);
-
-        uint64_t root_s = 0;
+        uint64_t root_s, root_a;
         CLINGO_CALL(clingo_statistics_root(step, &root_s));
-        ret = false;
-        CLINGO_CALL(clingo_statistics_map_has_subkey(step, root_s, "DifferenceLogic", &ret));
-        if (!ret) {
-            uint64_t new_s = 0;
-            CLINGO_CALL(clingo_statistics_map_add_subkey(step, root_s, "DifferenceLogic", clingo_statistics_type_map, &new_s));
-            root_s = new_s;
-        } else {
-            CLINGO_CALL(clingo_statistics_map_at(step, root_s, "DifferenceLogic", &root_s));
-        }
+        CLINGO_CALL(clingo_statistics_root(accu, &root_a));
         UserStatistics s(step, root_s);
-        storage->onStatisticsStep(s);
+        UserStatistics a(accu, root_a);
+        storage->onStatistics(s, a);
     }
     CLINGODL_CATCH;
 }

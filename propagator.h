@@ -232,6 +232,7 @@ struct HeapFromM {
     std::vector<int> &candidate_incoming(int idx) { return static_cast<P *>(this)->nodes_[idx].candidate_incoming; }
     void remove_incoming(int idx) { static_cast<P *>(this)->edge_states_[idx].removed_incoming = true; }
     void remove_outgoing(int idx) { static_cast<P *>(this)->edge_states_[idx].removed_outgoing = true; }
+    uint64_t &propagation_cost() {return static_cast<P *>(this)->stats_.propagate_cost_from; }
 };
 
 template <class T, class P>
@@ -249,6 +250,7 @@ struct HeapToM {
     std::vector<int> &candidate_incoming(int idx) { return static_cast<P *>(this)->nodes_[idx].candidate_outgoing; }
     void remove_incoming(int idx) { static_cast<P *>(this)->edge_states_[idx].removed_outgoing = true; }
     void remove_outgoing(int idx) { static_cast<P *>(this)->edge_states_[idx].removed_incoming = true; }
+    uint64_t &propagation_cost() {return static_cast<P *>(this)->stats_.propagate_cost_to; }
 };
 
 template <typename T>
@@ -280,12 +282,28 @@ struct DLStats {
         time_dijkstra  = steady_clock::duration::zero();
         true_edges     = 0;
         false_edges    = 0;
+        propagate_cost_add  = 0;
+        propagate_cost_from = 0;
+        propagate_cost_to   = 0;
+    }
+    void accu(DLStats const &x) {
+        time_propagate+= x.time_propagate;
+        time_undo     += x.time_undo;
+        time_dijkstra += x.time_dijkstra;
+        true_edges    += x.true_edges;
+        false_edges   += x.false_edges;
+        propagate_cost_add += x.propagate_cost_add;
+        propagate_cost_from+= x.propagate_cost_from;
+        propagate_cost_to  += x.propagate_cost_to;
     }
     Duration time_propagate = Duration{0};
     Duration time_undo = Duration{0};
     Duration time_dijkstra = Duration{0};
     uint64_t true_edges{0};
     uint64_t false_edges{0};
+    uint64_t propagate_cost_add{0};
+    uint64_t propagate_cost_from{0};
+    uint64_t propagate_cost_to{0};
 };
 
 struct EdgeState {
@@ -415,6 +433,7 @@ public:
             // NOTE: here we should have a cost from u to t
             //       and can check for an edge t to v
             for (auto st_idx : s.outgoing) {
+                ++stats_.propagate_cost_add;
                 assert(st_idx < numeric_cast<int>(edges_.size()));
                 auto &st = edges_[st_idx];
                 auto &t = nodes_[st.to];
@@ -786,6 +805,7 @@ private:
                 relevant_degree_in += nodes_[u_idx].degree_in;
             }
             for (auto &uv_idx : m.out(u_idx)) {
+                ++m.propagation_cost();
                 auto &uv = edges_[uv_idx];
                 auto v_idx = m.to(uv_idx);
                 // NOTE: explicitely using uv.from and uv.to is intended here
@@ -900,21 +920,23 @@ private:
 
 struct Stats {
     void reset() {
-        time_total = steady_clock::duration::zero();
         time_init  = steady_clock::duration::zero();
-        conflicts  = 0;
-        choices    = 0;
-        restarts   = 0;
         for (auto& i : dl_stats) {
             i.reset();
         }
     }
-    Duration time_total = Duration{0};
+    void accu(Stats const &x) {
+        time_init += x.time_init;
+        if (dl_stats.size() < x.dl_stats.size()) {
+            dl_stats.resize(x.dl_stats.size());
+        }
+        auto it = x.dl_stats.begin();
+        for (auto &y : dl_stats) {
+            y.accu(*it++);
+        }
+    }
     Duration time_init = Duration{0};
     std::vector<DLStats> dl_stats;
-    int64_t conflicts{0};
-    int64_t choices{0};
-    int64_t restarts{0};
 };
 
 template <typename T>
