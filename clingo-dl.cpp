@@ -106,12 +106,13 @@ public:
 static std::unique_ptr<Storage> storage(nullptr);
 static bool strict(false);
 static bool rdl(false);
-static bool prop(false);
+static bool full_prop(false);
+static PropagationMode prop(PropagationMode::Check);
 
 template<typename T>
 class PropagatorStorage : public Storage {
 public:
-    PropagatorStorage(clingo_control_t *ctl, bool strict, bool prop)
+    PropagatorStorage(clingo_control_t *ctl, bool strict, PropagationMode prop)
     : Storage()
     , clingoProp_ {
         init<int>,
@@ -200,11 +201,41 @@ extern "C" bool theory_destroy_propagator() {
     CLINGODL_CATCH;
 }
 
+static bool iequals(char const *a, char const *b) {
+    for (; *a && *b; ++a, ++b) {
+        if (tolower(*a) != tolower(*b)) { return false; }
+    }
+    return !*a && !*b;
+}
+static bool parse_mode(const char *value, void *data) {
+    auto &mode = *static_cast<PropagationMode*>(data);
+    if (iequals(value, "no")) {
+        mode = PropagationMode::Check;
+        return true;
+    }
+    else if (iequals(value, "partial")) {
+        mode = PropagationMode::Weak;
+        return true;
+    }
+    else if (iequals(value, "full")) {
+        mode = PropagationMode::Weak;
+        return true;
+    }
+    return false;
+}
+
 // FIXME: storing prop, strict, and rdl in static variables is stark ugly
 extern "C" bool theory_add_options(clingo_options_t* options) {
     CLINGODL_TRY {
-        char const * group = "DLPropagator";
-        CLINGO_CALL(clingo_options_add_flag(options, group, "propagate,p", "Enable propagation.", &prop));
+        char const * group = "Clingo.DL Options";
+        CLINGO_CALL(clingo_options_add_flag(options, group, "p", "Enable full propagation.", &full_prop));
+        CLINGO_CALL(clingo_options_add(options, group, "propagate",
+            "Set propagation mode [no]\n"
+            "    <mode>: {no,partial,full}\n"
+            "      no     : No propagation; only detect conflicts\n"
+            "      partial: Detect some conflicting constraints\n"
+            "      full   : Detect all conflicting constraints",
+            &parse_mode, &prop, false, "mode"));
         CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers.", &rdl));
         CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode.", &strict));
     }
@@ -213,6 +244,9 @@ extern "C" bool theory_add_options(clingo_options_t* options) {
 
 extern "C" bool theory_validate_options() {
     CLINGODL_TRY {
+        if (full_prop) {
+            prop = PropagationMode::Strong;
+        }
         if (strict && rdl) {
             throw std::runtime_error("real difference logic not available with strict semantics");
         }

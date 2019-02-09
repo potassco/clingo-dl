@@ -321,6 +321,8 @@ struct EdgeState {
     uint8_t active : 1;
 };
 
+enum class PropagationMode { Check = 0, Weak = 1, Strong = 2 };
+
 template <typename T>
 class DifferenceLogicGraph : private HeapToM<T, DifferenceLogicGraph<T>>, private HeapFromM<T, DifferenceLogicGraph<T>> {
     using HTM = HeapToM<T, DifferenceLogicGraph<T>>;
@@ -329,8 +331,9 @@ class DifferenceLogicGraph : private HeapToM<T, DifferenceLogicGraph<T>>, privat
     friend struct HeapFromM<T, DifferenceLogicGraph<T>>;
 
 public:
-    DifferenceLogicGraph(DLStats &stats, const std::vector<Edge<T>> &edges)
+    DifferenceLogicGraph(DLStats &stats, const std::vector<Edge<T>> &edges, PropagationMode propagate)
         : edges_(edges)
+        , propagate_(propagate)
         , stats_(stats) {
         edge_states_.resize(edges_.size(), {1, 1, 0});
         for (int i = 0; i < numeric_cast<int>(edges_.size()); ++i) {
@@ -498,7 +501,9 @@ public:
             consistent = f(neg_cycle);
         }
 
-        consistent = consistent && cheap_propagate(uv.from, f);
+        if (propagate_ >= PropagationMode::Weak) {
+            consistent = consistent && cheap_propagate(uv.from, f);
+        }
         // reset visited flags
         for (auto &x : visited_from_) {
             nodes_[x].visited_from = false;
@@ -930,6 +935,7 @@ private:
     std::vector<int> inactive_edges_;
     std::vector<EdgeState> edge_states_;
     DLStats &stats_;
+    PropagationMode propagate_;
 };
 
 struct Stats {
@@ -955,9 +961,9 @@ struct Stats {
 
 template <typename T>
 struct DLState {
-    DLState(DLStats &stats, const std::vector<Edge<T>> &edges)
+    DLState(DLStats &stats, const std::vector<Edge<T>> &edges, PropagationMode propagate)
         : stats(stats)
-        , dl_graph(stats, edges) {}
+        , dl_graph(stats, edges, propagate) {}
     DLStats &stats;
     DifferenceLogicGraph<T> dl_graph;
 };
@@ -1003,10 +1009,11 @@ public:
 private:
     std::vector<std::string> names_;
 };
+
 template <typename T>
 class DifferenceLogicPropagator : public Propagator, public ExtendedPropagator {
 public:
-    DifferenceLogicPropagator(Stats &stats, bool strict, bool propagate)
+    DifferenceLogicPropagator(Stats &stats, bool strict, PropagationMode propagate)
         : stats_(stats)
         , strict_(strict)
         , propagate_(propagate)
@@ -1061,7 +1068,7 @@ public:
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
         init.add_watch(lit);
-        if (propagate_) {
+        if (propagate_ >= PropagationMode::Strong) {
             false_lit_to_edges_.emplace(-lit, id);
             init.add_watch(-lit);
         }
@@ -1069,7 +1076,7 @@ public:
             auto id = numeric_cast<int>(edges_.size());
             edges_.push_back({v_id, u_id, -weight - 1, -lit});
             lit_to_edges_.emplace(-lit, id);
-            if (propagate_) {
+            if (propagate_ >= PropagationMode::Strong) {
                 false_lit_to_edges_.emplace(lit, id);
             }
             else {
@@ -1090,7 +1097,7 @@ public:
         stats_.dl_stats.resize(init.number_of_threads());
         states_.clear();
         for (int i = 0; i < init.number_of_threads(); ++i) {
-            states_.emplace_back(stats_.dl_stats[i], edges_);
+            states_.emplace_back(stats_.dl_stats[i], edges_, propagate_);
         }
     }
 
@@ -1117,7 +1124,7 @@ public:
                         return ctl.add_clause(clause) && ctl.propagate();
                     });
                     if (!ret) { return; }
-                    if (propagate_ && !state.dl_graph.propagate(it->second, ctl)) { return; }
+                    if (propagate_ >= PropagationMode::Strong && !state.dl_graph.propagate(it->second, ctl)) { return; }
                 }
             }
         }
@@ -1196,7 +1203,7 @@ private:
     std::unordered_map<Clingo::Symbol, int> vert_map_inv_;
     Stats &stats_;
     bool strict_;
-    bool propagate_;
+    PropagationMode propagate_;
 };
 
 
