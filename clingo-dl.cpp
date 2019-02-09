@@ -218,7 +218,7 @@ static bool parse_mode(const char *value, void *data) {
         return true;
     }
     else if (iequals(value, "full")) {
-        mode = PropagationMode::Weak;
+        mode = PropagationMode::Strong;
         return true;
     }
     return false;
