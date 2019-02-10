@@ -298,9 +298,9 @@ struct DLStats {
         time_dijkstra += x.time_dijkstra;
         true_edges    += x.true_edges;
         false_edges   += x.false_edges;
-        false_edges_trivial   = x.false_edges_trivial;
-        false_edges_weak      = x.false_edges_weak;
-        false_edges_weak_plus = x.false_edges_weak_plus;
+        false_edges_trivial  += x.false_edges_trivial;
+        false_edges_weak     += x.false_edges_weak;
+        false_edges_weak_plus+= x.false_edges_weak_plus;
         propagate_cost_add += x.propagate_cost_add;
         propagate_cost_from+= x.propagate_cost_from;
         propagate_cost_to  += x.propagate_cost_to;
