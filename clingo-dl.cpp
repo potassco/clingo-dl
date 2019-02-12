@@ -139,14 +139,10 @@ public:
         UserStatistics diff = root.add_subkey("DifferenceLogic", StatisticsType::Map);
         diff.add_subkey("Time init(s)", StatisticsType::Value).set_value(stats.time_init.count());
         UserStatistics threads = diff.add_subkey("Thread", StatisticsType::Array);
-        // NOTE: uncommented code can be used with next release
-        //threads.ensure_size(stats.dl_stats.size(), StatisticsType::Map);
-        //auto it = threads.begin();
-        size_t n = 0;
+        threads.ensure_size(stats.dl_stats.size(), StatisticsType::Map);
+        auto it = threads.begin();
         for (DLStats const& stat : stats.dl_stats) {
-            //auto thread = *it++;
-            auto thread = n < threads.size() ? threads[n] : threads.push(StatisticsType::Map);
-            ++n;
+            auto thread = *it++;
             thread.add_subkey("Propagation(s)", StatisticsType::Value).set_value(stat.time_propagate.count());
             thread.add_subkey("Dijkstra(s)", StatisticsType::Value).set_value(stat.time_dijkstra.count());
             thread.add_subkey("Undo(s)", StatisticsType::Value).set_value(stat.time_undo.count());
