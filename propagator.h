@@ -1059,8 +1059,8 @@ public:
     }
     char const* name(size_t index) { return names_[index].c_str(); }
     virtual size_t numVars() const = 0;
-    virtual bool hasLowerBound(uint32_t threadId, size_t index) = 0;
-    virtual double lowerBound(uint32_t threadId, size_t index) = 0;
+    virtual bool hasLowerBound(uint32_t threadId, size_t index) const = 0;
+    virtual double lowerBound(uint32_t threadId, size_t index) const = 0;
 private:
     std::vector<std::string> names_;
 };
@@ -1227,17 +1227,17 @@ public:
         return true;
     }
 
-    size_t numVars() const {
+    size_t numVars() const override {
         return vert_map_.size();
     }
 
-    bool hasLowerBound(uint32_t threadId, size_t index) {
+    bool hasLowerBound(uint32_t threadId, size_t index) const override {
         assert(index < vert_map_.size());
         auto &state = states_[threadId];
         return index > 0 && states_[threadId].dl_graph.node_value_defined(index);
 
     }
-    virtual double lowerBound(uint32_t threadId, size_t index) {
+    virtual double lowerBound(uint32_t threadId, size_t index) const override {
         assert(hasLowerBound(threadId, index));
         auto &state = states_[threadId];
         T adjust = 0;
