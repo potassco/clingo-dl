@@ -22,9 +22,8 @@
 //
 // // }}}
 
-#include "clingo-dl.h"
-#include "propagator.h"
-#include <map>
+#include <clingo-dl.h>
+#include <propagator.hh>
 
 #define CLINGODL_TRY try
 #define CLINGODL_CATCH catch (...){ Clingo::Detail::handle_cxx_error(); return false; } return true

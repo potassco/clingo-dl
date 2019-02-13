@@ -22,58 +22,17 @@
 //
 // // }}}
 
-#ifndef PROPAGATOR_H
-#define PROPAGATOR_H
-
+#ifndef CLINGODL_PROPAGATOR_HH
+#define CLINGODL_PROPAGATOR_HH
 
 #include <clingo.hh>
+#include <util.hh>
+
 #include <unordered_map>
-#include <chrono>
 
 //#define CROSSCHECK
 #define CHECKSOLUTION
 using namespace Clingo;
-using std::chrono::steady_clock;
-
-namespace std {
-
-template<>
-struct hash<std::pair<int, int>> {
-    size_t operator()(std::pair<int, int> const &p) const {
-        return static_cast<size_t>(p.first) + (static_cast<size_t>(p.second) >> 32);
-    }
-};
-
-}
-
-namespace Detail {
-
-template <int X>
-using int_type = std::integral_constant<int, X>;
-template <class T, class S>
-inline void nc_check(S s, int_type<0>) { // same sign
-    (void)s;
-    assert((std::is_same<T, S>::value) || (s >= std::numeric_limits<T>::min() && s <= std::numeric_limits<T>::max()));
-}
-template <class T, class S>
-inline void nc_check(S s, int_type<-1>) { // Signed -> Unsigned
-    (void)s;
-    assert(s >= 0 && static_cast<S>(static_cast<T>(s)) == s);
-}
-template <class T, class S>
-inline void nc_check(S s, int_type<1>) { // Unsigned -> Signed
-    (void)s;
-    assert(!(s > std::numeric_limits<T>::max()));
-}
-
-} // namespace Detail
-
-template <class T, class S>
-inline T numeric_cast(S s) {
-    constexpr int sv = int(std::numeric_limits<T>::is_signed) - int(std::numeric_limits<S>::is_signed);
-    ::Detail::nc_check<T>(s, ::Detail::int_type<sv>());
-    return static_cast<T>(s);
-}
 
 template <typename T>
 struct Edge {
@@ -81,140 +40,6 @@ struct Edge {
     int to;
     T weight;
     literal_t lit;
-};
-
-template <class K, class V>
-std::ostream &operator<<(std::ostream &out, std::unordered_map<K, V> const &map);
-template <class T>
-std::ostream &operator<<(std::ostream &out, std::vector<T> const &vec);
-template <class K, class V>
-std::ostream &operator<<(std::ostream &out, std::pair<K, V> const &pair);
-
-template <class T>
-std::ostream &operator<<(std::ostream &out, std::vector<T> const &vec) {
-    out << "{";
-    for (auto &x : vec) {
-        out << " " << x;
-    }
-    out << " }";
-    return out;
-}
-
-template <class K, class V>
-std::ostream &operator<<(std::ostream &out, std::unordered_map<K, V> const &map) {
-    using T = std::pair<K, V>;
-    std::vector<T> vec;
-    vec.assign(map.begin(), map.end());
-    std::sort(vec.begin(), vec.end(), [](T const &a, T const &b) { return a.first < b.first; });
-    out << vec;
-    return out;
-}
-
-template <class K, class V>
-std::ostream &operator<<(std::ostream &out, std::pair<K, V> const &pair) {
-    out << "( " << pair.first << " " << pair.second << " )";
-    return out;
-}
-
-template <class C>
-void ensure_index(C &c, size_t index) {
-    if (index >= c.size()) {
-        c.resize(index + 1);
-    }
-}
-
-using Duration = std::chrono::duration<double>;
-
-class Timer {
-public:
-    Timer(Duration &elapsed)
-        : elapsed_(elapsed)
-        , start_(std::chrono::steady_clock::now()) {}
-    ~Timer() { elapsed_ += std::chrono::steady_clock::now() - start_; }
-
-private:
-    Duration &elapsed_;
-    std::chrono::time_point<std::chrono::steady_clock> start_;
-};
-
-template <int N>
-class Heap {
-public:
-    template <class M>
-    void push(M &m, int item) {
-        auto i = m.offset(item) = static_cast<int>(heap_.size());
-        heap_.push_back(item);
-        decrease(m, i);
-    }
-    template <class M>
-    int pop(M &m) {
-        assert(!heap_.empty());
-        auto ret = heap_[0];
-        if (heap_.size() > 1) {
-            heap_[0] = heap_.back();
-            m.offset(heap_[0]) = 0;
-            heap_.pop_back();
-            increase(m, 0);
-        }
-        else {
-            heap_.pop_back();
-        }
-        return ret;
-    }
-
-    template <class M>
-    void decrease(M &m, int i) {
-        while (i > 0) {
-            int p = parent_(i);
-            if (m.cost(heap_[p]) > m.cost(heap_[i])) {
-                swap_(m, i, p);
-                i = p;
-            }
-            else {
-                break;
-            }
-        }
-    }
-    template <class M>
-    void increase(M &m, int i) {
-        for (int p = i, j = children_(p), s = numeric_cast<int>(heap_.size()); j < s; j = children_(p)) {
-            int min = j;
-            for (int k = j + 1; k < j + N; ++k) {
-                if (k < s && less_(m, k, min)) {
-                    min = k;
-                }
-            }
-            if (less_(m, min, p)) {
-                swap_(m, min, p);
-                p = min;
-            }
-            else {
-                return;
-            }
-        }
-    }
-    int size() { return heap_.size(); }
-    bool empty() { return heap_.empty(); }
-    void clear() { heap_.clear(); }
-
-private:
-    template <class M>
-    void swap_(M &m, int i, int j) {
-        m.offset(heap_[j]) = i;
-        m.offset(heap_[i]) = j;
-        std::swap(heap_[i], heap_[j]);
-    }
-    int parent_(int offset) { return (offset - 1) / N; }
-    int children_(int offset) { return N * offset + 1; }
-    template <class M>
-    bool less_(M &m, int a, int b) {
-        a = heap_[a], b = heap_[b];
-        auto ca = m.cost(a), cb = m.cost(b);
-        return ca < cb || (ca == cb && m.relevant(a) < m.relevant(b));
-    }
-
-private:
-    std::vector<int> heap_;
 };
 
 template <class T, class P>
@@ -277,9 +102,9 @@ struct DifferenceLogicNode {
 
 struct DLStats {
     void reset() {
-        time_propagate = steady_clock::duration::zero();
-        time_undo      = steady_clock::duration::zero();
-        time_dijkstra  = steady_clock::duration::zero();
+        time_propagate = std::chrono::steady_clock::duration::zero();
+        time_undo      = std::chrono::steady_clock::duration::zero();
+        time_dijkstra  = std::chrono::steady_clock::duration::zero();
         true_edges            = 0;
         false_edges           = 0;
         false_edges_trivial   = 0;
@@ -995,7 +820,7 @@ private:
 
 struct Stats {
     void reset() {
-        time_init  = steady_clock::duration::zero();
+        time_init  = std::chrono::steady_clock::duration::zero();
         for (auto& i : dl_stats) {
             i.reset();
         }
@@ -1245,4 +1070,4 @@ private:
 };
 
 
-#endif
+#endif // CLINGODL_PROPAGATOR_HH

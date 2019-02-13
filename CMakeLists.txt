@@ -13,10 +13,10 @@ include(GNUInstallDirs)
 include(CMakeDependentOption)
 
 option(CLINGODL_BUILD_WITH_SYSTEM_CLINGO "if true the local clingo copy will not be used" OFF)
-option(CLINGODL_BUILD_STATIC      "do not build shared libraries" OFF)
-option(CLINGODL_MANAGE_RPATH             "set rpath if not installed into system directory" ON)
+option(CLINGODL_BUILD_STATIC "do not build shared libraries" OFF)
+option(CLINGODL_MANAGE_RPATH "set rpath if not installed into system directory" ON)
 
-CMAKE_DEPENDENT_OPTION(CLINGODL_BUILD_SHARED     "build clingo-dl library shared"      ON  "NOT CLINGODL_BUILD_STATIC"  OFF)
+CMAKE_DEPENDENT_OPTION(CLINGODL_BUILD_SHARED "build clingo-dl library shared" ON "NOT CLINGODL_BUILD_STATIC" OFF)
 
 mark_as_advanced(CLINGODL_BUILD_STATIC)
 mark_as_advanced(CLINGODL_BUILD_SHARED)
@@ -95,10 +95,11 @@ else()
 endif()
 
 
-set(appfiles main.cpp)
-set(libfiles propagator.cpp clingo-dl.cpp)
+set(appfiles main.cc)
+set(libfiles propagator.cc clingo-dl.cc)
 
 add_library(libclingo-dl ${clingodl_lib_type} ${libfiles})
+target_include_directories(libclingo-dl PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
 target_compile_definitions(libclingo-dl PRIVATE CLINGODL_BUILD_LIBRARY)
 if (NOT CLINGODL_BUILD_STATIC AND CLINGODL_BUILD_SHARED)
     set_target_properties(libclingo-dl PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -118,7 +119,7 @@ set_target_properties(libclingo-dl PROPERTIES
 add_executable(clingo-dl ${appfiles})
 target_link_libraries(clingo-dl PRIVATE libclingo libclingo-dl)
 set_target_properties(clingo-dl PROPERTIES FOLDER exe)
-install(TARGETS clingo-dl libclingo-dl 
+install(TARGETS clingo-dl libclingo-dl
                 RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
                 LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
                 ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}

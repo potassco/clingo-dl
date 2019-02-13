@@ -22,9 +22,8 @@
 
 // }}}
 
-#include "propagator.h"
 #include <clingo.hh>
-#include "clingo-dl.h"
+#include <clingo-dl.h>
 
 using namespace Clingo;
 
@@ -71,7 +70,7 @@ public:
 
 int main(int argc, char *argv[]) {
     ClingoDLApp app;
-    return Clingo::clingo_main(app, {argv + 1, numeric_cast<size_t>(argc - 1)});
+    return Clingo::clingo_main(app, {argv + 1, static_cast<size_t>(argc - 1)});
 }
 
 

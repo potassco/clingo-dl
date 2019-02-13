@@ -48,6 +48,7 @@ flags = [
 '-DNDEBUG',
 '-xc++',
 '-std=c++14',
+'-I.',
 '-I/home/wv/bin/linux/64/gcc-7.1/include/c++/v1',
 '-I/home/wv/opt/clingo-banane/include',
 '-I/home/kaminski/clingo-5/libclingo',

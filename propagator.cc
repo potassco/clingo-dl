@@ -22,8 +22,7 @@
 //
 // // }}}
 
-#include "propagator.h"
-
+#include <propagator.hh>
 
 template <typename T>
 T evaluate_real(char const *);
@@ -79,11 +78,7 @@ T evaluate(Clingo::TheoryTerm term) {
 template int evaluate<int>(Clingo::TheoryTerm term);
 template double evaluate<double>(Clingo::TheoryTerm term);
 
-
-
-
 int require_number(Clingo::Symbol sym) { return sym.type() == Clingo::SymbolType::Number ? sym.number() : throw std::runtime_error("could not evaluate term: artithmetic on non-integer"); }
-
 
 template <>
 int get_weight(TheoryAtom const &atom) {
