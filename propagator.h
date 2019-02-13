@@ -1051,22 +1051,8 @@ T get_weight(TheoryAtom const &atom);
 
 Clingo::Symbol evaluate_term(Clingo::TheoryTerm term);
 
-class ExtendedPropagator {
-public:
-    virtual bool extend_model(Model &model) = 0;
-    void addName(const std::string& s) {
-        names_.emplace_back(s);
-    }
-    char const* name(size_t index) { return names_[index].c_str(); }
-    virtual size_t numVars() const = 0;
-    virtual bool hasLowerBound(uint32_t threadId, size_t index) const = 0;
-    virtual double lowerBound(uint32_t threadId, size_t index) const = 0;
-private:
-    std::vector<std::string> names_;
-};
-
 template <typename T>
-class DifferenceLogicPropagator : public Propagator, public ExtendedPropagator {
+class DifferenceLogicPropagator : public Propagator {
 public:
     DifferenceLogicPropagator(Stats &stats, bool strict, PropagationMode propagate)
         : stats_(stats)
@@ -1113,12 +1099,8 @@ public:
         if (args.size() != 2) {
             throw std::runtime_error(msg);
         }
-        auto x = evaluate_term(args[0]);
-        addName(x.to_string());
-        auto u_id = map_vert(x);
-        x = evaluate_term(args[1]);
-        addName(x.to_string());
-        auto v_id = map_vert(x);
+        auto u_id = map_vert(evaluate_term(args[0]));
+        auto v_id = map_vert(evaluate_term(args[1]));
         auto id = numeric_cast<int>(edges_.size());
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
@@ -1206,7 +1188,7 @@ public:
         }
     }
 #endif
-    bool extend_model(Model &model) override {
+    void extend_model(Model &model) {
         auto &state = states_[model.thread_id()];
         T adjust = 0;
         assert(vert_map_[0] == Clingo::Number(0));
@@ -1224,21 +1206,22 @@ public:
             }
         }
         model.extend(vec);
-        return true;
     }
 
-    size_t numVars() const override {
+    size_t num_vertices() const {
         return vert_map_.size();
     }
 
-    bool hasLowerBound(uint32_t threadId, size_t index) const override {
+    Symbol symbol(size_t index) const {
+        return vert_map_[index];
+    }
+    bool has_lower_bound(uint32_t threadId, size_t index) const {
         assert(index < vert_map_.size());
         auto &state = states_[threadId];
         return index > 0 && states_[threadId].dl_graph.node_value_defined(index);
-
     }
-    virtual double lowerBound(uint32_t threadId, size_t index) const override {
-        assert(hasLowerBound(threadId, index));
+    double lower_bound(uint32_t threadId, size_t index) const {
+        assert(has_lower_bound(threadId, index));
         auto &state = states_[threadId];
         T adjust = 0;
         assert(vert_map_[0] == Clingo::Number(0));

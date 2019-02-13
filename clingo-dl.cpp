@@ -27,16 +27,9 @@
 #include <map>
 
 #define CLINGODL_TRY try
-#define CLINGODL_CATCH catch(const std::exception& ex) {\
-                           clingo_set_error(clingo_error_unknown, ex.what());\
-                           return false;\
-                       }\
-                       catch (...){\
-                           return false;\
-                       }\
-                       return true
+#define CLINGODL_CATCH catch (...){ Clingo::Detail::handle_cxx_error(); return false; } return true
 
-#define CLINGO_CALL(x) if (!x) { throw std::runtime_error(clingo_error_message()); }
+#define CLINGO_CALL(x) Clingo::Detail::handle_error(x)
 
 template <typename T>
 bool init(clingo_propagate_init_t* i, void* data)
@@ -78,64 +71,60 @@ bool check(clingo_propagate_control_t* i, void* data)
     CLINGODL_CATCH;
 }
 
-class Storage {
-
+struct Storage {
 public:
-    Storage() : currentVar_(0) {}
     virtual ~Storage() {};
-    virtual clingo_control_t *getControl() = 0;
-    virtual clingo_propagator_t *getClingoPropagator() = 0;
-    virtual Propagator* getPropagator() = 0;
-    virtual ExtendedPropagator* getExtendedPropagator() = 0;
-    virtual void onStatistics(UserStatistics& step, UserStatistics &accu) = 0;
-    char const* valueToString(double value) {
-        auto x = valueToString_.find(value);
-        if (x != valueToString_.end()) {
-            return &(x->second[0]);
-        }
-        valueToString_[value].resize(snprintf( nullptr, 0, "%f.10", value));
-        snprintf( &(valueToString_[value][0]), 0, "%f.10", value);
-        return &(valueToString_[value][0]);
-    }
-
-    uint32_t currentThread_;
-    size_t currentVar_;
-    std::map<double, std::vector<char> > valueToString_;
+    virtual clingo_propagator_t *get_clingo_propagator() = 0;
+    virtual Propagator* get_propagator() = 0;
+    virtual void extend_model(Model &m) = 0;
+    virtual size_t num_vertices() const = 0;
+    virtual Symbol symbol(size_t idx) const = 0;
+    virtual bool has_lower_bound(uint32_t threadId, size_t index) const = 0;
+    virtual double lower_bound(uint32_t threadId, size_t index) const = 0;
+    virtual void on_statistics(UserStatistics& step, UserStatistics &accu) = 0;
 };
-
-static std::unique_ptr<Storage> storage(nullptr);
-static bool strict(false);
-static bool rdl(false);
-static PropagationMode prop(PropagationMode::Check);
 
 template<typename T>
 class PropagatorStorage : public Storage {
 public:
-    PropagatorStorage(clingo_control_t *ctl, bool strict, PropagationMode prop)
-    : Storage()
-    , clingoProp_ {
-        init<int>,
-        propagate<int>,
-        undo<int>,
-        check<int>,
-        nullptr
+    PropagatorStorage(bool strict, PropagationMode prop)
+    : diffProp_{step_, strict, prop}  {}
+
+    clingo_propagator_t *get_clingo_propagator() override {
+        static clingo_propagator_t clingoProp = {
+            init<T>,
+            propagate<T>,
+            undo<T>,
+            check<T>,
+            nullptr
+        };
+        return &clingoProp;
     }
-    , diffProp_{step_, strict, prop}
-    , ctl_(ctl) { }
+    Propagator* get_propagator() override { return &diffProp_; }
 
-    clingo_control_t *getControl() override { return ctl_; }
-    clingo_propagator_t *getClingoPropagator() override { return &clingoProp_; }
-    Propagator* getPropagator() override { return &diffProp_; }
-    ExtendedPropagator* getExtendedPropagator() override { return &diffProp_; }
-
-    void onStatistics(UserStatistics& step, UserStatistics &accu) override {
+    size_t num_vertices() const override {
+        return diffProp_.num_vertices();
+    }
+    Symbol symbol(size_t idx) const override {
+        return diffProp_.symbol(idx);
+    }
+    void extend_model(Model &m) override {
+        diffProp_.extend_model(m);
+    }
+    bool has_lower_bound(uint32_t threadId, size_t index) const override {
+        return diffProp_.has_lower_bound(threadId, index);
+    }
+    double lower_bound(uint32_t threadId, size_t index) const override {
+        return diffProp_.lower_bound(threadId, index);
+    }
+    void on_statistics(UserStatistics& step, UserStatistics &accu) override {
         accu_.accu(step_);
-        addStatistics(step, step_);
-        addStatistics(accu, accu_);
+        add_statistics(step, step_);
+        add_statistics(accu, accu_);
         step_.reset();
     }
 
-    void addStatistics(UserStatistics& root, Stats const &stats) {
+    void add_statistics(UserStatistics& root, Stats const &stats) {
         UserStatistics diff = root.add_subkey("DifferenceLogic", StatisticsType::Map);
         diff.add_subkey("Time init(s)", StatisticsType::Value).set_value(stats.time_init.count());
         UserStatistics threads = diff.add_subkey("Thread", StatisticsType::Array);
@@ -163,20 +152,29 @@ public:
 private:
     Stats step_;
     Stats accu_;
-    clingo_propagator_t clingoProp_;
     DifferenceLogicPropagator<T> diffProp_;
-    clingo_control_t* ctl_;
 };
 
-extern "C" bool theory_create_propagator(clingo_control_t* ctl) {
+struct clingodl_propagator {
+    std::unique_ptr<Storage> storage{nullptr};
+    bool strict{false};
+    bool rdl{false};
+    PropagationMode mode{PropagationMode::Check};
+};
+
+extern "C" bool clingodl_create_propagator(clingodl_propagator_t **prop) {
+    CLINGODL_TRY { *prop = new clingodl_propagator{}; }
+    CLINGODL_CATCH;
+}
+
+extern "C" bool clingodl_register_propagator(clingodl_propagator_t *prop, clingo_control_t* ctl) {
     CLINGODL_TRY {
-        if (!rdl) {
-            storage = std::make_unique<PropagatorStorage<int>>(ctl, strict, prop);
+        if (!prop->rdl) {
+            prop->storage = std::make_unique<PropagatorStorage<int>>(prop->strict, prop->mode);
         }
         else {
-            storage = std::make_unique<PropagatorStorage<double>>(ctl, strict, prop);
+            prop->storage = std::make_unique<PropagatorStorage<double>>(prop->strict, prop->mode);
         }
-
         CLINGO_CALL(clingo_control_add(ctl,"base", nullptr, 0, R"(#theory dl {
 term{};
 constant {
@@ -191,17 +189,13 @@ diff_term {- : 1, binary, left};
 &show_assignment/0 : term, directive
 }.)"));
 
-        CLINGO_CALL(clingo_control_register_propagator(ctl, storage->getClingoPropagator(),
-                                             static_cast<void*>(storage->getPropagator()), false));
+        CLINGO_CALL(clingo_control_register_propagator(ctl, prop->storage->get_clingo_propagator(), static_cast<void*>(prop->storage->get_propagator()), false));
     }
     CLINGODL_CATCH;
 }
 
-extern "C" bool theory_destroy_propagator() {
-    CLINGODL_TRY {
-        //TODO: currently no way to unregister a propagator
-        storage.reset(nullptr);
-    }
+extern "C" bool clingodl_destroy_propagator(clingodl_propagator_t *prop) {
+    CLINGODL_TRY { delete prop; }
     CLINGODL_CATCH;
 }
 
@@ -236,8 +230,7 @@ static bool parse_mode(const char *value, void *data) {
     return false;
 }
 
-// FIXME: storing prop, strict, and rdl in static variables is stark ugly
-extern "C" bool theory_add_options(clingo_options_t* options) {
+extern "C" bool clingodl_add_options(clingodl_propagator_t *prop, clingo_options_t* options) {
     CLINGODL_TRY {
         char const * group = "Clingo.DL Options";
         CLINGO_CALL(clingo_options_add(options, group, "propagate",
@@ -248,67 +241,58 @@ extern "C" bool theory_add_options(clingo_options_t* options) {
             "      partial : Detect some conflicting constraints\n"
             "      partial+: Detect some more conflicting constraints\n"
             "      full    : Detect all conflicting constraints",
-            &parse_mode, &prop, false, "mode"));
-        CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers.", &rdl));
-        CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode.", &strict));
+            &parse_mode, &prop->mode, false, "mode"));
+        CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers.", &prop->rdl));
+        CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode.", &prop->strict));
     }
     CLINGODL_CATCH;
 }
 
-extern "C" bool theory_validate_options() {
+extern "C" bool clingodl_validate_options(clingodl_propagator_t *prop) {
     CLINGODL_TRY {
-        if (strict && rdl) {
+        if (prop->strict && prop->rdl) {
             throw std::runtime_error("real difference logic not available with strict semantics");
         }
     }
     CLINGODL_CATCH;
 }
 
-extern "C" bool theory_on_model(clingo_model_t* model) {
-     CLINGODL_TRY {
-        Model m(model);
-        return storage->getExtendedPropagator()->extend_model(m);
-     }
-     CLINGODL_CATCH;
- }
-
-extern "C" bool theory_assignment_first(uint32_t threadId, char const** name, char const** comp, char const** value) {
+extern "C" bool clingodl_on_model(clingodl_propagator_t *prop, clingo_model_t* model) {
     CLINGODL_TRY {
-        storage->currentThread_ = threadId;
-        storage->currentVar_ = 1;
-        CLINGO_CALL(theory_assignment_next(name, comp, value));
+        Model m(model);
+        prop->storage->extend_model(m);
     }
     CLINGODL_CATCH;
 }
 
-extern "C" bool theory_assignment_next(char const** name, char const** comp, char const** value) {
+extern "C" void clingodl_assignment_begin(clingodl_propagator_t *, uint32_t, size_t *current) {
+    *current = 0;
+}
+
+extern "C" bool clingodl_assignment_next(clingodl_propagator_t *prop, uint32_t threadId, size_t *current, clingo_symbol_t *name, double* value, bool *ret) {
     CLINGODL_TRY {
-        auto x = storage->getExtendedPropagator();
-        while (! x->hasLowerBound(storage->currentThread_, storage->currentVar_)) {
-            ++storage->currentVar_;
-            if (storage->currentVar_ >= x->numVars()) {
-                name = comp = value = 0;
-                return true;
+        *ret = false;
+        for (++*current; *current <= prop->storage->num_vertices(); ++*current) {
+            size_t i = *current - 1;
+            if (prop->storage->has_lower_bound(threadId, i)) {
+                *name = prop->storage->symbol(i).to_c();
+                *value = prop->storage->lower_bound(threadId, i);
+                *ret = true;
+                break;
             }
         }
-        auto lb = x->lowerBound(storage->currentThread_, storage->currentVar_);
-        *name = x->name(storage->currentVar_);
-        static char const* c = "<=";
-        *comp = c;
-        *value = storage->valueToString(lb);
-        ++storage->currentVar_;
     }
     CLINGODL_CATCH;
 }
 
-extern "C" bool theory_on_statistics(clingo_statistics_t* step, clingo_statistics_t* accu) {
+extern "C" bool clingodl_on_statistics(clingodl_propagator_t *prop, clingo_statistics_t* step, clingo_statistics_t* accu) {
     CLINGODL_TRY {
         uint64_t root_s, root_a;
         CLINGO_CALL(clingo_statistics_root(step, &root_s));
         CLINGO_CALL(clingo_statistics_root(accu, &root_a));
         UserStatistics s(step, root_s);
         UserStatistics a(accu, root_a);
-        storage->onStatistics(s, a);
+        prop->storage->on_statistics(s, a);
     }
     CLINGODL_CATCH;
 }

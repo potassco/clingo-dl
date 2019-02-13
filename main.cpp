@@ -28,27 +28,26 @@
 
 using namespace Clingo;
 
-#define CLINGO_CALL(x) if (!x) throw std::runtime_error(clingo_error_message());
+#define CLINGO_CALL(x) Clingo::Detail::handle_error(x)
 
-class MyHandler : public SolveEventHandler {
+class ClingoDLApp : public Clingo::Application, private SolveEventHandler {
 public:
+    ClingoDLApp() {
+        CLINGO_CALL(clingodl_create_propagator(&prop_));
+    }
+    ~ClingoDLApp() { clingodl_destroy_propagator(prop_); }
+    char const *program_name() const noexcept override { return "clingo-dl"; }
+    char const *version() const noexcept override { return CLINGODL_VERSION; }
     bool on_model(Model &model) override {
-        CLINGO_CALL(theory_on_model(model.to_c()));
+        CLINGO_CALL(clingodl_on_model(prop_, model.to_c()));
         return true;
     }
 
     void on_statistics(UserStatistics step, UserStatistics accu) override {
-        CLINGO_CALL(theory_on_statistics(step.to_c(), accu.to_c()));
+        CLINGO_CALL(clingodl_on_statistics(prop_, step.to_c(), accu.to_c()));
     }
-};
-
-class ClingoDLApp : public Clingo::Application {
-public:
-    ~ClingoDLApp() { theory_destroy_propagator(); }
-    char const *program_name() const noexcept override { return "clingo-dl"; }
-    char const *version() const noexcept override { return CLINGODL_VERSION; }
     void main(Control &ctl, StringSpan files) override {
-        CLINGO_CALL(theory_create_propagator(ctl.to_c()));
+        CLINGO_CALL(clingodl_register_propagator(prop_, ctl.to_c()));
         for (auto &file : files) {
             ctl.load(file);
         }
@@ -57,26 +56,17 @@ public:
         }
 
         ctl.ground({{"base", {}}});
-
-        //std::cout << "conf description " << std::endl;
-        //std::cout << "isMap: " << ctl.configuration().is_map() << std::endl;
-        //std::cout << "size: " << ctl.configuration().keys().size() << std::endl;
-        //auto x = ctl.configuration().keys();
-        //for (auto i :x) {
-        //    std::cout << "key: " << std::endl;
-        //}
-        ///TODO: check configuration for --text output and do not solve
-        MyHandler h;
-        ctl.solve(Clingo::SymbolicLiteralSpan{}, &h, false, false).get();
+        ctl.solve(Clingo::SymbolicLiteralSpan{}, this, false, false).get();
     }
 
     void register_options(ClingoOptions &options) override {
-        CLINGO_CALL(theory_add_options(options.to_c()));
+        CLINGO_CALL(clingodl_add_options(prop_, options.to_c()));
     }
 
     void validate_options() override {
-        CLINGO_CALL(theory_validate_options());
+        CLINGO_CALL(clingodl_validate_options(prop_));
     }
+    clingodl_propagator_t *prop_;
 };
 
 int main(int argc, char *argv[]) {
