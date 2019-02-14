@@ -25,4 +25,4 @@ numbers.
 
 ### Example
 
-    clingo-dl -c n=132 -propagate=full examples/taskassignment/encoding-dl.lp examples/taskassignment/tai4_4_1.lp
+    clingo-dl -c n=132 --propagate=full examples/taskassignment/encoding-dl.lp examples/taskassignment/tai4_4_1.lp
