@@ -1013,6 +1013,7 @@ public:
         }
     }
 #endif
+
     void extend_model(Model &model) {
         auto &state = states_[model.thread_id()];
         T adjust = 0;
@@ -1040,14 +1041,16 @@ public:
     Symbol symbol(size_t index) const {
         return vert_map_[index];
     }
-    bool has_lower_bound(uint32_t threadId, size_t index) const {
+
+    bool has_lower_bound(uint32_t thread_id, size_t index) const {
         assert(index < vert_map_.size());
-        auto &state = states_[threadId];
-        return index > 0 && states_[threadId].dl_graph.node_value_defined(index);
+        auto &state = states_[thread_id];
+        return index > 0 && states_[thread_id].dl_graph.node_value_defined(index);
     }
-    double lower_bound(uint32_t threadId, size_t index) const {
-        assert(has_lower_bound(threadId, index));
-        auto &state = states_[threadId];
+
+    double lower_bound(uint32_t thread_id, size_t index) const {
+        assert(has_lower_bound(thread_id, index));
+        auto &state = states_[thread_id];
         T adjust = 0;
         assert(vert_map_[0] == Clingo::Number(0));
         if (state.dl_graph.node_value_defined(0)) {
@@ -1055,7 +1058,6 @@ public:
         }
         return state.dl_graph.node_value(index) + adjust;
     }
-
 
 private:
     std::vector<DLState<T>> states_;

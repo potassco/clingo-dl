@@ -68,32 +68,32 @@ extern "C" {
 typedef struct clingodl_propagator clingodl_propagator_t;
 
 //! creates the propagator
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_create_propagator(clingodl_propagator_t **prop);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_create_propagator(clingodl_propagator_t **propagator);
 
 //! registers the propagator with the control
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_register_propagator(clingodl_propagator_t *prop, clingo_control_t* ctl);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_register_propagator(clingodl_propagator_t *propagator, clingo_control_t* control);
 
 //! destroys the propagator, currently no way to unregister a propagator
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_destroy_propagator(clingodl_propagator_t *prop);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_destroy_propagator(clingodl_propagator_t *propagator);
 
 //! add options for your theory
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_add_options(clingodl_propagator_t *prop, clingo_options_t* options);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_add_options(clingodl_propagator_t *propagator, clingo_options_t* options);
 
 //! validate options for your theory
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_validate_options(clingodl_propagator_t *prop);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_validate_options(clingodl_propagator_t *propagator);
 
 //! callback on every model
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_model(clingodl_propagator_t *prop, clingo_model_t* model);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_model(clingodl_propagator_t *propagator, clingo_model_t* model);
 
 //! return pointer to first element of the current (partial) assignment, 0 if not existent
-CLINGODL_VISIBILITY_DEFAULT void clingodl_assignment_begin(clingodl_propagator_t *prop, uint32_t threadId, size_t *current);
+CLINGODL_VISIBILITY_DEFAULT void clingodl_assignment_begin(clingodl_propagator_t *propagator, uint32_t thread_id, size_t *index);
 
 //! return pointer to next element of the current (partial) assignment 0 if not existent
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_next(clingodl_propagator_t *prop, uint32_t threadId, size_t *current, clingo_symbol_t *name, double* value, bool *ret);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_next(clingodl_propagator_t *propagator, uint32_t thread_id, size_t *index, clingo_symbol_t *name, double* value, bool *result);
 
 //! callback on statistic updates
 /// please add a subkey with the name of your propagator
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_statistics(clingodl_propagator_t *prop, clingo_statistics_t* step, clingo_statistics_t* accu);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_statistics(clingodl_propagator_t *propagator, clingo_statistics_t* step, clingo_statistics_t* accu);
 
 #ifdef __cplusplus
 }
