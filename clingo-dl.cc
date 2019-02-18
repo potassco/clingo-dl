@@ -70,18 +70,18 @@ bool check(clingo_propagate_control_t* i, void* data)
     CLINGODL_CATCH;
 }
 
-struct Storage {
+struct PropagatorFacade {
 public:
-    virtual ~Storage() {};
+    virtual ~PropagatorFacade() {};
     virtual bool next(uint32_t thread_id, size_t *current, clingo_symbol_t *name, double* value) = 0;
     virtual void extend_model(Model &m) = 0;
     virtual void on_statistics(UserStatistics& step, UserStatistics &accu) = 0;
 };
 
 template<typename T>
-class PropagatorStorage : public Storage {
+class DLPropagatorFacade : public PropagatorFacade {
 public:
-    PropagatorStorage(clingo_control_t *ctl, bool strict, PropagationMode mode)
+    DLPropagatorFacade(clingo_control_t *ctl, bool strict, PropagationMode mode)
     : prop_{step_, strict, mode} {
         CLINGO_CALL(clingo_control_add(ctl,"base", nullptr, 0, R"(#theory dl {
 term{};
@@ -159,7 +159,7 @@ private:
 };
 
 struct clingodl_propagator {
-    std::unique_ptr<Storage> storage{nullptr};
+    std::unique_ptr<PropagatorFacade> storage{nullptr};
     bool strict{false};
     bool rdl{false};
     PropagationMode mode{PropagationMode::Check};
@@ -173,10 +173,10 @@ extern "C" bool clingodl_create_propagator(clingodl_propagator_t **prop) {
 extern "C" bool clingodl_register_propagator(clingodl_propagator_t *prop, clingo_control_t* ctl) {
     CLINGODL_TRY {
         if (!prop->rdl) {
-            prop->storage = std::make_unique<PropagatorStorage<int>>(ctl, prop->strict, prop->mode);
+            prop->storage = std::make_unique<DLPropagatorFacade<int>>(ctl, prop->strict, prop->mode);
         }
         else {
-            prop->storage = std::make_unique<PropagatorStorage<double>>(ctl, prop->strict, prop->mode);
+            prop->storage = std::make_unique<DLPropagatorFacade<double>>(ctl, prop->strict, prop->mode);
         }
     }
     CLINGODL_CATCH;
