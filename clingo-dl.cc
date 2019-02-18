@@ -73,8 +73,6 @@ bool check(clingo_propagate_control_t* i, void* data)
 struct Storage {
 public:
     virtual ~Storage() {};
-    virtual clingo_propagator_t *get_clingo_propagator() = 0;
-    virtual Propagator* get_propagator() = 0;
     virtual void extend_model(Model &m) = 0;
     virtual size_t num_vertices() const = 0;
     virtual Symbol symbol(size_t idx) const = 0;
@@ -86,20 +84,30 @@ public:
 template<typename T>
 class PropagatorStorage : public Storage {
 public:
-    PropagatorStorage(bool strict, PropagationMode prop)
-    : prop_{step_, strict, prop}  {}
-
-    clingo_propagator_t *get_clingo_propagator() override {
-        static clingo_propagator_t clingoProp = {
+    PropagatorStorage(clingo_control_t *ctl, bool strict, PropagationMode mode)
+    : prop_{step_, strict, mode} {
+        CLINGO_CALL(clingo_control_add(ctl,"base", nullptr, 0, R"(#theory dl {
+term{};
+constant {
+  + : 1, binary, left;
+  - : 1, binary, left;
+  * : 2, binary, left;
+  / : 2, binary, left;
+  - : 3, unary
+};
+diff_term {- : 1, binary, left};
+&diff/0 : diff_term, {<=}, constant, any;
+&show_assignment/0 : term, directive
+}.)"));
+        static clingo_propagator_t prop = {
             init<T>,
             propagate<T>,
             undo<T>,
             check<T>,
             nullptr
         };
-        return &clingoProp;
+        CLINGO_CALL(clingo_control_register_propagator(ctl, &prop, &prop_, false));
     }
-    Propagator* get_propagator() override { return &prop_; }
 
     size_t num_vertices() const override {
         return prop_.num_vertices();
@@ -169,26 +177,11 @@ extern "C" bool clingodl_create_propagator(clingodl_propagator_t **prop) {
 extern "C" bool clingodl_register_propagator(clingodl_propagator_t *prop, clingo_control_t* ctl) {
     CLINGODL_TRY {
         if (!prop->rdl) {
-            prop->storage = std::make_unique<PropagatorStorage<int>>(prop->strict, prop->mode);
+            prop->storage = std::make_unique<PropagatorStorage<int>>(ctl, prop->strict, prop->mode);
         }
         else {
-            prop->storage = std::make_unique<PropagatorStorage<double>>(prop->strict, prop->mode);
+            prop->storage = std::make_unique<PropagatorStorage<double>>(ctl, prop->strict, prop->mode);
         }
-        CLINGO_CALL(clingo_control_add(ctl,"base", nullptr, 0, R"(#theory dl {
-term{};
-constant {
-  + : 1, binary, left;
-  - : 1, binary, left;
-  * : 2, binary, left;
-  / : 2, binary, left;
-  - : 3, unary
-};
-diff_term {- : 1, binary, left};
-&diff/0 : diff_term, {<=}, constant, any;
-&show_assignment/0 : term, directive
-}.)"));
-
-        CLINGO_CALL(clingo_control_register_propagator(ctl, prop->storage->get_clingo_propagator(), static_cast<void*>(prop->storage->get_propagator()), false));
     }
     CLINGODL_CATCH;
 }
