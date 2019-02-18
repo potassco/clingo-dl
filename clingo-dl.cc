@@ -73,11 +73,8 @@ bool check(clingo_propagate_control_t* i, void* data)
 struct Storage {
 public:
     virtual ~Storage() {};
+    virtual bool next(uint32_t thread_id, size_t *current, clingo_symbol_t *name, double* value) = 0;
     virtual void extend_model(Model &m) = 0;
-    virtual size_t num_vertices() const = 0;
-    virtual Symbol symbol(size_t idx) const = 0;
-    virtual bool has_lower_bound(uint32_t thread_id, size_t index) const = 0;
-    virtual double lower_bound(uint32_t thread_id, size_t index) const = 0;
     virtual void on_statistics(UserStatistics& step, UserStatistics &accu) = 0;
 };
 
@@ -109,20 +106,19 @@ diff_term {- : 1, binary, left};
         CLINGO_CALL(clingo_control_register_propagator(ctl, &prop, &prop_, false));
     }
 
-    size_t num_vertices() const override {
-        return prop_.num_vertices();
-    }
-    Symbol symbol(size_t idx) const override {
-        return prop_.symbol(idx);
+    bool next(uint32_t thread_id, size_t *current, clingo_symbol_t *name, double* value) override {
+        for (++*current; *current <= prop_.num_vertices(); ++*current) {
+            size_t i = *current - 1;
+            if (prop_.has_lower_bound(thread_id, i)) {
+                *name = prop_.symbol(i).to_c();
+                *value = prop_.lower_bound(thread_id, i);
+                return true;
+            }
+        }
+        return false;
     }
     void extend_model(Model &m) override {
         prop_.extend_model(m);
-    }
-    bool has_lower_bound(uint32_t thread_id, size_t index) const override {
-        return prop_.has_lower_bound(thread_id, index);
-    }
-    double lower_bound(uint32_t thread_id, size_t index) const override {
-        return prop_.lower_bound(thread_id, index);
     }
     void on_statistics(UserStatistics& step, UserStatistics &accu) override {
         accu_.accu(step_);
@@ -262,18 +258,7 @@ extern "C" void clingodl_assignment_begin(clingodl_propagator_t *, uint32_t, siz
 }
 
 extern "C" bool clingodl_assignment_next(clingodl_propagator_t *prop, uint32_t thread_id, size_t *current, clingo_symbol_t *name, double* value, bool *ret) {
-    CLINGODL_TRY {
-        *ret = false;
-        for (++*current; *current <= prop->storage->num_vertices(); ++*current) {
-            size_t i = *current - 1;
-            if (prop->storage->has_lower_bound(thread_id, i)) {
-                *name = prop->storage->symbol(i).to_c();
-                *value = prop->storage->lower_bound(thread_id, i);
-                *ret = true;
-                break;
-            }
-        }
-    }
+    CLINGODL_TRY { *ret = prop->storage->next(thread_id, current, name, value); }
     CLINGODL_CATCH;
 }
 
