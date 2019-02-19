@@ -65,6 +65,22 @@ extern "C" {
 
 #include <clingo.h>
 
+enum clingodl_value_type {
+    clingodl_value_type_int = 0,
+    clingodl_value_type_double = 1,
+    clingodl_value_type_symbol = 2
+};
+typedef int clingodl_value_type_t;
+
+typedef struct clingodl_value {
+    clingodl_value_type type;
+    union {
+        int int_number;
+        double double_number;
+        clingo_symbol_t symbol;
+    };
+} clingodl_value_t;
+
 typedef struct clingodl_propagator clingodl_propagator_t;
 
 //! creates the propagator
@@ -89,7 +105,7 @@ CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_model(clingodl_propagator_t *propag
 CLINGODL_VISIBILITY_DEFAULT void clingodl_assignment_begin(clingodl_propagator_t *propagator, uint32_t thread_id, size_t *index);
 
 //! return pointer to next element of the current (partial) assignment 0 if not existent
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_next(clingodl_propagator_t *propagator, uint32_t thread_id, size_t *index, clingo_symbol_t *name, double* value, bool *result);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_next(clingodl_propagator_t *propagator, uint32_t thread_id, size_t *index, clingo_symbol_t *name, clingodl_value_t* value, bool *result);
 
 //! callback on statistic updates
 /// please add a subkey with the name of your propagator

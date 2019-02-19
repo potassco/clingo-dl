@@ -1048,7 +1048,7 @@ public:
         return index > 0 && states_[thread_id].dl_graph.node_value_defined(index);
     }
 
-    double lower_bound(uint32_t thread_id, size_t index) const {
+    T lower_bound(uint32_t thread_id, size_t index) const {
         assert(has_lower_bound(thread_id, index));
         auto &state = states_[thread_id];
         T adjust = 0;

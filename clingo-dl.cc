@@ -73,10 +73,23 @@ bool check(clingo_propagate_control_t* i, void* data)
 struct PropagatorFacade {
 public:
     virtual ~PropagatorFacade() {};
-    virtual bool next(uint32_t thread_id, size_t *current, clingo_symbol_t *name, double* value) = 0;
+    virtual bool next(uint32_t thread_id, size_t *current, clingo_symbol_t *name, clingodl_value_t* value) = 0;
     virtual void extend_model(Model &m) = 0;
     virtual void on_statistics(UserStatistics& step, UserStatistics &accu) = 0;
 };
+
+template<typename T>
+T *get_value(clingodl_value_t *value);
+
+template<>
+int *get_value<int>(clingodl_value_t *value) {
+    return &value->int_number;
+}
+
+template<>
+double *get_value<double>(clingodl_value_t *value) {
+    return &value->double_number;
+}
 
 template<typename T>
 class DLPropagatorFacade : public PropagatorFacade {
@@ -106,12 +119,12 @@ diff_term {- : 1, binary, left};
         CLINGO_CALL(clingo_control_register_propagator(ctl, &prop, &prop_, false));
     }
 
-    bool next(uint32_t thread_id, size_t *current, clingo_symbol_t *name, double* value) override {
+    bool next(uint32_t thread_id, size_t *current, clingo_symbol_t *name, clingodl_value_t* value) override {
         for (++*current; *current <= prop_.num_vertices(); ++*current) {
             size_t i = *current - 1;
             if (prop_.has_lower_bound(thread_id, i)) {
                 *name = prop_.symbol(i).to_c();
-                *value = prop_.lower_bound(thread_id, i);
+                *get_value<T>(value) = prop_.lower_bound(thread_id, i);
                 return true;
             }
         }
@@ -257,8 +270,8 @@ extern "C" void clingodl_assignment_begin(clingodl_propagator_t *, uint32_t, siz
     *current = 0;
 }
 
-extern "C" bool clingodl_assignment_next(clingodl_propagator_t *prop, uint32_t thread_id, size_t *current, clingo_symbol_t *name, double* value, bool *ret) {
-    CLINGODL_TRY { *ret = prop->storage->next(thread_id, current, name, value); }
+bool clingodl_assignment_next(clingodl_propagator_t *prop, uint32_t thread_id, size_t *index, clingo_symbol_t *name, clingodl_value_t* value, bool *ret) {
+    CLINGODL_TRY { *ret = prop->storage->next(thread_id, index, name, value); }
     CLINGODL_CATCH;
 }
 
