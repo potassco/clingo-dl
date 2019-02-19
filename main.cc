@@ -59,7 +59,7 @@ public:
     }
 
     void register_options(ClingoOptions &options) override {
-        CLINGO_CALL(clingodl_add_options(prop_, options.to_c()));
+        CLINGO_CALL(clingodl_register_options(prop_, options.to_c()));
     }
 
     void validate_options() override {

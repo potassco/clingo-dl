@@ -93,7 +93,7 @@ CLINGODL_VISIBILITY_DEFAULT bool clingodl_register_propagator(clingodl_propagato
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_destroy_propagator(clingodl_propagator_t *propagator);
 
 //! add options for your theory
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_add_options(clingodl_propagator_t *propagator, clingo_options_t* options);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_register_options(clingodl_propagator_t *propagator, clingo_options_t* options);
 
 //! validate options for your theory
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_validate_options(clingodl_propagator_t *propagator);
@@ -102,7 +102,7 @@ CLINGODL_VISIBILITY_DEFAULT bool clingodl_validate_options(clingodl_propagator_t
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_model(clingodl_propagator_t *propagator, clingo_model_t* model);
 
 //! return pointer to first element of the current (partial) assignment, 0 if not existent
-CLINGODL_VISIBILITY_DEFAULT void clingodl_assignment_begin(clingodl_propagator_t *propagator, uint32_t thread_id, size_t *index);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_begin(clingodl_propagator_t *propagator, uint32_t thread_id, size_t *index);
 
 //! return pointer to next element of the current (partial) assignment 0 if not existent
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_next(clingodl_propagator_t *propagator, uint32_t thread_id, size_t *index, clingo_symbol_t *name, clingodl_value_t* value, bool *result);

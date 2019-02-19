@@ -231,7 +231,7 @@ static bool parse_mode(const char *value, void *data) {
     return false;
 }
 
-extern "C" bool clingodl_add_options(clingodl_propagator_t *prop, clingo_options_t* options) {
+extern "C" bool clingodl_register_options(clingodl_propagator_t *prop, clingo_options_t* options) {
     CLINGODL_TRY {
         char const * group = "Clingo.DL Options";
         CLINGO_CALL(clingo_options_add(options, group, "propagate",
@@ -266,8 +266,9 @@ extern "C" bool clingodl_on_model(clingodl_propagator_t *prop, clingo_model_t* m
     CLINGODL_CATCH;
 }
 
-extern "C" void clingodl_assignment_begin(clingodl_propagator_t *, uint32_t, size_t *current) {
+extern "C" bool clingodl_assignment_begin(clingodl_propagator_t *, uint32_t, size_t *current) {
     *current = 0;
+    return true;
 }
 
 bool clingodl_assignment_next(clingodl_propagator_t *prop, uint32_t thread_id, size_t *index, clingo_symbol_t *name, clingodl_value_t* value, bool *ret) {
