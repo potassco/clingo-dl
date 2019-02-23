@@ -129,7 +129,7 @@ diff_term {- : 1, binary, left};
     }
 
     clingo_symbol_t get_symbol(size_t index) override {
-        return prop_.symbol(index).to_c();
+        return prop_.symbol(index - 1).to_c();
     }
 
     bool has_value(uint32_t thread_id, size_t index) override {
