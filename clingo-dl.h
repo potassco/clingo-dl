@@ -101,11 +101,31 @@ CLINGODL_VISIBILITY_DEFAULT bool clingodl_validate_options(clingodl_propagator_t
 //! callback on every model
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_model(clingodl_propagator_t *propagator, clingo_model_t* model);
 
-//! return pointer to first element of the current (partial) assignment, 0 if not existent
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_begin(clingodl_propagator_t *propagator, uint32_t thread_id, size_t *index);
+//! obtain a symbol index which can be used to get the value of a symbol
+//! returns true if the symbol exists
+//! does not throw
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_lookup_symbol(clingodl_propagator_t *propagator, clingo_symbol_t symbol, size_t *index);
 
-//! return pointer to next element of the current (partial) assignment 0 if not existent
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_next(clingodl_propagator_t *propagator, uint32_t thread_id, size_t *index, clingo_symbol_t *name, clingodl_value_t* value, bool *result);
+//! obtain the symbol at the given index
+//! does not throw
+CLINGODL_VISIBILITY_DEFAULT clingo_symbol_t clingodl_get_symbol(clingodl_propagator_t *propagator, size_t index);
+
+//! initialize index so that it can be used with clingodl_assignment_next
+//! does not throw
+CLINGODL_VISIBILITY_DEFAULT void clingodl_assignment_begin(clingodl_propagator_t *propagator, uint32_t thread_id, size_t *index);
+
+//! move to the next index that has a value
+//! returns true if the updated index is valid
+//! does not throw
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_next(clingodl_propagator_t *propagator, uint32_t thread_id, size_t *index);
+
+//! check if the symbol at the given index has a value
+//! does not throw
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_has_value(clingodl_propagator_t *propagator, uint32_t thread_id, size_t index);
+
+//! get the symbol and it's value at the given index
+//! does not throw
+CLINGODL_VISIBILITY_DEFAULT void clingodl_assignment_get_value(clingodl_propagator_t *propagator, uint32_t thread_id, size_t index, clingodl_value_t *value);
 
 //! callback on statistic updates
 /// please add a subkey with the name of your propagator

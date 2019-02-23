@@ -877,6 +877,19 @@ T get_weight(TheoryAtom const &atom);
 Clingo::Symbol evaluate_term(Clingo::TheoryTerm term);
 
 template <typename T>
+Clingo::Symbol to_symbol(T value);
+
+template <>
+inline Clingo::Symbol to_symbol(int value) {
+    return Number(value);
+}
+
+template <>
+inline Clingo::Symbol to_symbol(double value) {
+    return String(std::to_string(value).c_str());
+}
+
+template <typename T>
 class DifferenceLogicPropagator : public Propagator {
 public:
     DifferenceLogicPropagator(Stats &stats, bool strict, PropagationMode propagate)
@@ -1027,7 +1040,7 @@ public:
             if (state.dl_graph.node_value_defined(idx)) {
                 SymbolVector params;
                 params.emplace_back(vert_map_[idx]);
-                params.emplace_back(String(std::to_string(adjust + state.dl_graph.node_value(idx)).c_str()));
+                params.emplace_back(to_symbol<T>(adjust + state.dl_graph.node_value(idx)));
                 vec.emplace_back(Function("dl",params));
             }
         }
@@ -1042,10 +1055,17 @@ public:
         return vert_map_[index];
     }
 
+    uint32_t lookup(clingo_symbol_t symbol) {
+        auto it = vert_map_inv_.find(Clingo::Symbol(symbol));
+        return it != vert_map_inv_.end()
+            ? it->second
+            : num_vertices();
+    }
+
     bool has_lower_bound(uint32_t thread_id, size_t index) const {
-        assert(index < vert_map_.size());
+        if (index >= vert_map_.size()) { return false; }
         auto &state = states_[thread_id];
-        return index > 0 && states_[thread_id].dl_graph.node_value_defined(index);
+        return states_[thread_id].dl_graph.node_value_defined(index);
     }
 
     T lower_bound(uint32_t thread_id, size_t index) const {

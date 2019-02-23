@@ -73,7 +73,11 @@ bool check(clingo_propagate_control_t* i, void* data)
 struct PropagatorFacade {
 public:
     virtual ~PropagatorFacade() {};
-    virtual bool next(uint32_t thread_id, size_t *current, clingo_symbol_t *name, clingodl_value_t* value) = 0;
+    virtual bool lookup_symbol(clingo_symbol_t name, size_t *index) = 0;
+    virtual clingo_symbol_t get_symbol(size_t index) = 0;
+    virtual bool has_value(uint32_t thread_id, size_t index) = 0;
+    virtual void get_value(uint32_t thread_id, size_t index, clingodl_value_t *value) = 0;
+    virtual bool next(uint32_t thread_id, size_t *current) = 0;
     virtual void extend_model(Model &m) = 0;
     virtual void on_statistics(UserStatistics& step, UserStatistics &accu) = 0;
 };
@@ -119,12 +123,27 @@ diff_term {- : 1, binary, left};
         CLINGO_CALL(clingo_control_register_propagator(ctl, &prop, &prop_, false));
     }
 
-    bool next(uint32_t thread_id, size_t *current, clingo_symbol_t *name, clingodl_value_t* value) override {
+    bool lookup_symbol(clingo_symbol_t name, size_t *index) override {
+        *index = prop_.lookup(name) + 1;
+        return *index <= prop_.num_vertices();
+    }
+
+    clingo_symbol_t get_symbol(size_t index) override {
+        return prop_.symbol(index).to_c();
+    }
+
+    bool has_value(uint32_t thread_id, size_t index) override {
+        assert(index > 0 && index <= prop_.num_vertices());
+        return prop_.has_lower_bound(thread_id, index);
+    }
+    void get_value(uint32_t thread_id, size_t index, clingodl_value_t *value) override {
+        assert(index > 0 && index <= prop_.num_vertices());
+        *::get_value<T>(value) = prop_.lower_bound(thread_id, index - 1);
+    }
+
+    bool next(uint32_t thread_id, size_t *current) override {
         for (++*current; *current <= prop_.num_vertices(); ++*current) {
-            size_t i = *current - 1;
-            if (prop_.has_lower_bound(thread_id, i)) {
-                *name = prop_.symbol(i).to_c();
-                *get_value<T>(value) = prop_.lower_bound(thread_id, i);
+            if (prop_.has_lower_bound(thread_id, *current - 1)) {
                 return true;
             }
         }
@@ -266,14 +285,29 @@ extern "C" bool clingodl_on_model(clingodl_propagator_t *prop, clingo_model_t* m
     CLINGODL_CATCH;
 }
 
-extern "C" bool clingodl_assignment_begin(clingodl_propagator_t *, uint32_t, size_t *current) {
-    *current = 0;
-    return true;
+extern "C" bool clingodl_lookup_symbol(clingodl_propagator_t *prop_, clingo_symbol_t symbol, size_t *index) {
+    return prop_->storage->lookup_symbol(symbol, index);
 }
 
-bool clingodl_assignment_next(clingodl_propagator_t *prop, uint32_t thread_id, size_t *index, clingo_symbol_t *name, clingodl_value_t* value, bool *ret) {
-    CLINGODL_TRY { *ret = prop->storage->next(thread_id, index, name, value); }
-    CLINGODL_CATCH;
+extern "C" clingo_symbol_t clingodl_get_symbol(clingodl_propagator_t *prop, size_t index) {
+    return prop->storage->get_symbol(index);
+}
+
+extern "C" void clingodl_assignment_begin(clingodl_propagator_t *, uint32_t, size_t *current) {
+    // Note: the first vertex is always 0 and can be skipped because its value is 0
+    *current = 1;
+}
+
+extern "C" bool clingodl_assignment_next(clingodl_propagator_t *prop, uint32_t thread_id, size_t *index) {
+    return prop->storage->next(thread_id, index);
+}
+
+extern "C" bool clingodl_assignment_has_value(clingodl_propagator_t *prop, uint32_t thread_id, size_t index) {
+    return prop->storage->has_value(thread_id, index);
+}
+
+extern "C" void clingodl_assignment_get_value(clingodl_propagator_t *prop, uint32_t thread_id, size_t index, clingodl_value_t *value) {
+    prop->storage->get_value(thread_id, index, value);
 }
 
 extern "C" bool clingodl_on_statistics(clingodl_propagator_t *prop, clingo_statistics_t* step, clingo_statistics_t* accu) {
