@@ -25,6 +25,8 @@
 #include <clingo-dl.h>
 #include <propagator.hh>
 
+#include <cerrno>
+
 #define CLINGODL_TRY try
 #define CLINGODL_CATCH catch (...){ Clingo::Detail::handle_cxx_error(); return false; } return true
 
@@ -98,8 +100,8 @@ double *get_value<double>(clingodl_value_t *value) {
 template<typename T>
 class DLPropagatorFacade : public PropagatorFacade {
 public:
-    DLPropagatorFacade(clingo_control_t *ctl, bool strict, PropagationMode mode)
-    : prop_{step_, strict, mode} {
+    DLPropagatorFacade(clingo_control_t *ctl, bool strict, uint64_t propagate_root, uint64_t propagate_budget, PropagationMode mode)
+    : prop_{step_, strict, propagate_root, propagate_budget, mode} {
         CLINGO_CALL(clingo_control_add(ctl,"base", nullptr, 0, R"(#theory dl {
 term{};
 constant {
@@ -191,9 +193,11 @@ private:
 };
 
 struct clingodl_propagator {
-    std::unique_ptr<PropagatorFacade> storage{nullptr};
+    std::unique_ptr<PropagatorFacade> clingodl{nullptr};
     bool strict{false};
     bool rdl{false};
+    uint64_t propagate_root{0};
+    uint64_t propagate_budget{0};
     PropagationMode mode{PropagationMode::Check};
 };
 
@@ -205,10 +209,10 @@ extern "C" bool clingodl_create_propagator(clingodl_propagator_t **prop) {
 extern "C" bool clingodl_register_propagator(clingodl_propagator_t *prop, clingo_control_t* ctl) {
     CLINGODL_TRY {
         if (!prop->rdl) {
-            prop->storage = std::make_unique<DLPropagatorFacade<int>>(ctl, prop->strict, prop->mode);
+            prop->clingodl = std::make_unique<DLPropagatorFacade<int>>(ctl, prop->strict, prop->propagate_root, prop->propagate_budget, prop->mode);
         }
         else {
-            prop->storage = std::make_unique<DLPropagatorFacade<double>>(ctl, prop->strict, prop->mode);
+            prop->clingodl = std::make_unique<DLPropagatorFacade<double>>(ctl, prop->strict, prop->propagate_root, prop->propagate_budget, prop->mode);
         }
     }
     CLINGODL_CATCH;
@@ -224,6 +228,12 @@ static bool iequals(char const *a, char const *b) {
         if (tolower(*a) != tolower(*b)) { return false; }
     }
     return !*a && !*b;
+}
+static bool parse_uint64(const char *value, void *data) {
+    auto &root = *static_cast<uint64_t*>(data);
+    char *end = nullptr;
+    root = std::strtoull(value, &end, 10);
+    return end != value && static_cast<size_t>(end - value) == std::strlen(value) && errno == 0;
 }
 static bool parse_mode(const char *value, void *data) {
     auto &mode = *static_cast<PropagationMode*>(data);
@@ -255,13 +265,20 @@ extern "C" bool clingodl_register_options(clingodl_propagator_t *prop, clingo_op
         char const * group = "Clingo.DL Options";
         CLINGO_CALL(clingo_options_add(options, group, "propagate",
             "Set propagation mode [no]\n"
-            "    <mode>: {no,partial,full}\n"
-            "      no      : No propagation; only detect conflicts\n"
-            "      inverse : Check inverse constraints\n"
-            "      partial : Detect some conflicting constraints\n"
-            "      partial+: Detect some more conflicting constraints\n"
-            "      full    : Detect all conflicting constraints",
-            &parse_mode, &prop->mode, false, "mode"));
+            "      <mode>: {no,partial,full}\n"
+            "        no      : No propagation; only detect conflicts\n"
+            "        inverse : Check inverse constraints\n"
+            "        partial : Detect some conflicting constraints\n"
+            "        partial+: Detect some more conflicting constraints\n"
+            "        full    : Detect all conflicting constraints",
+            &parse_mode, &prop->mode, false, "<mode>"));
+        CLINGO_CALL(clingo_options_add(options, group, "propagate-root",
+            "Enable full propagation below decision level <n> [0]",
+            &parse_uint64, &prop->propagate_root, false, "<n>"));
+        CLINGO_CALL(clingo_options_add(options, group, "propagate-budget",
+            "Enable full propagation limiting to budget <n> [0]\n"
+            "(if possible use with --propagate-root=1)\n",
+            &parse_uint64, &prop->propagate_budget, false, "<n>"));
         CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers.", &prop->rdl));
         CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode.", &prop->strict));
     }
@@ -280,17 +297,17 @@ extern "C" bool clingodl_validate_options(clingodl_propagator_t *prop) {
 extern "C" bool clingodl_on_model(clingodl_propagator_t *prop, clingo_model_t* model) {
     CLINGODL_TRY {
         Model m(model);
-        prop->storage->extend_model(m);
+        prop->clingodl->extend_model(m);
     }
     CLINGODL_CATCH;
 }
 
 extern "C" bool clingodl_lookup_symbol(clingodl_propagator_t *prop_, clingo_symbol_t symbol, size_t *index) {
-    return prop_->storage->lookup_symbol(symbol, index);
+    return prop_->clingodl->lookup_symbol(symbol, index);
 }
 
 extern "C" clingo_symbol_t clingodl_get_symbol(clingodl_propagator_t *prop, size_t index) {
-    return prop->storage->get_symbol(index);
+    return prop->clingodl->get_symbol(index);
 }
 
 extern "C" void clingodl_assignment_begin(clingodl_propagator_t *, uint32_t, size_t *current) {
@@ -299,15 +316,15 @@ extern "C" void clingodl_assignment_begin(clingodl_propagator_t *, uint32_t, siz
 }
 
 extern "C" bool clingodl_assignment_next(clingodl_propagator_t *prop, uint32_t thread_id, size_t *index) {
-    return prop->storage->next(thread_id, index);
+    return prop->clingodl->next(thread_id, index);
 }
 
 extern "C" bool clingodl_assignment_has_value(clingodl_propagator_t *prop, uint32_t thread_id, size_t index) {
-    return prop->storage->has_value(thread_id, index);
+    return prop->clingodl->has_value(thread_id, index);
 }
 
 extern "C" void clingodl_assignment_get_value(clingodl_propagator_t *prop, uint32_t thread_id, size_t index, clingodl_value_t *value) {
-    prop->storage->get_value(thread_id, index, value);
+    prop->clingodl->get_value(thread_id, index, value);
 }
 
 extern "C" bool clingodl_on_statistics(clingodl_propagator_t *prop, clingo_statistics_t* step, clingo_statistics_t* accu) {
@@ -317,7 +334,7 @@ extern "C" bool clingodl_on_statistics(clingodl_propagator_t *prop, clingo_stati
         CLINGO_CALL(clingo_statistics_root(accu, &root_a));
         UserStatistics s(step, root_s);
         UserStatistics a(accu, root_a);
-        prop->storage->on_statistics(s, a);
+        prop->clingodl->on_statistics(s, a);
     }
     CLINGODL_CATCH;
 }

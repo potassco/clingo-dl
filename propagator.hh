@@ -183,12 +183,22 @@ public:
 
     bool edge_is_active(int edge_idx) const { return edge_states_[edge_idx].active; }
 
+    bool can_propagate() const {
+        return std::get<4>(changed_trail_.back());
+    }
+
+    void disable_propagate() {
+        std::get<4>(changed_trail_.back()) = false;
+    }
+
     void ensure_decision_level(int level) {
         // initialize the trail
         if (changed_trail_.empty() || static_cast<int>(std::get<0>(changed_trail_.back())) < level) {
+            bool can_propagate = changed_trail_.empty() || std::get<4>(changed_trail_.back());
             changed_trail_.emplace_back(level, static_cast<int>(changed_nodes_.size()),
                                                static_cast<int>(changed_edges_.size()),
-                                               static_cast<int>(inactive_edges_.size()));
+                                               static_cast<int>(inactive_edges_.size()),
+                                               can_propagate);
         }
     }
 
@@ -811,7 +821,7 @@ private:
     std::vector<DifferenceLogicNode<T>> nodes_;
     std::vector<int> changed_nodes_;
     std::vector<int> changed_edges_;
-    std::vector<std::tuple<int, int, int, int>> changed_trail_;
+    std::vector<std::tuple<int, int, int, int, bool>> changed_trail_;
     std::vector<int> inactive_edges_;
     std::vector<EdgeState> edge_states_;
     DLStats &stats_;
@@ -892,10 +902,12 @@ inline Clingo::Symbol to_symbol(double value) {
 template <typename T>
 class DifferenceLogicPropagator : public Propagator {
 public:
-    DifferenceLogicPropagator(Stats &stats, bool strict, PropagationMode propagate)
+    DifferenceLogicPropagator(Stats &stats, bool strict, uint64_t propagate_root, uint64_t propagate_budget, PropagationMode propagate)
         : stats_(stats)
-        , strict_(strict)
+        , propagate_root_{propagate_root}
+        , propagate_budget_{propagate_budget}
         , propagate_(propagate)
+        , strict_(strict)
         {
             map_vert(Clingo::Number(0));
         }
@@ -943,7 +955,7 @@ public:
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
         init.add_watch(lit);
-        if (propagate_ >= PropagationMode::Strong) {
+        if (propagate_ >= PropagationMode::Strong || propagate_budget_ > 0 || propagate_root_ > 0) {
             false_lit_to_edges_.emplace(-lit, id);
             init.add_watch(-lit);
         }
@@ -951,7 +963,7 @@ public:
             auto id = numeric_cast<int>(edges_.size());
             edges_.push_back({v_id, u_id, -weight - 1, -lit});
             lit_to_edges_.emplace(-lit, id);
-            if (propagate_ >= PropagationMode::Strong) {
+            if (propagate_ >= PropagationMode::Strong || propagate_budget_ > 0 || propagate_root_ > 0) {
                 false_lit_to_edges_.emplace(lit, id);
             }
             else {
@@ -979,7 +991,7 @@ public:
     // propagation
 
     void propagate(PropagateControl &ctl, LiteralSpan changes) override {
-        auto &state = states_[ctl.thread_id()];
+        DLState<T> &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_propagate};
         auto level = ctl.assignment().decision_level();
         state.dl_graph.ensure_decision_level(level);
@@ -999,7 +1011,12 @@ public:
                         return ctl.add_clause(clause) && ctl.propagate();
                     });
                     if (!ret) { return; }
-                    if (propagate_ >= PropagationMode::Strong && !state.dl_graph.propagate(it->second, ctl)) { return; }
+                    bool propagate = propagate_ >= PropagationMode::Strong;
+                    propagate = propagate || ctl.assignment().decision_level() < propagate_root_;
+                    propagate = propagate || (propagate_budget_ > 0 && state.dl_graph.can_propagate() && state.stats.propagate_cost_add + propagate_budget_ > state.stats.propagate_cost_from + state.stats.propagate_cost_to);
+                    if (!propagate) { state.dl_graph.disable_propagate(); }
+                    // if !propgate -> can no longer propagate!
+                    if (propagate && !state.dl_graph.propagate(it->second, ctl)) { return; }
                 }
             }
         }
@@ -1087,8 +1104,10 @@ private:
     std::vector<Clingo::Symbol> vert_map_;
     std::unordered_map<Clingo::Symbol, int> vert_map_inv_;
     Stats &stats_;
-    bool strict_;
+    uint64_t propagate_root_;
+    uint64_t propagate_budget_;
     PropagationMode propagate_;
+    bool strict_;
 };
 
 
