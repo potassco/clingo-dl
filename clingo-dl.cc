@@ -277,7 +277,7 @@ extern "C" bool clingodl_register_options(clingodl_propagator_t *prop, clingo_op
             &parse_uint64, &prop->propagate_root, false, "<n>"));
         CLINGO_CALL(clingo_options_add(options, group, "propagate-budget",
             "Enable full propagation limiting to budget <n> [0]\n"
-            "(if possible use with --propagate-root=1)\n",
+            "                            (if possible use with --propagate-root=1)\n",
             &parse_uint64, &prop->propagate_budget, false, "<n>"));
         CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers.", &prop->rdl));
         CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode.", &prop->strict));
