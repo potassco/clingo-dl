@@ -56,5 +56,4 @@ install:
   - ctest --output-on-failure
 
 script:
-  - echo "&diff{a-0} <= 42." | clingo-dl || [ $? = 10 ]
   - python scratch/runtests.py
