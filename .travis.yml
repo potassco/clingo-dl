@@ -51,7 +51,7 @@ install:
   - conda create -q -n test-environment python=$PYTHON_VERSION
   - source activate test-environment
   - conda install -q clingo cmake "${COMPILER}"
-  - cmake -DCMAKE_VERBOSE_MAKEFILE=ON -DCLINGODL_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=release -DCMAKE_INSTALL_PREFIX="${CONDA_PREFIX}" .
+  - cmake -DCMAKE_VERBOSE_MAKEFILE=ON -DCLINGODL_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=release -DCMAKE_INSTALL_PREFIX="${CONDA_PREFIX}" -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath,${HOME}/miniconda/lib"
   - cmake --build .
   - cmake --build . --target test
   - cmake --build . --target install
