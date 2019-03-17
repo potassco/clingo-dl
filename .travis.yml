@@ -52,6 +52,7 @@ install:
   - source activate test-environment
   - conda install -q clingo cmake "${COMPILER}" ninja
   - cmake -G Ninja -DCLINGODL_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=release -DCMAKE_INSTALL_PREFIX="${CONDA_PREFIX}" .
+  - cmake --build .
   - ctest --output-on-failure
   - cmake --build . --target install
 
