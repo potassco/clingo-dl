@@ -89,11 +89,13 @@ T *get_value(clingodl_value_t *value);
 
 template<>
 int *get_value<int>(clingodl_value_t *value) {
+    value->type = clingodl_value_type_int;
     return &value->int_number;
 }
 
 template<>
 double *get_value<double>(clingodl_value_t *value) {
+    value->type = clingodl_value_type_double;
     return &value->double_number;
 }
 
