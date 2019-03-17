@@ -1,13 +1,22 @@
 cmake_minimum_required(VERSION 3.1)
-file(READ "clingo-dl.h" main)
+
+file(READ "libclingo-dl/clingo-dl.h" main)
 string(REGEX MATCH "#define CLINGODL_VERSION \"([^\"]*)\"" clingov ${main})
+
 project(CLINGODL VERSION "${CMAKE_MATCH_1}" LANGUAGES CXX)
-# Enable folders in IDEs like Visual Studio
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+if (POLICY CMP0063)
+    cmake_policy(SET CMP0063 NEW)
+endif()
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     message(STATUS "No build type selected - using 'Release'")
     set(CMAKE_BUILD_TYPE "Release")
 endif()
+
+# Enable folders in IDEs like Visual Studio
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS ON)
 
 include(GNUInstallDirs)
 include(CMakeDependentOption)
@@ -15,41 +24,12 @@ include(CMakeDependentOption)
 option(CLINGODL_BUILD_WITH_SYSTEM_CLINGO "if true the local clingo copy will not be used" OFF)
 option(CLINGODL_BUILD_STATIC "do not build shared libraries" OFF)
 option(CLINGODL_MANAGE_RPATH "set rpath if not installed into system directory" ON)
+option(CLINGODL_BUILD_TESTS "build tests" OFF)
 
 CMAKE_DEPENDENT_OPTION(CLINGODL_BUILD_SHARED "build clingo-dl library shared" ON "NOT CLINGODL_BUILD_STATIC" OFF)
 
 mark_as_advanced(CLINGODL_BUILD_STATIC)
 mark_as_advanced(CLINGODL_BUILD_SHARED)
-
-if (NOT MSVC)
-    if (NOT CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
-        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-    endif()
-    if (NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
-        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-    endif()
-    if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
-        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-    endif()
-else()
-    set(VC_RELEASE_LINK_OPTIONS /LTCG)
-    SET(CMAKE_EXE_LINKER_FLAGS_RELEASE    "${CMAKE_EXE_LINKER_FLAGS_RELEASE}    ${VC_RELEASE_LINK_OPTIONS}")
-    SET(CMAKE_MODULE_LINKER_FLAGS_RELEASE "${CMAKE_MODULE_LINKER_FLAGS_RELEASE} ${VC_RELEASE_LINK_OPTIONS}")
-    SET(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} ${VC_RELEASE_LINK_OPTIONS}")
-    SET(CMAKE_STATIC_LINKER_FLAGS_RELEASE "${CMAKE_STATIC_LINKER_FLAGS_RELEASE} ${VC_RELEASE_LINK_OPTIONS}")
-endif()
-
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS ON)
-
-if (POLICY CMP0063)
-    if (CLINGODL_BUILD_SHARED)
-        set(CMAKE_CXX_VISIBILITY_PRESET hidden)
-        set(CMAKE_C_VISIBILITY_PRESET hidden)
-    endif()
-    cmake_policy(SET CMP0063 NEW)
-endif()
 
 if (NOT CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -64,10 +44,36 @@ if (NOT CMAKE_IMPORT_LIBRARY_PREFIX)
     set(CMAKE_IMPORT_LIBRARY_PREFIX import_)
 endif()
 
-if (CLINGODL_BUILD_SHARED)
-    set(clingodl_lib_type SHARED)
-else()
-    set(clingodl_lib_type STATIC)
+if (MSVC)
+    set(VC_RELEASE_LINK_OPTIONS /LTCG)
+    SET(CMAKE_EXE_LINKER_FLAGS_RELEASE    "${CMAKE_EXE_LINKER_FLAGS_RELEASE}    ${VC_RELEASE_LINK_OPTIONS}")
+    SET(CMAKE_MODULE_LINKER_FLAGS_RELEASE "${CMAKE_MODULE_LINKER_FLAGS_RELEASE} ${VC_RELEASE_LINK_OPTIONS}")
+    SET(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} ${VC_RELEASE_LINK_OPTIONS}")
+    SET(CMAKE_STATIC_LINKER_FLAGS_RELEASE "${CMAKE_STATIC_LINKER_FLAGS_RELEASE} ${VC_RELEASE_LINK_OPTIONS}")
+    if (CLINGODL_BUILD_STATIC)
+        # force static runtime
+        string(REGEX REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+    endif()
+endif()
+
+if (POLICY CMP0063 AND CLINGODL_BUILD_SHARED)
+    set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+    set(CMAKE_C_VISIBILITY_PRESET hidden)
+endif()
+
+enable_testing()
+
+if (NOT CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+endif()
+if (NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+endif()
+if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+endif()
+if (NOT CMAKE_IMPORT_LIBRARY_PREFIX)
+    set(CMAKE_IMPORT_LIBRARY_PREFIX import_)
 endif()
 
 if (CLINGODL_MANAGE_RPATH)
@@ -94,33 +100,5 @@ else()
     add_subdirectory(clingo)
 endif()
 
-
-set(appfiles main.cc)
-set(libfiles propagator.cc clingo-dl.cc)
-
-add_library(libclingo-dl ${clingodl_lib_type} ${libfiles})
-target_include_directories(libclingo-dl PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
-target_compile_definitions(libclingo-dl PRIVATE CLINGODL_BUILD_LIBRARY)
-if (NOT CLINGODL_BUILD_STATIC AND CLINGODL_BUILD_SHARED)
-    set_target_properties(libclingo-dl PROPERTIES POSITION_INDEPENDENT_CODE ON)
-endif()
-target_link_libraries(libclingo-dl PRIVATE libclingo)
-if (NOT CLINGODL_BUILD_SHARED)
-    target_compile_definitions(libclingo-dl PUBLIC CLINGODL_NO_VISIBILITY)
-else()
-    set_target_properties(libclingo-dl PROPERTIES PUBLIC_HEADER clingo-dl.h)
-endif()
-set_target_properties(libclingo-dl PROPERTIES
-    OUTPUT_NAME clingo-dl
-    LIBRARY_OUTPUT_NAME clingo-dl
-    FOLDER lib)
-
-
-add_executable(clingo-dl ${appfiles})
-target_link_libraries(clingo-dl PRIVATE libclingo libclingo-dl)
-set_target_properties(clingo-dl PROPERTIES FOLDER exe)
-install(TARGETS clingo-dl libclingo-dl
-                RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-                LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-                ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-                PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+add_subdirectory(libclingo-dl)
+add_subdirectory(app)

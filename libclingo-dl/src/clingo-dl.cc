@@ -23,7 +23,7 @@
 // // }}}
 
 #include <clingo-dl.h>
-#include <propagator.hh>
+#include <clingo-dl/propagator.hh>
 
 #include <cerrno>
 

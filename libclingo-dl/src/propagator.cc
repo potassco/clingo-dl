@@ -22,7 +22,7 @@
 //
 // // }}}
 
-#include <propagator.hh>
+#include <clingo-dl/propagator.hh>
 
 template <typename T>
 T evaluate_real(char const *);

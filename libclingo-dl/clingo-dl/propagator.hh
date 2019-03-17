@@ -26,7 +26,7 @@
 #define CLINGODL_PROPAGATOR_HH
 
 #include <clingo.hh>
-#include <util.hh>
+#include <clingo-dl/util.hh>
 
 #include <unordered_map>
 

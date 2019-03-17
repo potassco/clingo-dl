@@ -49,6 +49,7 @@ flags = [
 '-xc++',
 '-std=c++14',
 '-I.',
+'-Ilibclingo-dl',
 '-I/home/wv/bin/linux/64/gcc-7.1/include/c++/v1',
 '-I/home/wv/opt/clingo-banane/include',
 '-Iclingo/libclingo',

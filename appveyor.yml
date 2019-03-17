@@ -36,12 +36,10 @@ build:
 
 test_script:
 - cmd: >-
+    ctest --output-on-failure -C "Release"
 
     cmake --build . --target install --config release
 
     clingo-dl --version
 
     python scratch/runtests.py
-
-# this one should work but doesn't on appveyor ...
-# echo ^^^&diff{x-0} ^^^<= 42. | clingo-dl | findstr /b dl(x,\"0\")
