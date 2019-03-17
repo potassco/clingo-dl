@@ -28,7 +28,7 @@ before_build:
 
     conda install -c potassco/label/dev clingo
 
-    cmake -G "%GEN%" . -DCMAKE_INSTALL_PREFIX=%CONDA_PREFIX%\Library
+    cmake -G "%GEN%" . -DCLINGODL_BUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX=%CONDA_PREFIX%\Library
 
 build:
   project: clingodl.sln
