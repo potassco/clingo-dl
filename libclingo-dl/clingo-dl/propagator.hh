@@ -849,11 +849,17 @@ struct Stats {
     std::vector<DLStats> dl_stats;
 };
 
+struct FactState {
+    std::vector<literal_t> lits;
+    size_t limit{0};
+    size_t done{0};
+};
+
 template <typename T>
 struct DLState {
     DLState(DLStats &stats, const std::vector<Edge<T>> &edges, PropagationMode propagate)
         : stats(stats)
-        , dl_graph(stats, edges, propagate) {}
+        , dl_graph(stats, edges, propagate) { }
     DLStats &stats;
     DifferenceLogicGraph<T> dl_graph;
 };
@@ -916,6 +922,9 @@ public:
     // initialization
 
     void init(PropagateInit &init) override {
+        if (!edges_.empty()) {
+            init.set_check_mode(PropagatorCheckMode::Partial);
+        }
         Timer t{stats_.time_init};
         for (auto atom : init.theory_atoms()) {
             auto term = atom.term();
@@ -983,14 +992,38 @@ public:
     void initialize_states(PropagateInit &init) {
         stats_.dl_stats.resize(init.number_of_threads());
         states_.clear();
+        if (facts_.size() < init.number_of_threads()) {
+            facts_.resize(init.number_of_threads());
+        }
         for (int i = 0; i < init.number_of_threads(); ++i) {
             states_.emplace_back(stats_.dl_stats[i], edges_, propagate_);
+            facts_[i].limit = facts_[i].lits.size();
+            facts_[i].done = 0;
         }
     }
 
     // propagation
 
-    void propagate(PropagateControl &ctl, LiteralSpan changes) override {
+    void check(PropagateControl &ctl) override {
+        DLState<T> &state = states_[ctl.thread_id()];
+        auto &facts = facts_[ctl.thread_id()];
+        auto assignment = ctl.assignment();
+        if (assignment.decision_level() == 0 && facts.done < facts.limit) {
+            do_propagate(ctl, {facts.lits.data(), facts.lits.data() + facts.limit});
+            facts.done = facts.limit;
+        }
+#if defined(CHECKSOLUTION) || defined(CROSSCHECK)
+        for (auto &x : edges_) {
+            if (ctl.assignment().is_true(x.lit)) {
+                if (!state.dl_graph.node_value_defined(x.from) || !state.dl_graph.node_value_defined(x.to) || !(state.dl_graph.node_value(x.from) - state.dl_graph.node_value(x.to) <= x.weight)) {
+                    throw std::logic_error("not a valid solution");
+                }
+            }
+        }
+#endif
+    }
+
+    void do_propagate(PropagateControl &ctl, LiteralSpan changes) {
         DLState<T> &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_propagate};
         auto level = ctl.assignment().decision_level();
@@ -1021,6 +1054,13 @@ public:
             }
         }
     }
+    void propagate(PropagateControl &ctl, LiteralSpan changes) override {
+        if (ctl.assignment().decision_level() == 0) {
+            auto &facts = facts_[ctl.thread_id()];
+            facts.lits.insert(facts.lits.end(), changes.begin(), changes.end());
+        }
+        do_propagate(ctl, changes);
+    }
 
     // undo
 
@@ -1030,19 +1070,6 @@ public:
         Timer t{state.stats.time_undo};
         state.dl_graph.backtrack();
     }
-
-#if defined(CHECKSOLUTION) || defined(CROSSCHECK)
-    void check(PropagateControl &ctl) override {
-        auto &state = states_[ctl.thread_id()];
-        for (auto &x : edges_) {
-            if (ctl.assignment().is_true(x.lit)) {
-                if (!state.dl_graph.node_value_defined(x.from) || !state.dl_graph.node_value_defined(x.to) || !(state.dl_graph.node_value(x.from) - state.dl_graph.node_value(x.to) <= x.weight)) {
-                    throw std::logic_error("not a valid solution");
-                }
-            }
-        }
-    }
-#endif
 
     void extend_model(Model &model) {
         auto &state = states_[model.thread_id()];
@@ -1098,6 +1125,7 @@ public:
 
 private:
     std::vector<DLState<T>> states_;
+    std::vector<FactState> facts_;
     std::unordered_multimap<literal_t, int> lit_to_edges_;
     std::unordered_multimap<literal_t, int> false_lit_to_edges_;
     std::vector<Edge<T>> edges_;
