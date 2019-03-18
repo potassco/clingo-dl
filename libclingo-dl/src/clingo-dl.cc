@@ -85,18 +85,18 @@ public:
 };
 
 template<typename T>
-T *get_value(clingodl_value_t *value);
+void set_value(clingodl_value_t *variant, T value);
 
 template<>
-int *get_value<int>(clingodl_value_t *value) {
-    value->type = clingodl_value_type_int;
-    return &value->int_number;
+void set_value<int>(clingodl_value_t *variant, int value) {
+    variant->type = clingodl_value_type_int;
+    variant->int_number = value;
 }
 
 template<>
-double *get_value<double>(clingodl_value_t *value) {
-    value->type = clingodl_value_type_double;
-    return &value->double_number;
+void set_value<double>(clingodl_value_t *variant, double value) {
+    variant->type = clingodl_value_type_int;
+    variant->int_number = value;
 }
 
 template<typename T>
@@ -142,7 +142,7 @@ diff_term {- : 1, binary, left};
     }
     void get_value(uint32_t thread_id, size_t index, clingodl_value_t *value) override {
         assert(index > 0 && index <= prop_.num_vertices());
-        *::get_value<T>(value) = prop_.lower_bound(thread_id, index - 1);
+        set_value(value, prop_.lower_bound(thread_id, index - 1));
     }
 
     bool next(uint32_t thread_id, size_t *current) override {
