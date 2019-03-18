@@ -852,7 +852,6 @@ struct Stats {
 struct FactState {
     std::vector<literal_t> lits;
     size_t limit{0};
-    size_t done{0};
 };
 
 template <typename T>
@@ -998,7 +997,6 @@ public:
         for (int i = 0; i < init.number_of_threads(); ++i) {
             states_.emplace_back(stats_.dl_stats[i], edges_, propagate_);
             facts_[i].limit = facts_[i].lits.size();
-            facts_[i].done = 0;
         }
     }
 
@@ -1008,9 +1006,9 @@ public:
         DLState<T> &state = states_[ctl.thread_id()];
         auto &facts = facts_[ctl.thread_id()];
         auto assignment = ctl.assignment();
-        if (assignment.decision_level() == 0 && facts.done < facts.limit) {
+        if (assignment.decision_level() == 0 && facts.limit > 0) {
             do_propagate(ctl, {facts.lits.data(), facts.lits.data() + facts.limit});
-            facts.done = facts.limit;
+            facts.limit = 0;
         }
 #if defined(CHECKSOLUTION) || defined(CROSSCHECK)
         for (auto &x : edges_) {
