@@ -29,6 +29,7 @@
 #include <clingo-dl/util.hh>
 
 #include <unordered_map>
+#include <list>
 
 //#define CROSSCHECK
 #define CHECKSOLUTION
@@ -846,7 +847,7 @@ struct Stats {
         }
     }
     Duration time_init = Duration{0};
-    std::vector<DLStats> dl_stats;
+    std::list<DLStats> dl_stats;
 };
 
 template <typename T>
@@ -981,10 +982,9 @@ public:
     }
 
     void initialize_states(PropagateInit &init) {
-        stats_.dl_stats.resize(init.number_of_threads());
-        states_.clear();
-        for (int i = 0; i < init.number_of_threads(); ++i) {
-            states_.emplace_back(stats_.dl_stats[i], edges_, propagate_);
+        for (int i = states_.size(); i < init.number_of_threads(); ++i) {
+            stats_.dl_stats.emplace_back();
+            states_.emplace_back(stats_.dl_stats.back(), edges_, propagate_);
         }
     }
 
