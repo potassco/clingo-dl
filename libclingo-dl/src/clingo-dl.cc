@@ -261,6 +261,37 @@ static bool parse_mode(const char *value, void *data) {
     }
     return false;
 }
+static bool parse_bool(const char *value, void *data) {
+    auto &result = *static_cast<bool*>(data);
+    if (iequals(value, "no") || iequals(value, "off") || iequals(value, "0")) {
+        result = false;
+        return true;
+    }
+    if (iequals(value, "yes") || iequals(value, "on") || iequals(value, "1")) {
+        result = true;
+        return true;
+    }
+    return false;
+}
+
+extern "C" bool clingodl_configure_propagator(clingodl_propagator_t *prop, char const *key, char const *value) {
+    if (strcmp(key, "propagate") == 0) {
+        return parse_mode(value, &prop->mode);
+    }
+    if (strcmp(key, "propagate-root") == 0) {
+        return parse_uint64(value, &prop->propagate_root);
+    }
+    if (strcmp(key, "propagate-budget") == 0) {
+        return parse_uint64(value, &prop->propagate_budget);
+    }
+    if (strcmp(key, "rdl") == 0) {
+        return parse_bool(value, &prop->rdl);
+    }
+    if (strcmp(key, "strict") == 0) {
+        return parse_bool(value, &prop->strict);
+    }
+    return false;
+}
 
 extern "C" bool clingodl_register_options(clingodl_propagator_t *prop, clingo_options_t* options) {
     CLINGODL_TRY {
