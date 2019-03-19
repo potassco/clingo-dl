@@ -157,6 +157,47 @@ struct EdgeState {
 
 enum class PropagationMode { Check = 0, Trivial = 1, Weak = 2, WeakPlus = 3, Strong = 4 };
 
+struct ThreadConfig {
+    std::pair<bool,uint64_t> propagate_root{false,0};
+    std::pair<bool,uint64_t> propagate_budget{false,0};
+    std::pair<bool,PropagationMode> mode{false,PropagationMode::Check};
+};
+
+struct PropagatorConfig {
+    bool strict{false};
+    uint64_t propagate_root{0};
+    uint64_t propagate_budget{0};
+    PropagationMode mode{PropagationMode::Check};
+    std::vector<ThreadConfig> thread_config;
+
+    uint64_t get_propagate_root(id_t thread_id) {
+        if (thread_id < thread_config.size() && thread_config[thread_id].propagate_root.first) {
+            return thread_config[thread_id].propagate_root.second;
+        }
+        return propagate_root;
+    }
+    uint64_t get_propagate_budget(id_t thread_id) {
+        if (thread_id < thread_config.size() && thread_config[thread_id].propagate_budget.first) {
+            return thread_config[thread_id].propagate_budget.second;
+        }
+        return propagate_budget;
+    }
+    PropagationMode get_mode(id_t thread_id) {
+        if (thread_id < thread_config.size() && thread_config[thread_id].mode.first) {
+            return thread_config[thread_id].mode.second;
+        }
+        return mode;
+    }
+
+    ThreadConfig &ensure(id_t thread_id) {
+        if (thread_config.size() < thread_id + 1) {
+            thread_config.resize(thread_id + 1);
+        }
+        return thread_config[thread_id];
+    }
+};
+
+
 template <typename T>
 class DifferenceLogicGraph : private HeapToM<T, DifferenceLogicGraph<T>>, private HeapFromM<T, DifferenceLogicGraph<T>> {
     using HTM = HeapToM<T, DifferenceLogicGraph<T>>;
@@ -511,6 +552,10 @@ public:
         edge_states_[uv_idx].active = false;
     }
 
+    PropagationMode mode() const {
+        return propagate_;
+    }
+
 private:
     void add_candidate_edge(int uv_idx) {
         auto &uv = edges_[uv_idx];
@@ -856,11 +901,15 @@ struct FactState {
 
 template <typename T>
 struct DLState {
-    DLState(DLStats &stats, const std::vector<Edge<T>> &edges, PropagationMode propagate)
+    DLState(DLStats &stats, const std::vector<Edge<T>> &edges, PropagationMode propagate, uint64_t propagate_root, uint64_t propagate_budget)
         : stats(stats)
-        , dl_graph(stats, edges, propagate) { }
+        , dl_graph(stats, edges, propagate)
+        , propagate_root{propagate_root}
+        , propagate_budget{propagate_budget} { }
     DLStats &stats;
     DifferenceLogicGraph<T> dl_graph;
+    uint64_t propagate_root;
+    uint64_t propagate_budget;
 };
 
 template <typename T>
@@ -907,34 +956,40 @@ inline Clingo::Symbol to_symbol(double value) {
 template <typename T>
 class DifferenceLogicPropagator : public Propagator {
 public:
-    DifferenceLogicPropagator(Stats &stats, bool strict, uint64_t propagate_root, uint64_t propagate_budget, PropagationMode propagate)
-        : stats_(stats)
-        , propagate_root_{propagate_root}
-        , propagate_budget_{propagate_budget}
-        , propagate_(propagate)
-        , strict_(strict)
-        {
-            map_vert(Clingo::Number(0));
-        }
+    DifferenceLogicPropagator(Stats &stats, PropagatorConfig const &conf)
+    : stats_(stats)
+    , conf_{conf} {
+        map_vert(Clingo::Number(0));
+    }
 
 public:
     // initialization
 
     void init(PropagateInit &init) override {
+        bool add_inv = false;
+        for (int i = 0; i < init.number_of_threads(); ++i) {
+            if (conf_.get_mode(i) >= PropagationMode::Strong || conf_.get_propagate_root(i) > 0 || conf_.get_propagate_budget(i) > 0) {
+                add_inv = true;
+                break;
+            }
+        }
+
         if (!edges_.empty()) {
             init.set_check_mode(PropagatorCheckMode::Partial);
         }
+
         Timer t{stats_.time_init};
         for (auto atom : init.theory_atoms()) {
             auto term = atom.term();
             if (term.to_string() == "diff") {
-                add_edge_atom(init, atom);
+                add_edge_atom(init, atom, add_inv);
             }
         }
+
         initialize_states(init);
     }
 
-    void add_edge_atom(PropagateInit &init, TheoryAtom const &atom) {
+    void add_edge_atom(PropagateInit &init, TheoryAtom const &atom, bool add_inv) {
         char const *msg = "parsing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";
         int lit = init.solver_literal(atom.literal());
         if (!atom.has_guard()) {
@@ -963,15 +1018,15 @@ public:
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
         init.add_watch(lit);
-        if (propagate_ >= PropagationMode::Strong || propagate_budget_ > 0 || propagate_root_ > 0) {
+        if (add_inv) {
             false_lit_to_edges_.emplace(-lit, id);
             init.add_watch(-lit);
         }
-        if (strict_) {
+        if (conf_.strict) {
             auto id = numeric_cast<int>(edges_.size());
             edges_.push_back({v_id, u_id, -weight - 1, -lit});
             lit_to_edges_.emplace(-lit, id);
-            if (propagate_ >= PropagationMode::Strong || propagate_budget_ > 0 || propagate_root_ > 0) {
+            if (add_inv) {
                 false_lit_to_edges_.emplace(lit, id);
             }
             else {
@@ -995,7 +1050,7 @@ public:
             facts_.resize(init.number_of_threads());
         }
         for (int i = 0; i < init.number_of_threads(); ++i) {
-            states_.emplace_back(stats_.dl_stats[i], edges_, propagate_);
+            states_.emplace_back(stats_.dl_stats[i], edges_, conf_.get_mode(i), conf_.get_propagate_root(i), conf_.get_propagate_budget(i));
             facts_[i].limit = facts_[i].lits.size();
         }
     }
@@ -1042,9 +1097,9 @@ public:
                         return ctl.add_clause(clause) && ctl.propagate();
                     });
                     if (!ret) { return; }
-                    bool propagate = propagate_ >= PropagationMode::Strong;
-                    propagate = propagate || ctl.assignment().decision_level() < propagate_root_;
-                    propagate = propagate || (propagate_budget_ > 0 && state.dl_graph.can_propagate() && state.stats.propagate_cost_add + propagate_budget_ > state.stats.propagate_cost_from + state.stats.propagate_cost_to);
+                    bool propagate = state.dl_graph.mode() >= PropagationMode::Strong;
+                    propagate = propagate || ctl.assignment().decision_level() < state.propagate_root;
+                    propagate = propagate || (state.propagate_budget > 0 && state.dl_graph.can_propagate() && state.stats.propagate_cost_add + state.propagate_budget > state.stats.propagate_cost_from + state.stats.propagate_cost_to);
                     if (!propagate) { state.dl_graph.disable_propagate(); }
                     // if !propgate -> can no longer propagate!
                     if (propagate && !state.dl_graph.propagate(it->second, ctl)) { return; }
@@ -1130,10 +1185,7 @@ private:
     std::vector<Clingo::Symbol> vert_map_;
     std::unordered_map<Clingo::Symbol, int> vert_map_inv_;
     Stats &stats_;
-    uint64_t propagate_root_;
-    uint64_t propagate_budget_;
-    PropagationMode propagate_;
-    bool strict_;
+    PropagatorConfig conf_;
 };
 
 

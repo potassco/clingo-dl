@@ -102,8 +102,8 @@ void set_value<double>(clingodl_value_t *variant, double value) {
 template<typename T>
 class DLPropagatorFacade : public PropagatorFacade {
 public:
-    DLPropagatorFacade(clingo_control_t *ctl, bool strict, uint64_t propagate_root, uint64_t propagate_budget, PropagationMode mode)
-    : prop_{step_, strict, propagate_root, propagate_budget, mode} {
+    DLPropagatorFacade(clingo_control_t *ctl, PropagatorConfig const &conf)
+    : prop_{step_, conf} {
         CLINGO_CALL(clingo_control_add(ctl,"base", nullptr, 0, R"(#theory dl {
 term{};
 constant {
@@ -196,11 +196,8 @@ private:
 
 struct clingodl_propagator {
     std::unique_ptr<PropagatorFacade> clingodl{nullptr};
-    bool strict{false};
-    bool rdl{false};
-    uint64_t propagate_root{0};
-    uint64_t propagate_budget{0};
-    PropagationMode mode{PropagationMode::Check};
+    bool rdl;
+    PropagatorConfig config;
 };
 
 extern "C" bool clingodl_create_propagator(clingodl_propagator_t **prop) {
@@ -211,10 +208,10 @@ extern "C" bool clingodl_create_propagator(clingodl_propagator_t **prop) {
 extern "C" bool clingodl_register_propagator(clingodl_propagator_t *prop, clingo_control_t* ctl) {
     CLINGODL_TRY {
         if (!prop->rdl) {
-            prop->clingodl = std::make_unique<DLPropagatorFacade<int>>(ctl, prop->strict, prop->propagate_root, prop->propagate_budget, prop->mode);
+            prop->clingodl = std::make_unique<DLPropagatorFacade<int>>(ctl, prop->config);
         }
         else {
-            prop->clingodl = std::make_unique<DLPropagatorFacade<double>>(ctl, prop->strict, prop->propagate_root, prop->propagate_budget, prop->mode);
+            prop->clingodl = std::make_unique<DLPropagatorFacade<double>>(ctl, prop->config);
         }
     }
     CLINGODL_CATCH;
@@ -225,41 +222,76 @@ extern "C" bool clingodl_destroy_propagator(clingodl_propagator_t *prop) {
     CLINGODL_CATCH;
 }
 
-static bool iequals(char const *a, char const *b) {
+static char const *iequals_pre(char const *a, char const *b) {
     for (; *a && *b; ++a, ++b) {
-        if (tolower(*a) != tolower(*b)) { return false; }
+        if (tolower(*a) != tolower(*b)) { return nullptr; }
     }
-    return !*a && !*b;
+    return *b ? nullptr : a;
 }
-static bool parse_uint64(const char *value, void *data) {
+static bool iequals(char const *a, char const *b) {
+    a = iequals_pre(a, b);
+    return !*a;
+}
+static char const *parse_uint64_pre(const char *value, void *data) {
     auto &root = *static_cast<uint64_t*>(data);
     char *end = nullptr;
     root = std::strtoull(value, &end, 10);
-    return end != value && static_cast<size_t>(end - value) == std::strlen(value) && errno == 0;
+    return end != value && errno == 0 ? end : nullptr;
+
 }
-static bool parse_mode(const char *value, void *data) {
-    auto &mode = *static_cast<PropagationMode*>(data);
-    if (iequals(value, "no")) {
-        mode = PropagationMode::Check;
+static bool parse_uint64(const char *value, void *data) {
+    value = parse_uint64_pre(value, data);
+    return !*value;
+}
+
+template <typename F, typename G>
+bool set_config(char const *value, void *data, F f, G g) {
+    auto &config = *static_cast<PropagatorConfig*>(data);
+    uint64_t id = 0;
+    if (*value == '\0') {
+        f(config);
         return true;
     }
-    else if (iequals(value, "inverse")) {
-        mode = PropagationMode::Trivial;
-        return true;
-    }
-    else if (iequals(value, "partial")) {
-        mode = PropagationMode::Weak;
-        return true;
-    }
-    else if (iequals(value, "partial+")) {
-        mode = PropagationMode::WeakPlus;
-        return true;
-    }
-    else if (iequals(value, "full")) {
-        mode = PropagationMode::Strong;
+    else if (*value == ',' && parse_uint64(value + 1, &id) && id < 64) {
+        g(config.ensure(id));
         return true;
     }
     return false;
+}
+
+static bool parse_root(const char *value, void *data) {
+    uint64_t x = 0;
+    return (value = parse_uint64_pre(value, &x)) && set_config(value, data,
+        [x](PropagatorConfig &config) { config.propagate_root = x; },
+        [x](ThreadConfig &config) { config.propagate_root = {true, x}; });
+}
+static bool parse_budget(const char *value, void *data) {
+    uint64_t x = 0;
+    return (value = parse_uint64_pre(value, &x)) && set_config(value, data,
+        [x](PropagatorConfig &config) { config.propagate_budget = x; },
+        [x](ThreadConfig &config) { config.propagate_budget = {true, x}; });
+}
+static bool parse_mode(const char *value, void *data) {
+    PropagationMode mode = PropagationMode::Check;
+    char const *rem = nullptr;
+    if ((rem = iequals_pre(value, "no"))) {
+        mode = PropagationMode::Check;
+    }
+    else if ((rem = iequals_pre(value, "inverse"))) {
+        mode = PropagationMode::Trivial;
+    }
+    else if ((rem = iequals_pre(value, "partial+"))) {
+        mode = PropagationMode::WeakPlus;
+    }
+    else if ((rem = iequals_pre(value, "partial"))) {
+        mode = PropagationMode::Weak;
+    }
+    else if ((rem = iequals_pre(value, "full"))) {
+        mode = PropagationMode::Strong;
+    }
+    return rem && set_config(rem, data,
+        [mode](PropagatorConfig &config) { config.mode = mode; },
+        [mode](ThreadConfig &config) { config.mode = {true, mode}; });
 }
 static bool parse_bool(const char *value, void *data) {
     auto &result = *static_cast<bool*>(data);
@@ -276,19 +308,19 @@ static bool parse_bool(const char *value, void *data) {
 
 extern "C" bool clingodl_configure_propagator(clingodl_propagator_t *prop, char const *key, char const *value) {
     if (strcmp(key, "propagate") == 0) {
-        return parse_mode(value, &prop->mode);
+        return parse_mode(value, &prop->config);
     }
     if (strcmp(key, "propagate-root") == 0) {
-        return parse_uint64(value, &prop->propagate_root);
+        return parse_root(value, &prop->config);
     }
     if (strcmp(key, "propagate-budget") == 0) {
-        return parse_uint64(value, &prop->propagate_budget);
+        return parse_budget(value, &prop->config);
     }
     if (strcmp(key, "rdl") == 0) {
         return parse_bool(value, &prop->rdl);
     }
     if (strcmp(key, "strict") == 0) {
-        return parse_bool(value, &prop->strict);
+        return parse_bool(value, &prop->config);
     }
     return false;
 }
@@ -298,29 +330,36 @@ extern "C" bool clingodl_register_options(clingodl_propagator_t *prop, clingo_op
         char const * group = "Clingo.DL Options";
         CLINGO_CALL(clingo_options_add(options, group, "propagate",
             "Set propagation mode [no]\n"
-            "      <mode>: {no,inverse,partial,partial+,full}\n"
+            "      <mode>  : {no,inverse,partial,partial+,full}[,<thread>]\n"
             "        no      : No propagation; only detect conflicts\n"
             "        inverse : Check inverse constraints\n"
             "        partial : Detect some conflicting constraints\n"
             "        partial+: Detect some more conflicting constraints\n"
-            "        full    : Detect all conflicting constraints",
-            &parse_mode, &prop->mode, false, "<mode>"));
+            "        full    : Detect all conflicting constraints\n"
+            "      <thread>: Restrict to thread",
+            &parse_mode, &prop->config, true, "<mode>"));
         CLINGO_CALL(clingo_options_add(options, group, "propagate-root",
-            "Enable full propagation below decision level <n> [0]",
-            &parse_uint64, &prop->propagate_root, false, "<n>"));
+            "Enable full propagation below decision level [0]\n"
+            "      <arg>   : <n>[,<thread>]\n"
+            "      <n>     : Upper bound for decision level\n"
+            "      <thread>: Restrict to thread",
+            &parse_root, &prop->config, true, "<arg>"));
         CLINGO_CALL(clingo_options_add(options, group, "propagate-budget",
-            "Enable full propagation limiting to budget <n> [0]\n"
-            "                            (if possible use with --propagate-root=1)\n",
-            &parse_uint64, &prop->propagate_budget, false, "<n>"));
+            "Enable full propagation limiting to budget [0]\n"
+            "      <arg>   : <n>[,<thread>]\n"
+            "      <n>     : Budget roughly corresponding to cost of consistency checks\n"
+            "                (if possible use with --propagate-root greater 0)\n"
+            "      <thread>: Restrict to thread\n",
+            &parse_budget, &prop->config, true, "<arg>"));
         CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers.", &prop->rdl));
-        CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode.", &prop->strict));
+        CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode.", &prop->config.strict));
     }
     CLINGODL_CATCH;
 }
 
 extern "C" bool clingodl_validate_options(clingodl_propagator_t *prop) {
     CLINGODL_TRY {
-        if (prop->strict && prop->rdl) {
+        if (prop->config.strict && prop->rdl) {
             throw std::runtime_error("real difference logic not available with strict semantics");
         }
     }
