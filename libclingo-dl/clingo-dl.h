@@ -93,6 +93,7 @@ CLINGODL_VISIBILITY_DEFAULT bool clingodl_register_propagator(clingodl_propagato
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_destroy_propagator(clingodl_propagator_t *propagator);
 
 //! configure propagator manually (without using clingo's options facility)
+//! Note that the propagator has to be configured before registering it and cannot be reconfigured.
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_configure_propagator(clingodl_propagator_t *prop, char const *key, char const *value);
 
 //! add options for your theory
