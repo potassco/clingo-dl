@@ -231,18 +231,27 @@ static char const *iequals_pre(char const *a, char const *b) {
 }
 static bool iequals(char const *a, char const *b) {
     a = iequals_pre(a, b);
-    return !*a;
+    return a && !*a;
 }
 static char const *parse_uint64_pre(const char *value, void *data) {
-    auto &root = *static_cast<uint64_t*>(data);
-    char *end = nullptr;
-    root = std::strtoull(value, &end, 10);
-    return end != value && errno == 0 ? end : nullptr;
+    auto &res = *static_cast<uint64_t*>(data);
+    char const *it = value;
 
+    for (; *it; ++it) {
+        if ('0' <= *it && *it <= '9') {
+            auto tmp = res;
+            res *= 10;
+            res += *it - '0';
+            if (res < tmp) { return nullptr; }
+        }
+        else { break; }
+    }
+
+    return value != it ? it : nullptr;
 }
 static bool parse_uint64(const char *value, void *data) {
     value = parse_uint64_pre(value, data);
-    return !*value;
+    return value && !*value;
 }
 
 template <typename F, typename G>
