@@ -235,7 +235,7 @@ public:
     void ensure_decision_level(int level, bool enable_propagate) {
         // initialize the trail
         if (changed_trail_.empty() || static_cast<int>(std::get<0>(changed_trail_.back())) < level) {
-            bool can_propagate = changed_trail_.empty() ? enable_propagate : std::get<4>(changed_trail_.back());
+            bool can_propagate = (changed_trail_.empty() || std::get<4>(changed_trail_.back())) && enable_propagate;
             changed_trail_.emplace_back(level, static_cast<int>(changed_nodes_.size()),
                                                static_cast<int>(changed_edges_.size()),
                                                static_cast<int>(inactive_edges_.size()),
@@ -1079,7 +1079,7 @@ public:
         DLState<T> &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_propagate};
         auto level = ctl.assignment().decision_level();
-        bool enable_propagate = state.dl_graph.mode() >= PropagationMode::Strong || state.propagate_root > 0 || state.propagate_budget > 0;
+        bool enable_propagate = state.dl_graph.mode() >= PropagationMode::Strong || level < state.propagate_root || state.propagate_budget > 0;
         state.dl_graph.ensure_decision_level(level, enable_propagate);
         for (auto lit : changes) {
             auto it = lit_to_edges_.find(lit), ie = lit_to_edges_.end();
