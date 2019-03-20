@@ -26,6 +26,7 @@
 #include <clingo-dl/propagator.hh>
 
 #include <cerrno>
+#include <sstream>
 
 #define CLINGODL_TRY try
 #define CLINGODL_CATCH catch (...){ Clingo::Detail::handle_cxx_error(); return false; } return true
@@ -246,16 +247,19 @@ static bool parse_uint64(const char *value, void *data) {
 
 template <typename F, typename G>
 bool set_config(char const *value, void *data, F f, G g) {
-    auto &config = *static_cast<PropagatorConfig*>(data);
-    uint64_t id = 0;
-    if (*value == '\0') {
-        f(config);
-        return true;
+    try {
+        auto &config = *static_cast<PropagatorConfig*>(data);
+        uint64_t id = 0;
+        if (*value == '\0') {
+            f(config);
+            return true;
+        }
+        else if (*value == ',' && parse_uint64(value + 1, &id) && id < 64) {
+            g(config.ensure(id));
+            return true;
+        }
     }
-    else if (*value == ',' && parse_uint64(value + 1, &id) && id < 64) {
-        g(config.ensure(id));
-        return true;
-    }
+    catch (...) { }
     return false;
 }
 
@@ -306,23 +310,38 @@ static bool parse_bool(const char *value, void *data) {
     return false;
 }
 
+static bool check_parse(char const *key, bool ret) {
+    if (!ret) {
+        std::ostringstream msg;
+        msg << "invalid value for '" << key << "'";
+        clingo_set_error(clingo_error_runtime, msg.str().c_str());
+    }
+    return ret;
+}
+
 extern "C" bool clingodl_configure_propagator(clingodl_propagator_t *prop, char const *key, char const *value) {
-    if (strcmp(key, "propagate") == 0) {
-        return parse_mode(value, &prop->config);
+    CLINGODL_TRY {
+        if (strcmp(key, "propagate") == 0) {
+            return check_parse("propagate", parse_mode(value, &prop->config));
+        }
+        if (strcmp(key, "propagate-root") == 0) {
+            return check_parse("propagate-root", parse_root(value, &prop->config));
+        }
+        if (strcmp(key, "propagate-budget") == 0) {
+            return check_parse("propgate-budget", parse_budget(value, &prop->config));
+        }
+        if (strcmp(key, "rdl") == 0) {
+            return check_parse("rdl", parse_bool(value, &prop->rdl));
+        }
+        if (strcmp(key, "strict") == 0) {
+            return check_parse("strict", parse_bool(value, &prop->config));
+        }
+        std::ostringstream msg;
+        msg << "invalid configuration key '" << key << "'";
+        clingo_set_error(clingo_error_runtime, msg.str().c_str());
+        return false;
     }
-    if (strcmp(key, "propagate-root") == 0) {
-        return parse_root(value, &prop->config);
-    }
-    if (strcmp(key, "propagate-budget") == 0) {
-        return parse_budget(value, &prop->config);
-    }
-    if (strcmp(key, "rdl") == 0) {
-        return parse_bool(value, &prop->rdl);
-    }
-    if (strcmp(key, "strict") == 0) {
-        return parse_bool(value, &prop->config);
-    }
-    return false;
+    CLINGODL_CATCH;
 }
 
 extern "C" bool clingodl_register_options(clingodl_propagator_t *prop, clingo_options_t* options) {
