@@ -966,14 +966,6 @@ public:
     // initialization
 
     void init(PropagateInit &init) override {
-        bool add_inv = false;
-        for (int i = 0; i < init.number_of_threads(); ++i) {
-            if (conf_.get_mode(i) >= PropagationMode::Strong || conf_.get_propagate_root(i) > 0 || conf_.get_propagate_budget(i) > 0) {
-                add_inv = true;
-                break;
-            }
-        }
-
         if (!edges_.empty()) {
             init.set_check_mode(PropagatorCheckMode::Partial);
         }
@@ -982,14 +974,14 @@ public:
         for (auto atom : init.theory_atoms()) {
             auto term = atom.term();
             if (term.to_string() == "diff") {
-                add_edge_atom(init, atom, add_inv);
+                add_edge_atom(init, atom);
             }
         }
 
         initialize_states(init);
     }
 
-    void add_edge_atom(PropagateInit &init, TheoryAtom const &atom, bool add_inv) {
+    void add_edge_atom(PropagateInit &init, TheoryAtom const &atom) {
         char const *msg = "parsing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";
         int lit = init.solver_literal(atom.literal());
         if (!atom.has_guard()) {
@@ -1017,20 +1009,26 @@ public:
         auto id = numeric_cast<int>(edges_.size());
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
-        init.add_watch(lit);
-        if (add_inv) {
-            false_lit_to_edges_.emplace(-lit, id);
-            init.add_watch(-lit);
-        }
         if (conf_.strict) {
             auto id = numeric_cast<int>(edges_.size());
             edges_.push_back({v_id, u_id, -weight - 1, -lit});
             lit_to_edges_.emplace(-lit, id);
-            if (add_inv) {
-                false_lit_to_edges_.emplace(lit, id);
+        }
+        bool add = false;
+        for (int i = 0; i < init.number_of_threads(); ++i) {
+            init.add_watch(lit, i);
+            if (conf_.get_mode(i) >= PropagationMode::Strong || conf_.get_propagate_root(i) > 0 || conf_.get_propagate_budget(i) > 0) {
+                add = true;
+                init.add_watch(-lit, i);
             }
-            else {
-                init.add_watch(-lit);
+            else if (conf_.strict) {
+                init.add_watch(-lit, i);
+            }
+        }
+        if (add) {
+            false_lit_to_edges_.emplace(-lit, id);
+            if (conf_.strict) {
+                false_lit_to_edges_.emplace(lit, id);
             }
         }
     }
