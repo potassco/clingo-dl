@@ -25,7 +25,6 @@
 #include <clingo-dl.h>
 #include <clingo-dl/propagator.hh>
 
-#include <cerrno>
 #include <sstream>
 
 #define CLINGODL_TRY try
