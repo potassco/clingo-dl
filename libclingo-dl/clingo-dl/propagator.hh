@@ -232,10 +232,10 @@ public:
         std::get<4>(changed_trail_.back()) = false;
     }
 
-    void ensure_decision_level(int level) {
+    void ensure_decision_level(int level, bool enable_propagate) {
         // initialize the trail
         if (changed_trail_.empty() || static_cast<int>(std::get<0>(changed_trail_.back())) < level) {
-            bool can_propagate = changed_trail_.empty() || std::get<4>(changed_trail_.back());
+            bool can_propagate = changed_trail_.empty() ? enable_propagate : std::get<4>(changed_trail_.back());
             changed_trail_.emplace_back(level, static_cast<int>(changed_nodes_.size()),
                                                static_cast<int>(changed_edges_.size()),
                                                static_cast<int>(inactive_edges_.size()),
@@ -908,6 +908,7 @@ struct DLState {
         , propagate_budget{propagate_budget} { }
     DLStats &stats;
     DifferenceLogicGraph<T> dl_graph;
+    std::vector<literal_t> false_lits;
     uint64_t propagate_root;
     uint64_t propagate_budget;
 };
@@ -1078,14 +1079,22 @@ public:
         DLState<T> &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_propagate};
         auto level = ctl.assignment().decision_level();
-        state.dl_graph.ensure_decision_level(level);
+        bool enable_propagate = state.dl_graph.mode() >= PropagationMode::Strong || state.propagate_root > 0 || state.propagate_budget > 0;
+        state.dl_graph.ensure_decision_level(level, enable_propagate);
         for (auto lit : changes) {
-            for (auto it = false_lit_to_edges_.find(lit), ie = false_lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
-                if (state.dl_graph.edge_is_active(it->second)) {
-                    state.dl_graph.remove_candidate_edge(it->second);
+            auto it = lit_to_edges_.find(lit), ie = lit_to_edges_.end();
+            if (state.dl_graph.can_propagate()) {
+                for (auto it = false_lit_to_edges_.find(lit), ie = false_lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
+                    if (state.dl_graph.edge_is_active(it->second)) {
+                        state.dl_graph.remove_candidate_edge(it->second);
+                    }
                 }
             }
-            for (auto it = lit_to_edges_.find(lit), ie = lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
+            else if (it == ie) {
+                state.false_lits.emplace_back(lit);
+                ctl.remove_watch(lit);
+            }
+            for (; it != ie && it->first == lit; ++it) {
                 if (state.dl_graph.edge_is_active(it->second)) {
                     auto ret = state.dl_graph.add_edge(it->second, [&](std::vector<int> const &neg_cycle) {
                         std::vector<literal_t> clause;
@@ -1095,9 +1104,11 @@ public:
                         return ctl.add_clause(clause) && ctl.propagate();
                     });
                     if (!ret) { return; }
-                    bool propagate = state.dl_graph.mode() >= PropagationMode::Strong;
-                    propagate = propagate || ctl.assignment().decision_level() < state.propagate_root;
-                    propagate = propagate || (state.propagate_budget > 0 && state.dl_graph.can_propagate() && state.stats.propagate_cost_add + state.propagate_budget > state.stats.propagate_cost_from + state.stats.propagate_cost_to);
+                    bool propagate = (state.dl_graph.mode() >= PropagationMode::Strong) ||
+                        (level < state.propagate_root) || (
+                            state.propagate_budget > 0 &&
+                            state.dl_graph.can_propagate() &&
+                            state.stats.propagate_cost_add + state.propagate_budget > state.stats.propagate_cost_from + state.stats.propagate_cost_to);
                     if (!propagate) { state.dl_graph.disable_propagate(); }
                     // if !propgate -> can no longer propagate!
                     if (propagate && !state.dl_graph.propagate(it->second, ctl)) { return; }
@@ -1119,7 +1130,15 @@ public:
         static_cast<void>(changes);
         auto &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_undo};
+        auto old = state.dl_graph.can_propagate();
         state.dl_graph.backtrack();
+        if (!old && state.dl_graph.can_propagate()) {
+            for (auto &rem : state.false_lits) {
+                // NOTE: this is a problem with the API
+                const_cast<PropagateControl&>(ctl).add_watch(rem);
+            }
+            state.false_lits.clear();
+        }
     }
 
     void extend_model(Model &model) {
