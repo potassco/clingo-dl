@@ -1075,21 +1075,30 @@ public:
 #endif
     }
 
+    void disable_edge_by_lit(DLState<T> &state, literal_t lit) {
+        for (auto it = false_lit_to_edges_.find(lit), ie = false_lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
+            if (state.dl_graph.edge_is_active(it->second)) {
+                state.dl_graph.remove_candidate_edge(it->second);
+            }
+        }
+    }
+
     void do_propagate(PropagateControl &ctl, LiteralSpan changes) {
         DLState<T> &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_propagate};
         auto level = ctl.assignment().decision_level();
         bool enable_propagate = state.dl_graph.mode() >= PropagationMode::Strong || level < state.propagate_root || state.propagate_budget > 0;
         state.dl_graph.ensure_decision_level(level, enable_propagate);
+        if (state.dl_graph.can_propagate()) {
+            for (auto &lit : state.false_lits) {
+                if (ctl.assignment().is_true(lit)) { disable_edge_by_lit(state, lit); }
+                ctl.add_watch(lit);
+            }
+            state.false_lits.clear();
+        }
         for (auto lit : changes) {
             auto it = lit_to_edges_.find(lit), ie = lit_to_edges_.end();
-            if (state.dl_graph.can_propagate()) {
-                for (auto it = false_lit_to_edges_.find(lit), ie = false_lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
-                    if (state.dl_graph.edge_is_active(it->second)) {
-                        state.dl_graph.remove_candidate_edge(it->second);
-                    }
-                }
-            }
+            if (state.dl_graph.can_propagate()) { disable_edge_by_lit(state, lit); }
             else if (it == ie) {
                 state.false_lits.emplace_back(lit);
                 ctl.remove_watch(lit);
@@ -1130,15 +1139,7 @@ public:
         static_cast<void>(changes);
         auto &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_undo};
-        auto old = state.dl_graph.can_propagate();
         state.dl_graph.backtrack();
-        if (!old && state.dl_graph.can_propagate()) {
-            for (auto &rem : state.false_lits) {
-                // NOTE: this is a problem with the API
-                const_cast<PropagateControl&>(ctl).add_watch(rem);
-            }
-            state.false_lits.clear();
-        }
     }
 
     void extend_model(Model &model) {
