@@ -1155,7 +1155,7 @@ public:
             if (state.dl_graph.node_value_defined(idx)) {
                 SymbolVector params;
                 params.emplace_back(vert_map_[idx]);
-                params.emplace_back(to_symbol<T>(adjust + state.dl_graph.node_value(idx)));
+                params.emplace_back(to_symbol<T>(state.dl_graph.node_value(idx) - adjust));
                 vec.emplace_back(Function("dl",params));
             }
         }
