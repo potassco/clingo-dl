@@ -1191,7 +1191,7 @@ public:
         if (state.dl_graph.node_value_defined(0)) {
             adjust = state.dl_graph.node_value(0);
         }
-        return state.dl_graph.node_value(index) + adjust;
+        return state.dl_graph.node_value(index) - adjust;
     }
 
 private:
