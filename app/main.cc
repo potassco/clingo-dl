@@ -143,9 +143,9 @@ public:
         char const * group = "Clingo.DL Options";
         options.add(group, "minimize-variable",
             "Minimize the given variable\n"
-            "      <arg> : <variable>[,<initial>]\n"
+            "      <arg>   : <variable>[,<initial>]\n"
             "      <variable>: the variable to minimize_\n"
-            "      <initial>: upper bound for the variable\n",
+            "      <initial> : upper bound for the variable\n",
             [this](char const *value) { return parse_bound(value); });
     }
 

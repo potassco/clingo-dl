@@ -166,6 +166,7 @@ diff_term {- : 1, binary, left};
     void add_statistics(UserStatistics& root, Stats const &stats) {
         UserStatistics diff = root.add_subkey("DifferenceLogic", StatisticsType::Map);
         diff.add_subkey("Time init(s)", StatisticsType::Value).set_value(stats.time_init.count());
+        diff.add_subkey("Mutexes", StatisticsType::Value).set_value(stats.mutexes);
         UserStatistics threads = diff.add_subkey("Thread", StatisticsType::Array);
         threads.ensure_size(stats.dl_stats.size(), StatisticsType::Map);
         auto it = threads.begin();
@@ -235,6 +236,7 @@ static bool iequals(char const *a, char const *b) {
 static char const *parse_uint64_pre(const char *value, void *data) {
     auto &res = *static_cast<uint64_t*>(data);
     char const *it = value;
+    res = 0;
 
     for (; *it; ++it) {
         if ('0' <= *it && *it <= '9') {
@@ -282,6 +284,21 @@ static bool parse_budget(const char *value, void *data) {
     return (value = parse_uint64_pre(value, &x)) && set_config(value, data,
         [x](PropagatorConfig &config) { config.propagate_budget = x; },
         [x](ThreadConfig &config) { config.propagate_budget = {true, x}; });
+}
+static bool parse_mutex(const char *value, void *data) {
+    auto &pc = *static_cast<PropagatorConfig*>(data);
+    uint64_t x = 0;
+    if (!(value = parse_uint64_pre(value, &x))) { return false; }
+    pc.mutex_size = x;
+    if (*value == '\0') {
+        pc.mutex_cutoff = 10 * x;
+        return true;
+    }
+    if (*value == ',') {
+        if (!parse_uint64(value+1, &x)) { return false; }
+        pc.mutex_cutoff = x;
+    }
+    return true;
 }
 static bool parse_mode(const char *value, void *data) {
     PropagationMode mode = PropagationMode::Check;
@@ -338,6 +355,9 @@ extern "C" bool clingodl_configure_propagator(clingodl_propagator_t *prop, char 
         if (strcmp(key, "propagate-budget") == 0) {
             return check_parse("propgate-budget", parse_budget(value, &prop->config));
         }
+        if (strcmp(key, "add-mutexes") == 0) {
+            return check_parse("add-mutexes", parse_mutex(value, &prop->config));
+        }
         if (strcmp(key, "rdl") == 0) {
             return check_parse("rdl", parse_bool(value, &prop->rdl));
         }
@@ -376,10 +396,16 @@ extern "C" bool clingodl_register_options(clingodl_propagator_t *prop, clingo_op
             "      <arg>   : <n>[,<thread>]\n"
             "      <n>     : Budget roughly corresponding to cost of consistency checks\n"
             "                (if possible use with --propagate-root greater 0)\n"
-            "      <thread>: Restrict to thread\n",
+            "      <thread>: Restrict to thread",
             &parse_budget, &prop->config, true, "<arg>"));
-        CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers.", &prop->rdl));
-        CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode.", &prop->config.strict));
+        CLINGO_CALL(clingo_options_add(options, group, "add-mutexes",
+            "Add mutexes in a preprocessing step [0]\n"
+            "      <arg>   : <max>[,<cut>]\n"
+            "      <max>   : Maximum size of mutexes to add\n"
+            "      <cut>   : Limit costs to calculate mutexes\n",
+            &parse_mutex, &prop->config, true, "<arg>"));
+        CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers", &prop->rdl));
+        CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode", &prop->config.strict));
     }
     CLINGODL_CATCH;
 }

@@ -165,6 +165,8 @@ struct ThreadConfig {
 
 struct PropagatorConfig {
     bool strict{false};
+    uint64_t mutex_size{0};
+    uint64_t mutex_cutoff{10};
     uint64_t propagate_root{0};
     uint64_t propagate_budget{0};
     PropagationMode mode{PropagationMode::Check};
@@ -876,12 +878,14 @@ private:
 struct Stats {
     void reset() {
         time_init  = std::chrono::steady_clock::duration::zero();
+        mutexes = 0;
         for (auto& i : dl_stats) {
             i.reset();
         }
     }
     void accu(Stats const &x) {
         time_init += x.time_init;
+        mutexes += x.mutexes;
         if (dl_stats.size() < x.dl_stats.size()) {
             dl_stats.resize(x.dl_stats.size());
         }
@@ -891,6 +895,7 @@ struct Stats {
         }
     }
     Duration time_init = Duration{0};
+    uint64_t mutexes{0};
     std::vector<DLStats> dl_stats;
 };
 
@@ -971,11 +976,104 @@ public:
             init.set_check_mode(PropagatorCheckMode::Partial);
         }
 
+        int edge_start = edges_.size();
+
         Timer t{stats_.time_init};
         for (auto atom : init.theory_atoms()) {
             auto term = atom.term();
             if (term.to_string() == "diff") {
                 add_edge_atom(init, atom);
+            }
+        }
+
+        // let r and s be edge literals and T be the true literal:
+        //
+        //            r     T
+        //         o --> o --> o
+        //         ^           |
+        //       T |           | r
+        //         |           v
+        //         o <-- o <-- o
+        //            s     s
+        //
+        // if the above graph gives rise to a negative cycle, then r and s are mutually exclusive
+        // the algorithm below adds clauses excluding such mutexes
+        if (conf_.mutex_size > 0 && conf_.mutex_cutoff > 0) {
+            struct State {
+                T weight;
+                int id;
+                int n;
+                int previous;
+            };
+            std::vector<State> queue;
+            std::vector<Clingo::literal_t> clause;
+
+            // build adjacency list
+            for (int edge_id = edge_start, size = edges_.size(); edge_id < size; ++edge_id) {
+                outgoing_.emplace(std::make_pair(edges_[edge_id].from, edge_id));
+            }
+
+            auto ass = init.assignment();
+
+            // traverse graph starting from each edge
+            for (int start_id = edge_start, size = edges_.size(); start_id < size; ++start_id) {
+                auto &start = edges_[start_id];
+                // skipping over true literals forgoes some mutexes in the incremental case
+                // but makes the algorithm much faster when there are many static edges
+                // which are checked on level zero anyway
+                if (ass.truth_value(start.lit) != Clingo::TruthValue::Free) {
+                    continue;
+                }
+
+                queue.emplace_back(State{start.weight, start_id, 1, -1});
+                for (int queue_offset = 0; queue_offset < queue.size(); ++queue_offset) {
+                    auto rs_state = queue[queue_offset];
+                    auto rs = edges_[rs_state.id];
+                    auto out = outgoing_.equal_range(rs.to);
+                    for (auto it = out.first; it != out.second; ++it) {
+                        auto st_id = it->second;
+                        auto &st = edges_[st_id];
+                        auto st_truth = ass.truth_value(st.lit);
+                        if ((st_id > start_id && st_truth == Clingo::TruthValue::Free) || st_truth == Clingo::TruthValue::False) {
+                            continue;
+                        }
+                        auto w = rs_state.weight + st.weight;
+                        auto n = rs_state.n;
+                        auto c = queue_offset;
+                        int found = 0;
+                        while (c != -1) {
+                            auto &cc = edges_[queue[c].id];
+                            if (cc.lit == -st.lit || queue[c].id == st_id) {
+                                found = 2;
+                                break;
+                            }
+                            else if (cc.lit == st.lit) {
+                                found = 1;
+                            }
+                            c = queue[c].previous;
+                        }
+                        if (found == 2) { continue; }
+                        else if (found == 0 && st_truth == TruthValue::Free) { n += 1; }
+                        if (st.to == start.from && w < 0) {
+                            ++stats_.mutexes;
+                            clause.emplace_back(-st.lit);
+                            auto c = queue_offset;
+                            while (c != -1) {
+                                auto &cc = edges_[queue[c].id];
+                                clause.emplace_back(-cc.lit);
+                                c = queue[c].previous;
+                            }
+                            if (!init.add_clause(clause)) {
+                                return;
+                            }
+                            clause.clear();
+                        }
+                        else if (n < conf_.mutex_size && queue.size() < conf_.mutex_cutoff) {
+                            queue.emplace_back(State{w, st_id, n, queue_offset});
+                        }
+                    }
+                }
+                queue.clear();
             }
         }
 
@@ -1200,6 +1298,7 @@ private:
     std::unordered_multimap<literal_t, int> lit_to_edges_;
     std::unordered_multimap<literal_t, int> false_lit_to_edges_;
     std::vector<Edge<T>> edges_;
+    std::unordered_multimap<int, int> outgoing_;
     std::vector<Clingo::Symbol> vert_map_;
     std::unordered_map<Clingo::Symbol, int> vert_map_inv_;
     Stats &stats_;

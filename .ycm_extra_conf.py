@@ -51,8 +51,8 @@ flags = [
 '-I.',
 '-Ilibclingo-dl',
 '-I/home/wv/bin/linux/64/gcc-7.1/include/c++/v1',
-'-I/home/wv/opt/clingo-banane/include',
 '-Iclingo/libclingo',
+'-I/home/wv/opt/clingo-banane/include',
 ]
 
 # Set this to the absolute path to the folder (NOT the file!) containing the
