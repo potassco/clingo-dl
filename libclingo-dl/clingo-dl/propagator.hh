@@ -1278,7 +1278,7 @@ public:
     bool has_lower_bound(uint32_t thread_id, size_t index) const {
         if (index >= vert_map_.size()) { return false; }
         auto &state = states_[thread_id];
-        return states_[thread_id].dl_graph.node_value_defined(index);
+        return !states_[thread_id].dl_graph.empty() && states_[thread_id].dl_graph.node_value_defined(index);
     }
 
     T lower_bound(uint32_t thread_id, size_t index) const {

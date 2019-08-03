@@ -137,7 +137,6 @@ diff_term {- : 1, binary, left};
     }
 
     bool has_value(uint32_t thread_id, size_t index) override {
-        assert(index > 0 && index <= prop_.num_vertices());
         return prop_.has_lower_bound(thread_id, index - 1);
     }
     void get_value(uint32_t thread_id, size_t index, clingodl_value_t *value) override {
