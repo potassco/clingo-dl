@@ -1,10 +1,17 @@
+"""
+This module defines a single Theory class for using a C propagator with
+clingo's python library.
+"""
+
+
 import ctypes
 import ctypes.util
 import clingo
 
-from ctypes import c_bool, c_void_p, c_int, c_double, c_uint, c_uint64, c_size_t, c_char_p, Union, Structure, POINTER, byref
+from typing import Optional, Union, Iterator, Tuple
+from ctypes import c_bool, c_void_p, c_int, c_double, c_uint, c_uint64, c_size_t, c_char_p, Structure, POINTER, byref
 
-class _c_value(Union):
+class _c_value(ctypes.Union):
     _fields_ = [ ("integer", c_int)
                , ("double", c_double)
                , ("symbol", c_uint64)
@@ -15,8 +22,48 @@ class _c_variant(Structure):
                , ("value", _c_value)
                ]
 
+
 class Theory:
-    def __init__(self, prefix, lib):
+    """
+    Interface to call functions from a C-library extending clingo's C/Python
+    library.
+
+    The functions in here are designed to be used with a `clingo.Application`
+    object but can also be used with a standalone `clingo.Control` object.
+
+    Notes
+    -----
+    The C library must implement the following functions:
+
+    - `bool create_propagator(propagator_t **propagator)`
+    - `bool destroy_propagator(propagator_t *propagator)`
+    - `bool register_propagator(propagator_t *propagator, clingo_control_t* control)`
+    - `bool register_options(propagator_t *propagator, clingo_options_t* options)`
+    - `bool validate_options(propagator_t *propagator)`
+    - `bool on_model(propagator_t *propagator, clingo_model_t* model)`
+    - `bool on_statistics(propagator_t *propagator, clingo_statistics_t* step, clingo_statistics_t* accu)`
+    - `bool lookup_symbol(propagator_t *propagator, clingo_symbol_t symbol, size_t *index)`
+    - `clingo_symbol_t get_symbol(propagator_t *propagator, size_t index)`
+    - `void assignment_begin(propagator_t *propagator, uint32_t thread_id, size_t *index)`
+    - `bool assignment_next(propagator_t *propagator, uint32_t thread_id, size_t *index)`
+    - `void assignment_has_value(propagator_t *propagator, uint32_t thread_id, size_t index)`
+    - `void assignment_get_value(propagator_t *propagator, uint32_t thread_id, size_t index, value_t *value)`
+    - `bool clingodl_configure_propagator(clingodl_propagator_t *prop, char const *key, char const *value)`
+    """
+
+    ValueType = Union[int, float, clingo.Symbol]
+
+    def __init__(self, prefix: str, lib: str):
+        """
+        Loads a given library.
+
+        Arguments
+        ---------
+        prefix: str
+            Prefix of functions in the library.
+        lib: str
+            Name of the library to load.
+        """
         self.__c_propagator = None
 
         # load library
@@ -61,7 +108,7 @@ class Theory:
         # void assignment_get_value(propagator_t *propagator, uint32_t thread_id, size_t index, value_t *value);
         self.__assignment_get_value = self.__fun(prefix, "assignment_get_value", None, [c_void_p, c_uint, c_size_t, POINTER(_c_variant)], False)
 
-        #CLINGODL_VISIBILITY_DEFAULT bool clingodl_configure_propagator(clingodl_propagator_t *prop, char const *key, char const *value);
+        # bool clingodl_configure_propagator(clingodl_propagator_t *prop, char const *key, char const *value);
         self.__configure_propagator = self.__fun(prefix, "configure_propagator", c_bool, [c_void_p, c_char_p, c_char_p])
 
         # create propagator
@@ -74,38 +121,151 @@ class Theory:
             self.__destroy_propagator(self.__c_propagator)
             self.__c_propagator = None
 
-    def configure_propagator(self, key, value):
+    def configure_propagator(self, key: str, value: str) -> None:
+        """
+        Allows for configuring a propagator via key/value pairs similar to
+        command line options.
+
+        This function must be called before the propagator is registered.
+
+        Arguments
+        ---------
+        key: str
+            The name of the option.
+        value: str
+            The value of the option.
+        """
         self.__configure_propagator(self.__c_propagator, key.encode(), value.encode())
 
-    def register_propagator(self, control):
+    def register_propagator(self, control: clingo.Control) -> None:
+        """
+        Register the propagator with the given control object.
+
+        Arguments
+        ---------
+        control: clingo.Control
+            Target to register with.
+        """
         self.__register_propagator(self.__c_propagator, control._to_c)
 
-    def register_options(self, options):
+    def register_options(self, options: clingo.ApplicationOptions) -> None:
+        """
+        Register the propagator's options with the given application options
+        object.
+
+        Arguments
+        ---------
+        options: clingo.ApplicationOptions
+            Target to register with.
+        """
+
         self.__register_options(self.__c_propagator, options._to_c)
 
-    def validate_options(self):
+    def validate_options(self) -> None:
+        """
+        Validate the options of the propagator.
+        """
         self.__validate_options(self.__c_propagator)
 
-    def on_model(self, model):
+    def on_model(self, model: clingo.Model) -> None:
+        """
+        Inform the propagator that a model has been found.
+
+        Arguments
+        ---------
+        model: clingo.Model
+            The current model.
+        """
         self.__on_model(self.__c_propagator, model._to_c)
 
-    def on_statistics(self, step, accu):
+    def on_statistics(self, step: clingo.StatisticsMap, accu: clingo.StatisticsMap) -> None:
+        """
+        Add the propagator's statistics to the given maps.
+
+        Arguments
+        ---------
+        step: clingo.StatisticsMap
+            Map for per step statistics.
+        accu: clingo.StatisticsMap
+            Map for accumulated statistics.
+        """
         self.__on_statistics(self.__c_propagator, step._to_c, accu._to_c)
 
-    def lookup_symbol(self, symbol):
+    def lookup_symbol(self, symbol: clingo.Symbol) -> Optional[int]:
+        """
+        Get the integer index of a symbol assigned by the propagator when a
+        model is found.
+
+        Using indices allows for efficent retreival of values.
+
+        Arguments
+        ---------
+        symbol: clingo.Symbol
+            The symbol to look up.
+
+        Returns
+        -------
+        Optional[int]
+            The index of the value if found.
+        """
         c_index = c_size_t()
         if self.__lookup_symbol(self.__c_propagator, symbol._to_c, byref(c_index)):
             return c_index.value
         else:
             return None
 
-    def get_symbol(self, index):
+    def get_symbol(self, index: int) -> clingo.Symbol:
+        """
+        Get the symbol associated with an index.
+
+        The index must be valid.
+
+        Arguments
+        ---------
+        index: int
+            Index to retreive.
+
+        Returns
+        -------
+        clingo.Symbol
+            The associated symbol.
+        """
         return clingo._Symbol(self.__get_symbol(self.__c_propagator, index))
 
-    def has_value(self, thread_id, index):
+    def has_value(self, thread_id: int, index: int) -> bool:
+        """
+        Check if the given symbol index has a value in the current model.
+
+        Arguments
+        ---------
+        thread_id: int
+            The index of the solving thread that found the model.
+        index: int
+            Index to retreive.
+
+        Returns
+        -------
+        bool
+            Whether the given index has a value.
+        """
         return self.__assignment_has_value(self.__c_propagator, thread_id, index)
 
-    def get_value(self, thread_id, index):
+    def get_value(self, thread_id: int, index: int) -> ValueType:
+        """
+        Get the value of the symbol index in the current model.
+
+        Arguments
+        ---------
+        thread_id: int
+            The index of the solving thread that found the model.
+        index: int
+            Index to retreive.
+
+        Returns
+        -------
+        ValueType
+            The value of the index in form of an int, float, or clingo.Symbol.
+        """
         c_value = _c_variant()
         self.__assignment_get_value(self.__c_propagator, thread_id, index, byref(c_value))
         if c_value.type == 0:
@@ -117,7 +277,21 @@ class Theory:
         else:
             return None
 
-    def assignment(self, thread_id):
+    def assignment(self, thread_id: int) -> Iterator[Tuple[clingo.Symbol,ValueType]]:
+        """
+        Get all values symbol/value pairs assigned by the propagator in the
+        current model.
+
+        Arguments
+        ---------
+        thread_id: int
+            The index of the solving thread that found the model.
+
+        Returns
+        -------
+        Iterator[Tuple[clingo.Symbol,ValueType]]
+            An iterator over symbol/value pairs.
+        """
         c_index = c_size_t()
         self.__assignment_begin(self.__c_propagator, thread_id, byref(c_index))
         while self.__assignment_next(self.__c_propagator, thread_id, byref(c_index)):
