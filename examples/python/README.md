@@ -5,5 +5,8 @@ It emulates clingo-dl printing some extra information:
 
     python example.py -c n=132 example.lp --propagate partial -t 2 --stats 2
 
+Note that the example requires Python 3 to run (the theory module uses type
+annotations).
+
 [clingo]: https://potassco.org/clingo/python-api/current/
 [anaconda]: https://anaconda.org/potassco/clingo-dl/
