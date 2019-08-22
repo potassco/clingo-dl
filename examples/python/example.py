@@ -25,18 +25,19 @@ class Application:
         pass
 
     def main(self, prg, files):
-        self.__theory.configure_propagator("propagate", "full,1")
-        self.__theory.register_propagator(prg)
+        self.__theory.configure("propagate", "full,1")
+        self.__theory.register(prg)
         if not files:
             files.append("-")
         for f in files:
             prg.load(f)
 
         prg.ground([("base", [])])
+        self.__theory.prepare(prg)
 
-        # Note: this symbol is created upon propagator creation
-        #       right now it is a bit tricky to get into a state where Propagator.init has been called for all propagators
-        #       one possibility would be to register a propgator after all other propagators
+        # Note: this symbol is created upon theory creation
+        #       right now it is a bit tricky to get into a state where Propagator.init has been called for all theory
+        #       one possibility would be to register a propgator after all other theories
         #       another to lazily build a lookup table when required
         adjust = self.__theory.lookup_symbol(clingo.Number(0))
 

@@ -33,27 +33,27 @@ using namespace Clingo;
 class ClingoDLApp : public Clingo::Application, private SolveEventHandler {
 public:
     ClingoDLApp() {
-        CLINGO_CALL(clingodl_create_propagator(&prop_));
+        CLINGO_CALL(clingodl_create(&theory_));
     }
-    ~ClingoDLApp() { clingodl_destroy_propagator(prop_); }
+    ~ClingoDLApp() { clingodl_destroy(theory_); }
     char const *program_name() const noexcept override { return "clingo-dl"; }
     char const *version() const noexcept override { return CLINGODL_VERSION; }
     bool on_model(Model &model) override {
-        CLINGO_CALL(clingodl_on_model(prop_, model.to_c()));
+        CLINGO_CALL(clingodl_on_model(theory_, model.to_c()));
         return true;
     }
 
     int get_bound(Model const &m) {
         if (!bound_index_) {
-            if (!clingodl_lookup_symbol(prop_, bound_symbol.to_c(), &bound_index_)) {
+            if (!clingodl_lookup_symbol(theory_, bound_symbol.to_c(), &bound_index_)) {
                 throw std::runtime_error("variable to minimize not found");
             }
         }
-        if (!clingodl_assignment_has_value(prop_, m.thread_id(), bound_index_)) {
+        if (!clingodl_assignment_has_value(theory_, m.thread_id(), bound_index_)) {
             throw std::runtime_error("variable to minimize is unassigned");
         }
         clingodl_value_t value;
-        clingodl_assignment_get_value(prop_, m.thread_id(), bound_index_, &value);
+        clingodl_assignment_get_value(theory_, m.thread_id(), bound_index_, &value);
         // NOTE: minimizinig real values would require an epsilon
         if (value.type != clingodl_value_type_int) {
             throw std::runtime_error("only integer minimization is supported");
@@ -79,11 +79,11 @@ public:
     void on_statistics(UserStatistics step, UserStatistics accu) override {
         add_stats(step);
         add_stats(accu);
-        CLINGO_CALL(clingodl_on_statistics(prop_, step.to_c(), accu.to_c()));
+        CLINGO_CALL(clingodl_on_statistics(theory_, step.to_c(), accu.to_c()));
     }
 
     void main(Control &ctl, StringSpan files) override {
-        CLINGO_CALL(clingodl_register_propagator(prop_, ctl.to_c()));
+        CLINGO_CALL(clingodl_register(theory_, ctl.to_c()));
         for (auto &file : files) {
             ctl.load(file);
         }
@@ -139,7 +139,7 @@ public:
     }
 
     void register_options(ClingoOptions &options) override {
-        CLINGO_CALL(clingodl_register_options(prop_, options.to_c()));
+        CLINGO_CALL(clingodl_register_options(theory_, options.to_c()));
         char const * group = "Clingo.DL Options";
         options.add(group, "minimize-variable",
             "Minimize the given variable\n"
@@ -150,10 +150,10 @@ public:
     }
 
     void validate_options() override {
-        CLINGO_CALL(clingodl_validate_options(prop_));
+        CLINGO_CALL(clingodl_validate_options(theory_));
     }
 private:
-    clingodl_propagator_t *prop_;
+    clingodl_theory_t *theory_;
     Clingo::Symbol bound_symbol;
     size_t bound_index_ = 0;
     int bound_value_ = 0;

@@ -1,5 +1,5 @@
 """
-This module defines a single Theory class for using a C propagator with
+This module defines a single Theory class for using a C theory with
 clingo's python library.
 """
 
@@ -35,20 +35,21 @@ class Theory:
     -----
     The C library must implement the following functions:
 
-    - `bool create_propagator(propagator_t **propagator)`
-    - `bool destroy_propagator(propagator_t *propagator)`
-    - `bool register_propagator(propagator_t *propagator, clingo_control_t* control)`
-    - `bool register_options(propagator_t *propagator, clingo_options_t* options)`
-    - `bool validate_options(propagator_t *propagator)`
-    - `bool on_model(propagator_t *propagator, clingo_model_t* model)`
-    - `bool on_statistics(propagator_t *propagator, clingo_statistics_t* step, clingo_statistics_t* accu)`
-    - `bool lookup_symbol(propagator_t *propagator, clingo_symbol_t symbol, size_t *index)`
-    - `clingo_symbol_t get_symbol(propagator_t *propagator, size_t index)`
-    - `void assignment_begin(propagator_t *propagator, uint32_t thread_id, size_t *index)`
-    - `bool assignment_next(propagator_t *propagator, uint32_t thread_id, size_t *index)`
-    - `void assignment_has_value(propagator_t *propagator, uint32_t thread_id, size_t index)`
-    - `void assignment_get_value(propagator_t *propagator, uint32_t thread_id, size_t index, value_t *value)`
-    - `bool clingodl_configure_propagator(clingodl_propagator_t *prop, char const *key, char const *value)`
+    - `bool create(theory_t **theory)`
+    - `bool destroy(theory_t *theory)`
+    - `bool register(theory_t *theory, clingo_control_t* control)`
+    - `bool prepare(theory_t *theory, clingo_control_t* control)`
+    - `bool register_options(theory_t *theory, clingo_options_t* options)`
+    - `bool validate_options(theory_t *theory)`
+    - `bool on_model(theory_t *theory, clingo_model_t* model)`
+    - `bool on_statistics(theory_t *theory, clingo_statistics_t* step, clingo_statistics_t* accu)`
+    - `bool lookup_symbol(theory_t *theory, clingo_symbol_t symbol, size_t *index)`
+    - `clingo_symbol_t get_symbol(theory_t *theory, size_t index)`
+    - `void assignment_begin(theory_t *theory, uint32_t thread_id, size_t *index)`
+    - `bool assignment_next(theory_t *theory, uint32_t thread_id, size_t *index)`
+    - `void assignment_has_value(theory_t *theory, uint32_t thread_id, size_t index)`
+    - `void assignment_get_value(theory_t *theory, uint32_t thread_id, size_t index, value_t *value)`
+    - `bool configure(theory_t *theory, char const *key, char const *value)`
     """
 
     ValueType = Union[int, float, clingo.Symbol]
@@ -64,69 +65,75 @@ class Theory:
         lib: str
             Name of the library to load.
         """
-        self.__c_propagator = None
+        self.__c_theory = None
 
         # load library
-        self.__theory = ctypes.cdll.LoadLibrary(ctypes.util.find_library(lib))
+        #self.__theory = ctypes.cdll.LoadLibrary(ctypes.util.find_library(lib))
+        self.__theory = ctypes.cdll.LoadLibrary('/home/kaminski/git/clingoDL/build/bin/libclingo-dl.so')
 
-        # bool create_propagator(propagator_t **propagator);
-        self.__create_propagator = self.__fun(prefix, "create_propagator", c_bool, [POINTER(c_void_p)])
+        print (self.__theory)
 
-        # bool destroy_propagator(propagator_t *propagator);
-        self.__destroy_propagator = self.__fun(prefix, "destroy_propagator", c_bool, [c_void_p])
+        # bool create(theory_t **theory);
+        self.__create = self.__fun(prefix, "create", c_bool, [POINTER(c_void_p)])
 
-        # bool register_propagator(propagator_t *propagator, clingo_control_t* control);
-        self.__register_propagator = self.__fun(prefix, "register_propagator", c_bool, [c_void_p, c_void_p])
+        # bool destroy(theory_t *theory);
+        self.__destroy = self.__fun(prefix, "destroy", c_bool, [c_void_p])
 
-        # bool register_options(propagator_t *propagator, clingo_options_t* options);
+        # bool register(theory_t *theory, clingo_control_t* control);
+        self.__register = self.__fun(prefix, "register", c_bool, [c_void_p, c_void_p])
+
+        # bool prepare(theory_t *theory, clingo_control_t* control);
+        self.__prepare = self.__fun(prefix, "prepare", c_bool, [c_void_p, c_void_p])
+
+        # bool register_options(theory_t *theory, clingo_options_t* options);
         self.__register_options = self.__fun(prefix, "register_options", c_bool, [c_void_p, c_void_p])
 
-        # bool validate_options(propagator_t *propagator);
+        # bool validate_options(theory_t *theory);
         self.__validate_options = self.__fun(prefix, "validate_options", c_bool, [c_void_p])
 
-        # bool on_model(propagator_t *propagator, clingo_model_t* model);
+        # bool on_model(theory_t *theory, clingo_model_t* model);
         self.__on_model = self.__fun(prefix, "on_model", c_bool, [c_void_p, c_void_p])
 
-        # bool on_statistics(propagator_t *propagator, clingo_statistics_t* step, clingo_statistics_t* accu);
+        # bool on_statistics(theory_t *theory, clingo_statistics_t* step, clingo_statistics_t* accu);
         self.__on_statistics = self.__fun(prefix, "on_statistics", c_bool, [c_void_p, c_void_p, c_void_p])
 
-        # bool lookup_symbol(propagator_t *propagator, clingo_symbol_t symbol, size_t *index);
+        # bool lookup_symbol(theory_t *theory, clingo_symbol_t symbol, size_t *index);
         self.__lookup_symbol = self.__fun(prefix, "lookup_symbol", c_bool, [c_void_p, c_uint64, POINTER(c_size_t)], False)
 
-        # clingo_symbol_t get_symbol(propagator_t *propagator, size_t index);
+        # clingo_symbol_t get_symbol(theory_t *theory, size_t index);
         self.__get_symbol = self.__fun(prefix, "get_symbol", c_uint64, [c_void_p, c_size_t], False)
 
-        # void assignment_begin(propagator_t *propagator, uint32_t thread_id, size_t *index);
+        # void assignment_begin(theory_t *theory, uint32_t thread_id, size_t *index);
         self.__assignment_begin = self.__fun(prefix, "assignment_begin", None, [c_void_p, c_uint, POINTER(c_size_t)], False)
 
-        # bool assignment_next(propagator_t *propagator, uint32_t thread_id, size_t *index);
+        # bool assignment_next(theory_t *theory, uint32_t thread_id, size_t *index);
         self.__assignment_next = self.__fun(prefix, "assignment_next", c_bool, [c_void_p, c_uint, POINTER(c_size_t)], False)
 
-        # void assignment_has_value(propagator_t *propagator, uint32_t thread_id, size_t index);
+        # void assignment_has_value(theory_t *theory, uint32_t thread_id, size_t index);
         self.__assignment_has_value = self.__fun(prefix, "assignment_has_value", c_bool, [c_void_p, c_uint, c_size_t], False)
 
-        # void assignment_get_value(propagator_t *propagator, uint32_t thread_id, size_t index, value_t *value);
+        # void assignment_get_value(theory_t *theory, uint32_t thread_id, size_t index, value_t *value);
         self.__assignment_get_value = self.__fun(prefix, "assignment_get_value", None, [c_void_p, c_uint, c_size_t, POINTER(_c_variant)], False)
 
-        # bool clingodl_configure_propagator(clingodl_propagator_t *prop, char const *key, char const *value);
-        self.__configure_propagator = self.__fun(prefix, "configure_propagator", c_bool, [c_void_p, c_char_p, c_char_p])
+        # bool configure(theory_t *theory, char const *key, char const *value);
+        self.__configure = self.__fun(prefix, "configure", c_bool, [c_void_p, c_char_p, c_char_p])
 
-        # create propagator
-        c_propagator = c_void_p()
-        self.__create_propagator(byref(c_propagator))
-        self.__c_propagator = c_propagator
+        # create theory
+        c_theory = c_void_p()
+        self.__create(byref(c_theory))
+        self.__c_theory = c_theory
 
     def __del__(self):
-        if self.__c_propagator is not None:
-            self.__destroy_propagator(self.__c_propagator)
-            self.__c_propagator = None
+        if self.__c_theory is not None:
+            self.__destroy(self.__c_theory)
+            self.__c_theory = None
 
-    def configure_propagator(self, key: str, value: str) -> None:
+    def configure(self, key: str, value: str) -> None:
         """
-        Allows for configuring a propagator via key/value pairs similar to
+        Allows for configuring a theory via key/value pairs similar to
         command line options.
 
-        This function must be called before the propagator is registered.
+        This function must be called before the theory is registered.
 
         Arguments
         ---------
@@ -135,22 +142,35 @@ class Theory:
         value: str
             The value of the option.
         """
-        self.__configure_propagator(self.__c_propagator, key.encode(), value.encode())
+        self.__configure(self.__c_theory, key.encode(), value.encode())
 
-    def register_propagator(self, control: clingo.Control) -> None:
+    def register(self, control: clingo.Control) -> None:
         """
-        Register the propagator with the given control object.
+        Register the theory with the given control object.
 
         Arguments
         ---------
         control: clingo.Control
             Target to register with.
         """
-        self.__register_propagator(self.__c_propagator, control._to_c)
+        self.__register(self.__c_theory, control._to_c)
+
+    def prepare(self, control: clingo.Control) -> None:
+        """
+        Prepare the theory.
+
+        Must be called between ground and solve.
+
+        Arguments
+        ---------
+        control: clingo.Control
+            The associated control object.
+        """
+        self.__prepare(self.__c_theory, control._to_c)
 
     def register_options(self, options: clingo.ApplicationOptions) -> None:
         """
-        Register the propagator's options with the given application options
+        Register the theory's options with the given application options
         object.
 
         Arguments
@@ -159,28 +179,28 @@ class Theory:
             Target to register with.
         """
 
-        self.__register_options(self.__c_propagator, options._to_c)
+        self.__register_options(self.__c_theory, options._to_c)
 
     def validate_options(self) -> None:
         """
-        Validate the options of the propagator.
+        Validate the options of the theory.
         """
-        self.__validate_options(self.__c_propagator)
+        self.__validate_options(self.__c_theory)
 
     def on_model(self, model: clingo.Model) -> None:
         """
-        Inform the propagator that a model has been found.
+        Inform the theory that a model has been found.
 
         Arguments
         ---------
         model: clingo.Model
             The current model.
         """
-        self.__on_model(self.__c_propagator, model._to_c)
+        self.__on_model(self.__c_theory, model._to_c)
 
     def on_statistics(self, step: clingo.StatisticsMap, accu: clingo.StatisticsMap) -> None:
         """
-        Add the propagator's statistics to the given maps.
+        Add the theory's statistics to the given maps.
 
         Arguments
         ---------
@@ -189,11 +209,11 @@ class Theory:
         accu: clingo.StatisticsMap
             Map for accumulated statistics.
         """
-        self.__on_statistics(self.__c_propagator, step._to_c, accu._to_c)
+        self.__on_statistics(self.__c_theory, step._to_c, accu._to_c)
 
     def lookup_symbol(self, symbol: clingo.Symbol) -> Optional[int]:
         """
-        Get the integer index of a symbol assigned by the propagator when a
+        Get the integer index of a symbol assigned by the theory when a
         model is found.
 
         Using indices allows for efficent retreival of values.
@@ -209,7 +229,7 @@ class Theory:
             The index of the value if found.
         """
         c_index = c_size_t()
-        if self.__lookup_symbol(self.__c_propagator, symbol._to_c, byref(c_index)):
+        if self.__lookup_symbol(self.__c_theory, symbol._to_c, byref(c_index)):
             return c_index.value
         else:
             return None
@@ -230,7 +250,7 @@ class Theory:
         clingo.Symbol
             The associated symbol.
         """
-        return clingo._Symbol(self.__get_symbol(self.__c_propagator, index))
+        return clingo._Symbol(self.__get_symbol(self.__c_theory, index))
 
     def has_value(self, thread_id: int, index: int) -> bool:
         """
@@ -248,7 +268,7 @@ class Theory:
         bool
             Whether the given index has a value.
         """
-        return self.__assignment_has_value(self.__c_propagator, thread_id, index)
+        return self.__assignment_has_value(self.__c_theory, thread_id, index)
 
     def get_value(self, thread_id: int, index: int) -> ValueType:
         """
@@ -267,7 +287,7 @@ class Theory:
             The value of the index in form of an int, float, or clingo.Symbol.
         """
         c_value = _c_variant()
-        self.__assignment_get_value(self.__c_propagator, thread_id, index, byref(c_value))
+        self.__assignment_get_value(self.__c_theory, thread_id, index, byref(c_value))
         if c_value.type == 0:
             return c_value.value.integer
         elif c_value.type == 1:
@@ -279,7 +299,7 @@ class Theory:
 
     def assignment(self, thread_id: int) -> Iterator[Tuple[clingo.Symbol,ValueType]]:
         """
-        Get all values symbol/value pairs assigned by the propagator in the
+        Get all values symbol/value pairs assigned by the theory in the
         current model.
 
         Arguments
@@ -293,8 +313,8 @@ class Theory:
             An iterator over symbol/value pairs.
         """
         c_index = c_size_t()
-        self.__assignment_begin(self.__c_propagator, thread_id, byref(c_index))
-        while self.__assignment_next(self.__c_propagator, thread_id, byref(c_index)):
+        self.__assignment_begin(self.__c_theory, thread_id, byref(c_index))
+        while self.__assignment_next(self.__c_theory, thread_id, byref(c_index)):
             yield (self.get_symbol(c_index), self.get_value(thread_id, c_index))
 
     def __fun(self, prefix, name, res, args, error=True):

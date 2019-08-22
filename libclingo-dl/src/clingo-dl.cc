@@ -194,31 +194,35 @@ private:
     DifferenceLogicPropagator<T> prop_;
 };
 
-struct clingodl_propagator {
+struct clingodl_theory {
     std::unique_ptr<PropagatorFacade> clingodl{nullptr};
     bool rdl;
     PropagatorConfig config;
 };
 
-extern "C" bool clingodl_create_propagator(clingodl_propagator_t **prop) {
-    CLINGODL_TRY { *prop = new clingodl_propagator{}; }
+extern "C" bool clingodl_create(clingodl_theory_t **theory) {
+    CLINGODL_TRY { *theory = new clingodl_theory{}; }
     CLINGODL_CATCH;
 }
 
-extern "C" bool clingodl_register_propagator(clingodl_propagator_t *prop, clingo_control_t* ctl) {
+extern "C" bool clingodl_register(clingodl_theory_t *theory, clingo_control_t* ctl) {
     CLINGODL_TRY {
-        if (!prop->rdl) {
-            prop->clingodl = std::make_unique<DLPropagatorFacade<int>>(ctl, prop->config);
+        if (!theory->rdl) {
+            theory->clingodl = std::make_unique<DLPropagatorFacade<int>>(ctl, theory->config);
         }
         else {
-            prop->clingodl = std::make_unique<DLPropagatorFacade<double>>(ctl, prop->config);
+            theory->clingodl = std::make_unique<DLPropagatorFacade<double>>(ctl, theory->config);
         }
     }
     CLINGODL_CATCH;
 }
 
-extern "C" bool clingodl_destroy_propagator(clingodl_propagator_t *prop) {
-    CLINGODL_TRY { delete prop; }
+extern "C" bool clingodl_prepare(clingodl_theory_t *, clingo_control_t *) {
+    return true;
+}
+
+extern "C" bool clingodl_destroy(clingodl_theory_t *theory) {
+    CLINGODL_TRY { delete theory; }
     CLINGODL_CATCH;
 }
 
@@ -343,25 +347,25 @@ static bool check_parse(char const *key, bool ret) {
     return ret;
 }
 
-extern "C" bool clingodl_configure_propagator(clingodl_propagator_t *prop, char const *key, char const *value) {
+extern "C" bool clingodl_configure(clingodl_theory_t *theory, char const *key, char const *value) {
     CLINGODL_TRY {
         if (strcmp(key, "propagate") == 0) {
-            return check_parse("propagate", parse_mode(value, &prop->config));
+            return check_parse("propagate", parse_mode(value, &theory->config));
         }
         if (strcmp(key, "propagate-root") == 0) {
-            return check_parse("propagate-root", parse_root(value, &prop->config));
+            return check_parse("propagate-root", parse_root(value, &theory->config));
         }
         if (strcmp(key, "propagate-budget") == 0) {
-            return check_parse("propgate-budget", parse_budget(value, &prop->config));
+            return check_parse("propgate-budget", parse_budget(value, &theory->config));
         }
         if (strcmp(key, "add-mutexes") == 0) {
-            return check_parse("add-mutexes", parse_mutex(value, &prop->config));
+            return check_parse("add-mutexes", parse_mutex(value, &theory->config));
         }
         if (strcmp(key, "rdl") == 0) {
-            return check_parse("rdl", parse_bool(value, &prop->rdl));
+            return check_parse("rdl", parse_bool(value, &theory->rdl));
         }
         if (strcmp(key, "strict") == 0) {
-            return check_parse("strict", parse_bool(value, &prop->config));
+            return check_parse("strict", parse_bool(value, &theory->config));
         }
         std::ostringstream msg;
         msg << "invalid configuration key '" << key << "'";
@@ -371,7 +375,7 @@ extern "C" bool clingodl_configure_propagator(clingodl_propagator_t *prop, char 
     CLINGODL_CATCH;
 }
 
-extern "C" bool clingodl_register_options(clingodl_propagator_t *prop, clingo_options_t* options) {
+extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_options_t* options) {
     CLINGODL_TRY {
         char const * group = "Clingo.DL Options";
         CLINGO_CALL(clingo_options_add(options, group, "propagate",
@@ -383,82 +387,82 @@ extern "C" bool clingodl_register_options(clingodl_propagator_t *prop, clingo_op
             "        partial+: Detect some more conflicting constraints\n"
             "        full    : Detect all conflicting constraints\n"
             "      <thread>: Restrict to thread",
-            &parse_mode, &prop->config, true, "<mode>"));
+            &parse_mode, &theory->config, true, "<mode>"));
         CLINGO_CALL(clingo_options_add(options, group, "propagate-root",
             "Enable full propagation below decision level [0]\n"
             "      <arg>   : <n>[,<thread>]\n"
             "      <n>     : Upper bound for decision level\n"
             "      <thread>: Restrict to thread",
-            &parse_root, &prop->config, true, "<arg>"));
+            &parse_root, &theory->config, true, "<arg>"));
         CLINGO_CALL(clingo_options_add(options, group, "propagate-budget",
             "Enable full propagation limiting to budget [0]\n"
             "      <arg>   : <n>[,<thread>]\n"
             "      <n>     : Budget roughly corresponding to cost of consistency checks\n"
             "                (if possible use with --propagate-root greater 0)\n"
             "      <thread>: Restrict to thread",
-            &parse_budget, &prop->config, true, "<arg>"));
+            &parse_budget, &theory->config, true, "<arg>"));
         CLINGO_CALL(clingo_options_add(options, group, "add-mutexes",
             "Add mutexes in a preprocessing step [0]\n"
             "      <arg>   : <max>[,<cut>]\n"
             "      <max>   : Maximum size of mutexes to add\n"
             "      <cut>   : Limit costs to calculate mutexes\n",
-            &parse_mutex, &prop->config, true, "<arg>"));
-        CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers", &prop->rdl));
-        CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode", &prop->config.strict));
+            &parse_mutex, &theory->config, true, "<arg>"));
+        CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers", &theory->rdl));
+        CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode", &theory->config.strict));
     }
     CLINGODL_CATCH;
 }
 
-extern "C" bool clingodl_validate_options(clingodl_propagator_t *prop) {
+extern "C" bool clingodl_validate_options(clingodl_theory_t *theory) {
     CLINGODL_TRY {
-        if (prop->config.strict && prop->rdl) {
+        if (theory->config.strict && theory->rdl) {
             throw std::runtime_error("real difference logic not available with strict semantics");
         }
     }
     CLINGODL_CATCH;
 }
 
-extern "C" bool clingodl_on_model(clingodl_propagator_t *prop, clingo_model_t* model) {
+extern "C" bool clingodl_on_model(clingodl_theory_t *theory, clingo_model_t* model) {
     CLINGODL_TRY {
         Model m(model);
-        prop->clingodl->extend_model(m);
+        theory->clingodl->extend_model(m);
     }
     CLINGODL_CATCH;
 }
 
-extern "C" bool clingodl_lookup_symbol(clingodl_propagator_t *prop_, clingo_symbol_t symbol, size_t *index) {
-    return prop_->clingodl->lookup_symbol(symbol, index);
+extern "C" bool clingodl_lookup_symbol(clingodl_theory_t *theory, clingo_symbol_t symbol, size_t *index) {
+    return theory->clingodl->lookup_symbol(symbol, index);
 }
 
-extern "C" clingo_symbol_t clingodl_get_symbol(clingodl_propagator_t *prop, size_t index) {
-    return prop->clingodl->get_symbol(index);
+extern "C" clingo_symbol_t clingodl_get_symbol(clingodl_theory_t *theory, size_t index) {
+    return theory->clingodl->get_symbol(index);
 }
 
-extern "C" void clingodl_assignment_begin(clingodl_propagator_t *, uint32_t, size_t *current) {
+extern "C" void clingodl_assignment_begin(clingodl_theory_t *, uint32_t, size_t *current) {
     // Note: the first vertex is always 0 and can be skipped because its value is 0
     *current = 1;
 }
 
-extern "C" bool clingodl_assignment_next(clingodl_propagator_t *prop, uint32_t thread_id, size_t *index) {
-    return prop->clingodl->next(thread_id, index);
+extern "C" bool clingodl_assignment_next(clingodl_theory_t *theory, uint32_t thread_id, size_t *index) {
+    return theory->clingodl->next(thread_id, index);
 }
 
-extern "C" bool clingodl_assignment_has_value(clingodl_propagator_t *prop, uint32_t thread_id, size_t index) {
-    return prop->clingodl->has_value(thread_id, index);
+extern "C" bool clingodl_assignment_has_value(clingodl_theory_t *theory, uint32_t thread_id, size_t index) {
+    return theory->clingodl->has_value(thread_id, index);
 }
 
-extern "C" void clingodl_assignment_get_value(clingodl_propagator_t *prop, uint32_t thread_id, size_t index, clingodl_value_t *value) {
-    prop->clingodl->get_value(thread_id, index, value);
+extern "C" void clingodl_assignment_get_value(clingodl_theory_t *theory, uint32_t thread_id, size_t index, clingodl_value_t *value) {
+    theory->clingodl->get_value(thread_id, index, value);
 }
 
-extern "C" bool clingodl_on_statistics(clingodl_propagator_t *prop, clingo_statistics_t* step, clingo_statistics_t* accu) {
+extern "C" bool clingodl_on_statistics(clingodl_theory_t *theory, clingo_statistics_t* step, clingo_statistics_t* accu) {
     CLINGODL_TRY {
         uint64_t root_s, root_a;
         CLINGO_CALL(clingo_statistics_root(step, &root_s));
         CLINGO_CALL(clingo_statistics_root(accu, &root_a));
         UserStatistics s(step, root_s);
         UserStatistics a(accu, root_a);
-        prop->clingodl->on_statistics(s, a);
+        theory->clingodl->on_statistics(s, a);
     }
     CLINGODL_CATCH;
 }

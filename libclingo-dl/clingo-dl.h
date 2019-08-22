@@ -81,59 +81,62 @@ typedef struct clingodl_value {
     };
 } clingodl_value_t;
 
-typedef struct clingodl_propagator clingodl_propagator_t;
+typedef struct clingodl_theory clingodl_theory_t;
 
-//! creates the propagator
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_create_propagator(clingodl_propagator_t **propagator);
+//! creates the theory
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_create(clingodl_theory_t **theory);
 
-//! registers the propagator with the control
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_register_propagator(clingodl_propagator_t *propagator, clingo_control_t* control);
+//! registers the theory with the control
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_register(clingodl_theory_t *theory, clingo_control_t* control);
 
-//! destroys the propagator, currently no way to unregister a propagator
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_destroy_propagator(clingodl_propagator_t *propagator);
+//! prepare the theory between grounding and solving
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_prepare(clingodl_theory_t *theory, clingo_control_t* control);
 
-//! configure propagator manually (without using clingo's options facility)
-//! Note that the propagator has to be configured before registering it and cannot be reconfigured.
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_configure_propagator(clingodl_propagator_t *prop, char const *key, char const *value);
+//! destroys the theory, currently no way to unregister a theory
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_destroy(clingodl_theory_t *theory);
+
+//! configure theory manually (without using clingo's options facility)
+//! Note that the theory has to be configured before registering it and cannot be reconfigured.
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_configure(clingodl_theory_t *theory, char const *key, char const *value);
 
 //! add options for your theory
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_register_options(clingodl_propagator_t *propagator, clingo_options_t* options);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_register_options(clingodl_theory_t *theory, clingo_options_t* options);
 
 //! validate options for your theory
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_validate_options(clingodl_propagator_t *propagator);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_validate_options(clingodl_theory_t *theory);
 
 //! callback on every model
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_model(clingodl_propagator_t *propagator, clingo_model_t* model);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_model(clingodl_theory_t *theory, clingo_model_t* model);
 
 //! obtain a symbol index which can be used to get the value of a symbol
 //! returns true if the symbol exists
 //! does not throw
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_lookup_symbol(clingodl_propagator_t *propagator, clingo_symbol_t symbol, size_t *index);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_lookup_symbol(clingodl_theory_t *theory, clingo_symbol_t symbol, size_t *index);
 
 //! obtain the symbol at the given index
 //! does not throw
-CLINGODL_VISIBILITY_DEFAULT clingo_symbol_t clingodl_get_symbol(clingodl_propagator_t *propagator, size_t index);
+CLINGODL_VISIBILITY_DEFAULT clingo_symbol_t clingodl_get_symbol(clingodl_theory_t *theory, size_t index);
 
 //! initialize index so that it can be used with clingodl_assignment_next
 //! does not throw
-CLINGODL_VISIBILITY_DEFAULT void clingodl_assignment_begin(clingodl_propagator_t *propagator, uint32_t thread_id, size_t *index);
+CLINGODL_VISIBILITY_DEFAULT void clingodl_assignment_begin(clingodl_theory_t *theory, uint32_t thread_id, size_t *index);
 
 //! move to the next index that has a value
 //! returns true if the updated index is valid
 //! does not throw
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_next(clingodl_propagator_t *propagator, uint32_t thread_id, size_t *index);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_next(clingodl_theory_t *theory, uint32_t thread_id, size_t *index);
 
 //! check if the symbol at the given index has a value
 //! does not throw
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_has_value(clingodl_propagator_t *propagator, uint32_t thread_id, size_t index);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_has_value(clingodl_theory_t *theory, uint32_t thread_id, size_t index);
 
 //! get the symbol and it's value at the given index
 //! does not throw
-CLINGODL_VISIBILITY_DEFAULT void clingodl_assignment_get_value(clingodl_propagator_t *propagator, uint32_t thread_id, size_t index, clingodl_value_t *value);
+CLINGODL_VISIBILITY_DEFAULT void clingodl_assignment_get_value(clingodl_theory_t *theory, uint32_t thread_id, size_t index, clingodl_value_t *value);
 
 //! callback on statistic updates
-/// please add a subkey with the name of your propagator
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_statistics(clingodl_propagator_t *propagator, clingo_statistics_t* step, clingo_statistics_t* accu);
+/// please add a subkey with the name of your theory
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_statistics(clingodl_theory_t *theory, clingo_statistics_t* step, clingo_statistics_t* accu);
 
 #ifdef __cplusplus
 }
