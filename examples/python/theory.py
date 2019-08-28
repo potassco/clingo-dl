@@ -68,10 +68,7 @@ class Theory:
         self.__c_theory = None
 
         # load library
-        #self.__theory = ctypes.cdll.LoadLibrary(ctypes.util.find_library(lib))
-        self.__theory = ctypes.cdll.LoadLibrary('/home/kaminski/git/clingoDL/build/bin/libclingo-dl.so')
-
-        print (self.__theory)
+        self.__theory = ctypes.cdll.LoadLibrary(ctypes.util.find_library(lib))
 
         # bool create(theory_t **theory);
         self.__create = self.__fun(prefix, "create", c_bool, [POINTER(c_void_p)])
