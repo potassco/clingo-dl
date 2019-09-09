@@ -26,3 +26,5 @@ numbers.
 ### Example
 
     clingo-dl -c n=132 --propagate=full examples/taskassignment/encoding-dl.lp examples/taskassignment/tai4_4_1.lp
+
+For an example of how to use the clingoDL library, see [here](https://github.com/potassco/tefoli)
