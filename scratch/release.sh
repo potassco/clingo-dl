@@ -7,7 +7,7 @@ set -e
 
 cd "$(dirname $0)/.."
 
-VERSION="$(grep '#define CLINGODL_VERSION "[^.]\+.[^.]\+.[^.]\+"' clingo-dl.h | colrm 1 25 | tr -d '"')"
+VERSION="$(grep '#define CLINGODL_VERSION "[^.]\+.[^.]\+.[^.]\+"' libclingo-dl/clingo-dl.h | colrm 1 25 | tr -d '"')"
 
 # {{{1 parse options
 
