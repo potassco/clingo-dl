@@ -1163,10 +1163,12 @@ public:
             facts.limit = 0;
         }
 #if defined(CHECKSOLUTION) || defined(CROSSCHECK)
-        for (auto &x : edges_) {
-            if (ctl.assignment().is_true(x.lit)) {
-                if (!state.dl_graph.node_value_defined(x.from) || !state.dl_graph.node_value_defined(x.to) || !(state.dl_graph.node_value(x.from) - state.dl_graph.node_value(x.to) <= x.weight)) {
-                    throw std::logic_error("not a valid solution");
+        if (ctl.assignment().is_total()) {
+            for (auto &x : edges_) {
+                if (ctl.assignment().is_true(x.lit)) {
+                    if (!state.dl_graph.node_value_defined(x.from) || !state.dl_graph.node_value_defined(x.to) || !(state.dl_graph.node_value(x.from) - state.dl_graph.node_value(x.to) <= x.weight)) {
+                        throw std::logic_error("not a valid solution");
+                    }
                 }
             }
         }
