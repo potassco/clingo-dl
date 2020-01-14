@@ -105,16 +105,14 @@ public:
     DLPropagatorFacade(clingo_control_t *ctl, PropagatorConfig const &conf)
     : prop_{step_, conf} {
         CLINGO_CALL(clingo_control_add(ctl,"base", nullptr, 0, R"(#theory dl {
-term{};
-constant {
+term {
   + : 1, binary, left;
   - : 1, binary, left;
   * : 2, binary, left;
   / : 2, binary, left;
   - : 3, unary
 };
-diff_term {- : 1, binary, left};
-&diff/0 : diff_term, {<=}, constant, any;
+&diff/0 : term, {<=}, term, any;
 &show_assignment/0 : term, directive
 }.)"));
         static clingo_propagator_t prop = {

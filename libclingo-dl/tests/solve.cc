@@ -78,6 +78,19 @@ TEST_CASE("solving", "[clingo]") {
 
             REQUIRE(ctl.statistics()["user_accu"]["DifferenceLogic"]["Thread"][(size_t)0]["Edges propagated"].value() >= 1);
         }
+        SECTION("parse") {
+            REQUIRE(clingodl_register(theory, ctl.to_c()));
+
+            ctl.add("base", {},
+                "&diff { p(1+2)-q(3*4-7) } <= 3-9.\n"
+                );
+            ctl.ground({{"base", {}}});
+            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
+
+            auto result = solve(theory, ctl);
+            auto p = Clingo::parse_term("p(3)"),  q = Clingo::parse_term("q(5)");
+            REQUIRE(result == (ResultVec{{{p, 0}, {q, 6}}}));
+        }
         clingodl_destroy(theory);
     }
 }
