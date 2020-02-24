@@ -1207,10 +1207,13 @@ public:
                 if (state.dl_graph.edge_is_active(it->second)) {
                     auto ret = state.dl_graph.add_edge(it->second, [&](std::vector<int> const &neg_cycle) {
                         std::vector<literal_t> clause;
+                        bool sat = false;
                         for (auto eid : neg_cycle) {
+                            sat = ctl.assignment().is_true(-edges_[eid].lit);
+                            if (sat) break;
                             clause.emplace_back(-edges_[eid].lit);
                         }
-                        return ctl.add_clause(clause) && ctl.propagate();
+                        return sat || (ctl.add_clause(clause) && ctl.propagate());
                     });
                     if (!ret) { return; }
                     bool propagate = (state.dl_graph.mode() >= PropagationMode::Strong) ||
