@@ -1237,7 +1237,7 @@ public:
 
     // undo
 
-    void undo(PropagateControl const &ctl, LiteralSpan changes) noexcept override {
+    void undo(PropagateControl const &ctl, LiteralSpan changes) noexcept(noexcept(&Propagator::undo)) override {
         static_cast<void>(changes);
         auto &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_undo};
