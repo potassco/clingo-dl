@@ -52,6 +52,14 @@ bool propagate(clingo_propagate_control_t* i, const clingo_literal_t *changes, s
     CLINGODL_CATCH;
 }
 
+#if CLINGO_VERSION_MAJOR*100 + CLINGO_VERSION_MINOR >= 500500
+template <typename T>
+void undo(clingo_propagate_control_t const* i, const clingo_literal_t *changes, size_t size, void* data)
+{
+    PropagateControl in(const_cast<clingo_propagate_control_t *>(i));
+    static_cast<DifferenceLogicPropagator<T>*>(data)->undo(in, {changes, size});
+}
+#else
 template <typename T>
 bool undo(clingo_propagate_control_t const* i, const clingo_literal_t *changes, size_t size, void* data)
 {
@@ -61,6 +69,7 @@ bool undo(clingo_propagate_control_t const* i, const clingo_literal_t *changes, 
     }
     CLINGODL_CATCH;
 }
+#endif
 
 template <typename T>
 bool check(clingo_propagate_control_t* i, void* data)
