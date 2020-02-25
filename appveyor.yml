@@ -16,7 +16,7 @@ before_build:
 
     conda config --set always_yes yes --set changeps1 no
 
-    conda update -q conda
+    REM conda update -q conda
 
     conda info -a
 
