@@ -52,7 +52,7 @@ bool propagate(clingo_propagate_control_t* i, const clingo_literal_t *changes, s
     CLINGODL_CATCH;
 }
 
-#if CLINGO_VERSION_MAJOR*100 + CLINGO_VERSION_MINOR >= 500500
+#if CLINGO_VERSION_MAJOR*1000 + CLINGO_VERSION_MINOR >= 5005
 template <typename T>
 void undo(clingo_propagate_control_t const* i, const clingo_literal_t *changes, size_t size, void* data)
 {

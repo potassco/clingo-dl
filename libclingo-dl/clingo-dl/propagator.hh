@@ -30,12 +30,11 @@
 
 #include <unordered_map>
 
-#if CLINGO_VERSION_MAJOR*100 + CLINGO_VERSION_MINOR >= 500500
+#if CLINGO_VERSION_MAJOR*1000 + CLINGO_VERSION_MINOR >= 5005
 #   define CLINGODL_UNDO_NOEXCEPT noexcept
 #else
 #   define CLINGODL_UNDO_NOEXCEPT
 #endif
-
 
 //#define CROSSCHECK
 #define CHECKSOLUTION
@@ -1244,7 +1243,7 @@ public:
 
     // undo
 
-    void undo(PropagateControl const &ctl, LiteralSpan changes) noexcept(noexcept(&Propagator::undo)) CLINGODL_UNDO_NOEXCEPT override {
+    void undo(PropagateControl const &ctl, LiteralSpan changes) CLINGODL_UNDO_NOEXCEPT override {
         static_cast<void>(changes);
         auto &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_undo};
