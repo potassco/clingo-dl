@@ -30,6 +30,12 @@
 
 #include <unordered_map>
 
+#if CLINGO_VERSION_MAJOR*1000 + CLINGO_VERSION_MINOR >= 5005
+#   define CLINGODL_UNDO_NOEXCEPT noexcept
+#else
+#   define CLINGODL_UNDO_NOEXCEPT
+#endif
+
 //#define CROSSCHECK
 #define CHECKSOLUTION
 using namespace Clingo;
@@ -1208,7 +1214,9 @@ public:
                     auto ret = state.dl_graph.add_edge(it->second, [&](std::vector<int> const &neg_cycle) {
                         std::vector<literal_t> clause;
                         for (auto eid : neg_cycle) {
-                            clause.emplace_back(-edges_[eid].lit);
+                            auto lit = -edges_[eid].lit;
+                            if (ctl.assignment().is_true(lit)) { return true; }
+                            clause.emplace_back(lit);
                         }
                         return ctl.add_clause(clause) && ctl.propagate();
                     });
@@ -1235,7 +1243,7 @@ public:
 
     // undo
 
-    void undo(PropagateControl const &ctl, LiteralSpan changes) override {
+    void undo(PropagateControl const &ctl, LiteralSpan changes) CLINGODL_UNDO_NOEXCEPT override {
         static_cast<void>(changes);
         auto &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_undo};
