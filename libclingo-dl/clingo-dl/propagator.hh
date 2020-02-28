@@ -171,11 +171,11 @@ struct ThreadConfig {
 
 struct PropagatorConfig {
     bool strict{false};
+    bool sort_edges{true};
     uint64_t mutex_size{0};
     uint64_t mutex_cutoff{10};
     uint64_t propagate_root{0};
     uint64_t propagate_budget{0};
-    bool sort_edges{true};
     PropagationMode mode{PropagationMode::Check};
     std::vector<ThreadConfig> thread_config;
 
@@ -1217,7 +1217,7 @@ public:
             }
         }
 
-        if (!conf_.sort_edges) {
+        if (conf_.sort_edges) {
             std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
                 return edges_[l].weight < edges_[r].weight;
             });
