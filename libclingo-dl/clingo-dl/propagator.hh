@@ -175,6 +175,7 @@ struct PropagatorConfig {
     uint64_t mutex_cutoff{10};
     uint64_t propagate_root{0};
     uint64_t propagate_budget{0};
+    bool no_sort_edges{false};
     PropagationMode mode{PropagationMode::Check};
     std::vector<ThreadConfig> thread_config;
 
@@ -920,6 +921,7 @@ struct DLState {
     DLStats &stats;
     DifferenceLogicGraph<T> dl_graph;
     std::vector<literal_t> false_lits;
+    std::vector<int> todo_edges_;
     uint64_t propagate_root;
     uint64_t propagate_budget;
 };
@@ -1202,7 +1204,7 @@ public:
             }
             state.false_lits.clear();
         }
-        std::vector<int> edges;
+        state.todo_edges_.clear();
         for (auto lit : changes) {
             auto it = lit_to_edges_.find(lit), ie = lit_to_edges_.end();
             if (state.dl_graph.can_propagate()) { disable_edge_by_lit(state, lit); }
@@ -1211,33 +1213,34 @@ public:
                 ctl.remove_watch(lit);
             }
             for (; it != ie && it->first == lit; ++it) {
-                edges.push_back(it->second);
+                if (state.dl_graph.edge_is_active(it->second)) state.todo_edges_.push_back(it->second);
             }
         }
 
-        /// TODO: this could be optimized by inserting elements in lit_to_edges in the right order and then only merging the lists
-        std::sort(edges.begin(), edges.end(), [&](int l, int r) { return edges_[l].weight < edges_[r].weight; });
+        if (!conf_.no_sort_edges) {
+            std::sort(state.todo_edges_.begin(), state.todo_edges_.end(), [&](int l, int r) { return edges_[l].weight < edges_[r].weight; });
+        }
 
-        for (auto edge : edges) {
+        for (auto edge : state.todo_edges_) {
             if (state.dl_graph.edge_is_active(edge)) {
-                auto ret = state.dl_graph.add_edge(edge, [&](std::vector<int> const &neg_cycle) {
-                    std::vector<literal_t> clause;
-                    for (auto eid : neg_cycle) {
-                        auto lit = -edges_[eid].lit;
-                        if (ctl.assignment().is_true(lit)) { return true; }
-                        clause.emplace_back(lit);
-                    }
-                    return ctl.add_clause(clause) && ctl.propagate();
-                });
-                if (!ret) { return; }
-                bool propagate = (state.dl_graph.mode() >= PropagationMode::Strong) ||
-                    (level < state.propagate_root) || (
-                        state.propagate_budget > 0 &&
-                        state.dl_graph.can_propagate() &&
-                        state.stats.propagate_cost_add + state.propagate_budget > state.stats.propagate_cost_from + state.stats.propagate_cost_to);
-                if (!propagate) { state.dl_graph.disable_propagate(); }
-                // if !propgate -> can no longer propagate!
-                if (propagate && !state.dl_graph.propagate(edge, ctl)) { return; }
+            auto ret = state.dl_graph.add_edge(edge, [&](std::vector<int> const &neg_cycle) {
+                std::vector<literal_t> clause;
+                for (auto eid : neg_cycle) {
+                    auto lit = -edges_[eid].lit;
+                    if (ctl.assignment().is_true(lit)) { return true; }
+                    clause.emplace_back(lit);
+                }
+                return ctl.add_clause(clause) && ctl.propagate();
+            });
+            if (!ret) { return; }
+            bool propagate = (state.dl_graph.mode() >= PropagationMode::Strong) ||
+                (level < state.propagate_root) || (
+                    state.propagate_budget > 0 &&
+                    state.dl_graph.can_propagate() &&
+                    state.stats.propagate_cost_add + state.propagate_budget > state.stats.propagate_cost_from + state.stats.propagate_cost_to);
+            if (!propagate) { state.dl_graph.disable_propagate(); }
+            // if !propgate -> can no longer propagate!
+            if (propagate && !state.dl_graph.propagate(edge, ctl)) { return; }
             }
         }
     }

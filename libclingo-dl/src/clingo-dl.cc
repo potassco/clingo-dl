@@ -368,6 +368,9 @@ extern "C" bool clingodl_configure(clingodl_theory_t *theory, char const *key, c
         if (strcmp(key, "add-mutexes") == 0) {
             return check_parse("add-mutexes", parse_mutex(value, &theory->config));
         }
+        if (strcmp(key, "no-do-sort-edges") == 0) {
+            return check_parse("no-do-sort-edges", parse_bool(value, &theory->config.no_sort_edges));
+        }
         if (strcmp(key, "rdl") == 0) {
             return check_parse("rdl", parse_bool(value, &theory->rdl));
         }
@@ -414,6 +417,7 @@ extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_opti
             "      <max>   : Maximum size of mutexes to add\n"
             "      <cut>   : Limit costs to calculate mutexes\n",
             &parse_mutex, &theory->config, true, "<arg>"));
+        CLINGO_CALL(clingo_options_add_flag(options, group, "no-do-sort-edges", "Do not sort edges by lowest weight for propagation", &theory->config.no_sort_edges));
         CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers", &theory->rdl));
         CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode", &theory->config.strict));
     }
