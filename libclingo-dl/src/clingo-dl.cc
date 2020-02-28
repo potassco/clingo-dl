@@ -417,7 +417,7 @@ extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_opti
             "      <max>   : Maximum size of mutexes to add\n"
             "      <cut>   : Limit costs to calculate mutexes\n",
             &parse_mutex, &theory->config, true, "<arg>"));
-        CLINGO_CALL(clingo_options_add_flag(options, group, "sort-edges", "Sort edges by lowest weight for propagation (default)", &theory->config.sort_edges));
+        CLINGO_CALL(clingo_options_add_flag(options, group, "sort-edges", "Sort edges by lowest weight for propagation [enabled]", &theory->config.sort_edges));
         CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers", &theory->rdl));
         CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode", &theory->config.strict));
     }
