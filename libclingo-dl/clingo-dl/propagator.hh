@@ -162,6 +162,7 @@ struct EdgeState {
 };
 
 enum class PropagationMode { Check = 0, Trivial = 1, Weak = 2, WeakPlus = 3, Strong = 4 };
+enum class SortMode { No = 0, Weight = 1, Potential = 2 };
 
 struct ThreadConfig {
     std::pair<bool,uint64_t> propagate_root{false,0};
@@ -171,7 +172,7 @@ struct ThreadConfig {
 
 struct PropagatorConfig {
     bool strict{false};
-    bool sort_edges{true};
+    SortMode sort_edges{SortMode::Weight};
     uint64_t mutex_size{0};
     uint64_t mutex_cutoff{10};
     uint64_t propagate_root{0};
@@ -1217,9 +1218,19 @@ public:
             }
         }
 
-        if (conf_.sort_edges) {
+        if (conf_.sort_edges == SortMode::Weight) {
             std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
                 return edges_[l].weight < edges_[r].weight;
+            });
+        }
+        else if (conf_.sort_edges == SortMode::Potential) {
+            std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
+                auto le = edges_[l];
+                auto re = edges_[r];
+                auto& g = state.dl_graph;
+                auto costl = (g.node_value_defined(le.from) ? -g.node_value(le.from) : 0) + le.weight + (g.node_value_defined(le.to) ? -g.node_value(le.to) : 0);
+                auto costr = (g.node_value_defined(re.from) ? -g.node_value(re.from) : 0) + re.weight + (g.node_value_defined(re.to) ? -g.node_value(re.to) : 0);
+                return costl < costr;
             });
         }
 
