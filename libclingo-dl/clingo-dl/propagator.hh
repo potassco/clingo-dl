@@ -162,7 +162,7 @@ struct EdgeState {
 };
 
 enum class PropagationMode { Check = 0, Trivial = 1, Weak = 2, WeakPlus = 3, Strong = 4 };
-enum class SortMode { No = 0, Weight = 1, Potential = 2 };
+enum class SortMode { No = 0, Weight = 1, Potential = 2 , PotentialRev = 3};
 
 struct ThreadConfig {
     std::pair<bool,uint64_t> propagate_root{false,0};
@@ -1233,6 +1233,17 @@ public:
                 return costl < costr;
             });
         }
+        else if (conf_.sort_edges == SortMode::PotentialRev) {
+            std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
+                auto le = edges_[l];
+                auto re = edges_[r];
+                auto& g = state.dl_graph;
+                auto costl = (g.node_value_defined(le.from) ? -g.node_value(le.from) : 0) + le.weight + (g.node_value_defined(le.to) ? -g.node_value(le.to) : 0);
+                auto costr = (g.node_value_defined(re.from) ? -g.node_value(re.from) : 0) + re.weight + (g.node_value_defined(re.to) ? -g.node_value(re.to) : 0);
+                return costl > costr;
+            });
+        }
+
 
         for (auto edge : state.todo_edges) {
             if (state.dl_graph.edge_is_active(edge)) {

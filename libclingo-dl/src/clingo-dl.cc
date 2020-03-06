@@ -345,6 +345,9 @@ static bool parse_sort(const char *value, void *data) {
     else if ((rem = iequals_pre(value, "potential"))) {
         sort = SortMode::Potential;
     }
+    else if ((rem = iequals_pre(value, "potential-reversed"))) {
+        sort = SortMode::PotentialRev;
+    }
     if (rem) { pc.sort_edges = sort; }
     return rem;
 }
@@ -439,7 +442,8 @@ extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_opti
             "      <arg>   : {no, weight, potential}\n"
             "        no        : No sorting}\n"
             "        weight    : Sort by edge weight}\n"
-            "        potential : Sort by relative potential}\n",
+            "        potential : Sort by relative potential}\n"
+            "        potential-reversed : Sort by relative negative potential}\n",
             &parse_sort, &theory->config, true, "<arg>"));
         CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers", &theory->rdl));
         CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode", &theory->config.strict));
