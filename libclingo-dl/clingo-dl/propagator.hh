@@ -1228,8 +1228,8 @@ public:
                 auto le = edges_[l];
                 auto re = edges_[r];
                 auto& g = state.dl_graph;
-                auto costl = (g.node_value_defined(le.from) ? -g.node_value(le.from) : 0) + le.weight + (g.node_value_defined(le.to) ? -g.node_value(le.to) : 0);
-                auto costr = (g.node_value_defined(re.from) ? -g.node_value(re.from) : 0) + re.weight + (g.node_value_defined(re.to) ? -g.node_value(re.to) : 0);
+                auto costl = (g.node_value_defined(le.from) ? -g.node_value(le.from) : 0) + le.weight - (g.node_value_defined(le.to) ? -g.node_value(le.to) : 0);
+                auto costr = (g.node_value_defined(re.from) ? -g.node_value(re.from) : 0) + re.weight - (g.node_value_defined(re.to) ? -g.node_value(re.to) : 0);
                 return costl < costr;
             });
         }
@@ -1238,8 +1238,8 @@ public:
                 auto le = edges_[l];
                 auto re = edges_[r];
                 auto& g = state.dl_graph;
-                auto costl = (g.node_value_defined(le.from) ? -g.node_value(le.from) : 0) + le.weight + (g.node_value_defined(le.to) ? -g.node_value(le.to) : 0);
-                auto costr = (g.node_value_defined(re.from) ? -g.node_value(re.from) : 0) + re.weight + (g.node_value_defined(re.to) ? -g.node_value(re.to) : 0);
+                auto costl = (g.node_value_defined(le.from) ? -g.node_value(le.from) : 0) + le.weight - (g.node_value_defined(le.to) ? -g.node_value(le.to) : 0);
+                auto costr = (g.node_value_defined(re.from) ? -g.node_value(re.from) : 0) + re.weight - (g.node_value_defined(re.to) ? -g.node_value(re.to) : 0);
                 return costl > costr;
             });
         }
