@@ -342,11 +342,11 @@ static bool parse_sort(const char *value, void *data) {
     else if ((rem = iequals_pre(value, "weight"))) {
         sort = SortMode::Weight;
     }
-    else if ((rem = iequals_pre(value, "potential"))) {
-        sort = SortMode::Potential;
-    }
     else if ((rem = iequals_pre(value, "potential-reversed"))) {
         sort = SortMode::PotentialRev;
+    }
+    else if ((rem = iequals_pre(value, "potential"))) {
+        sort = SortMode::Potential;
     }
     if (rem) { pc.sort_edges = sort; }
     return rem;
