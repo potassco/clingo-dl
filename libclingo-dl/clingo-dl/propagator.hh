@@ -168,6 +168,7 @@ struct ThreadConfig {
     std::pair<bool,uint64_t> propagate_root{false,0};
     std::pair<bool,uint64_t> propagate_budget{false,0};
     std::pair<bool,PropagationMode> mode{false,PropagationMode::Check};
+    std::pair<bool,SortMode> sort_edges{false,SortMode::Weight};
 };
 
 struct PropagatorConfig {
@@ -192,12 +193,19 @@ struct PropagatorConfig {
         }
         return propagate_budget;
     }
-    PropagationMode get_mode(id_t thread_id) {
+    PropagationMode get_propagate_mode(id_t thread_id) {
         if (thread_id < thread_config.size() && thread_config[thread_id].mode.first) {
             return thread_config[thread_id].mode.second;
         }
         return mode;
     }
+    SortMode get_sort_mode(id_t thread_id) {
+        if (thread_id < thread_config.size() && thread_config[thread_id].sort_edges.first) {
+            return thread_config[thread_id].sort_edges.second;
+        }
+        return sort_edges;
+    }
+
 
     ThreadConfig &ensure(id_t thread_id) {
         if (thread_config.size() < thread_id + 1) {
@@ -1125,7 +1133,7 @@ public:
         bool add = false;
         for (int i = 0; i < init.number_of_threads(); ++i) {
             init.add_watch(lit, i);
-            if (conf_.get_mode(i) >= PropagationMode::Strong || conf_.get_propagate_root(i) > 0 || conf_.get_propagate_budget(i) > 0) {
+            if (conf_.get_propagate_mode(i) >= PropagationMode::Strong || conf_.get_propagate_root(i) > 0 || conf_.get_propagate_budget(i) > 0) {
                 add = true;
                 init.add_watch(-lit, i);
             }
@@ -1156,7 +1164,7 @@ public:
             facts_.resize(init.number_of_threads());
         }
         for (int i = 0; i < init.number_of_threads(); ++i) {
-            states_.emplace_back(stats_.dl_stats[i], edges_, conf_.get_mode(i), conf_.get_propagate_root(i), conf_.get_propagate_budget(i));
+            states_.emplace_back(stats_.dl_stats[i], edges_, conf_.get_propagate_mode(i), conf_.get_propagate_root(i), conf_.get_propagate_budget(i));
             facts_[i].limit = facts_[i].lits.size();
         }
     }
@@ -1193,7 +1201,8 @@ public:
     }
 
     void do_propagate(PropagateControl &ctl, LiteralSpan changes) {
-        DLState<T> &state = states_[ctl.thread_id()];
+        auto thread_id = ctl.thread_id();
+        DLState<T> &state = states_[thread_id];
         Timer t{state.stats.time_propagate};
         auto level = ctl.assignment().decision_level();
         bool enable_propagate = state.dl_graph.mode() >= PropagationMode::Strong || level < state.propagate_root || state.propagate_budget > 0;
@@ -1218,32 +1227,31 @@ public:
             }
         }
 
-        if (conf_.sort_edges == SortMode::Weight) {
+        if (conf_.get_sort_mode(thread_id) == SortMode::Weight) {
             std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
                 return edges_[l].weight < edges_[r].weight;
             });
         }
-        else if (conf_.sort_edges == SortMode::Potential) {
-            std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
-                auto le = edges_[l];
-                auto re = edges_[r];
-                auto& g = state.dl_graph;
-                auto costl = (g.node_value_defined(le.from) ? -g.node_value(le.from) : 0) + le.weight - (g.node_value_defined(le.to) ? -g.node_value(le.to) : 0);
-                auto costr = (g.node_value_defined(re.from) ? -g.node_value(re.from) : 0) + re.weight - (g.node_value_defined(re.to) ? -g.node_value(re.to) : 0);
-                return costl < costr;
-            });
-        }
-        else if (conf_.sort_edges == SortMode::PotentialRev) {
-            std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
-                auto le = edges_[l];
-                auto re = edges_[r];
-                auto& g = state.dl_graph;
-                auto costl = (g.node_value_defined(le.from) ? -g.node_value(le.from) : 0) + le.weight - (g.node_value_defined(le.to) ? -g.node_value(le.to) : 0);
-                auto costr = (g.node_value_defined(re.from) ? -g.node_value(re.from) : 0) + re.weight - (g.node_value_defined(re.to) ? -g.node_value(re.to) : 0);
-                return costl > costr;
-            });
-        }
+        else {
+                auto get_potential = [&](auto edge) {
+                    auto& g = state.dl_graph;
+                    return (g.node_value_defined(edge.from) ? -g.node_value(edge.from) : 0);
+                };
+                auto cost = [&](auto edge) {
+                    return get_potential(edge) + edge.weight - get_potential(edge);
+                };
 
+                if (conf_.get_sort_mode(thread_id) == SortMode::Potential) {
+                    std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
+                        return cost(edges_[l]) < cost(edges_[r]);
+                    });
+                }
+                else if (conf_.get_sort_mode(thread_id) == SortMode::PotentialRev) {
+                    std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
+                        return cost(edges_[l]) > cost(edges_[r]);
+                    });
+                }
+        }
 
         for (auto edge : state.todo_edges) {
             if (state.dl_graph.edge_is_active(edge)) {

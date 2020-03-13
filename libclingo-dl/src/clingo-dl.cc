@@ -348,8 +348,9 @@ static bool parse_sort(const char *value, void *data) {
     else if ((rem = iequals_pre(value, "potential"))) {
         sort = SortMode::Potential;
     }
-    if (rem) { pc.sort_edges = sort; }
-    return rem;
+    return rem && set_config(rem, data,
+        [sort](PropagatorConfig &config) { config.sort_edges = sort; },
+        [sort](ThreadConfig &config) { config.sort_edges = {true, sort}; });
 }
 
 static bool parse_bool(const char *value, void *data) {
