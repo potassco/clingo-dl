@@ -339,6 +339,9 @@ static bool parse_sort(const char *value, void *data) {
     if ((rem = iequals_pre(value, "no"))) {
         sort = SortMode::No;
     }
+    else if ((rem = iequals_pre(value, "weight-reversed"))) {
+        sort = SortMode::WeightRev;
+    }
     else if ((rem = iequals_pre(value, "weight"))) {
         sort = SortMode::Weight;
     }
@@ -440,9 +443,10 @@ extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_opti
             &parse_mutex, &theory->config, true, "<arg>"));
         CLINGO_CALL(clingo_options_add(options, group, "sort-edges",
             "Sort edges for propagation [weight]\n"
-            "      <arg>   : {no, weight, potential, potential-reversed}\n"
+            "      <arg>   : {no, weight, weight-reversed, potential, potential-reversed}\n"
             "        no                 : No sorting\n"
             "        weight             : Sort by edge weight\n"
+            "        weight-reversed    : Sort by negative edge weight\n"
             "        potential          : Sort by relative potential\n"
             "        potential-reversed : Sort by relative negative potential",
             &parse_sort, &theory->config, true, "<arg>"));

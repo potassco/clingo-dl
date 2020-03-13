@@ -162,7 +162,7 @@ struct EdgeState {
 };
 
 enum class PropagationMode { Check = 0, Trivial = 1, Weak = 2, WeakPlus = 3, Strong = 4 };
-enum class SortMode { No = 0, Weight = 1, Potential = 2 , PotentialRev = 3};
+enum class SortMode { No = 0, Weight = 1, WeightRev = 2, Potential = 3 , PotentialRev = 4};
 
 struct ThreadConfig {
     std::pair<bool,uint64_t> propagate_root{false,0};
@@ -1232,25 +1232,30 @@ public:
                 return edges_[l].weight < edges_[r].weight;
             });
         }
+        else if (conf_.get_sort_mode(thread_id) == SortMode::WeightRev) {
+            std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
+                return edges_[l].weight > edges_[r].weight;
+            });
+        }
         else {
-                auto get_potential = [&](auto edge) {
-                    auto& g = state.dl_graph;
-                    return (g.node_value_defined(edge.from) ? -g.node_value(edge.from) : 0);
-                };
-                auto cost = [&](auto edge) {
-                    return get_potential(edge) + edge.weight - get_potential(edge);
-                };
+            auto get_potential = [&](auto edge) {
+                auto& g = state.dl_graph;
+                return (g.node_value_defined(edge.from) ? -g.node_value(edge.from) : 0);
+            };
+            auto cost = [&](auto edge) {
+                return get_potential(edge) + edge.weight - get_potential(edge);
+            };
 
-                if (conf_.get_sort_mode(thread_id) == SortMode::Potential) {
-                    std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
-                        return cost(edges_[l]) < cost(edges_[r]);
-                    });
-                }
-                else if (conf_.get_sort_mode(thread_id) == SortMode::PotentialRev) {
-                    std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
-                        return cost(edges_[l]) > cost(edges_[r]);
-                    });
-                }
+            if (conf_.get_sort_mode(thread_id) == SortMode::Potential) {
+                std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
+                    return cost(edges_[l]) < cost(edges_[r]);
+                });
+            }
+            else if (conf_.get_sort_mode(thread_id) == SortMode::PotentialRev) {
+                std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
+                    return cost(edges_[l]) > cost(edges_[r]);
+                });
+            }
         }
 
         for (auto edge : state.todo_edges) {
