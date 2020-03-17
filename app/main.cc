@@ -61,13 +61,6 @@ public:
         return value.int_number;
 
     }
-    void print_model(Model const &model, std::function<void()> default_printer) noexcept override {
-        default_printer();
-        // NOTE: this is printed as part of the model but not as part of the optimization value
-        if (minimize_) {
-            std::cout << "DL Optimization: " << get_bound(model) << "\n";
-        }
-    }
 
     void add_stats(UserStatistics root) {
         if (found_bound_) {
