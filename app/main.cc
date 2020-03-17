@@ -107,6 +107,9 @@ public:
                     found_bound_ = true;
                     break;
                 }
+                if (h.get().is_interrupted()) {
+                    break;
+                }
             }
             while (has_bound_);
         }
