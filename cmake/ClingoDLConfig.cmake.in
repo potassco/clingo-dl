@@ -1,5 +1,5 @@
 @PACKAGE_INIT@
 
-include("${CMAKE_CURRENT_LIST_DIR}/ClingoTargets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/ClingoDLTargets.cmake")
 
-check_required_components(Clingo)
+check_required_components(ClingoDL)
