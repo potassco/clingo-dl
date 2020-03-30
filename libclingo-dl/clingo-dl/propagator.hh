@@ -1200,6 +1200,38 @@ public:
         }
     }
 
+    void sort_edges(SortMode mode, DLState<T>& state) {
+        auto get_potential = [&](auto edge) {
+            auto& g = state.dl_graph;
+            return (g.node_value_defined(edge.from) ? -g.node_value(edge.from) : 0);
+        };
+        auto cost = [&](auto edge) {
+            return get_potential(edge) + edge.weight - get_potential(edge);
+        };
+        switch(mode) {
+            case SortMode::Weight:
+                std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
+                    return edges_[l].weight < edges_[r].weight;
+                });
+                break;
+            case SortMode::WeightRev:
+                std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
+                    return edges_[l].weight > edges_[r].weight;
+                });
+                break;
+            case SortMode::Potential:
+                std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
+                    return cost(edges_[l]) < cost(edges_[r]);
+                });
+                break;
+            case SortMode::PotentialRev:
+                std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
+                    return cost(edges_[l]) > cost(edges_[r]);
+                });
+                break;
+        }
+    }
+
     void do_propagate(PropagateControl &ctl, LiteralSpan changes) {
         auto thread_id = ctl.thread_id();
         DLState<T> &state = states_[thread_id];
@@ -1226,38 +1258,7 @@ public:
                 if (state.dl_graph.edge_is_active(it->second)) state.todo_edges.push_back(it->second);
             }
         }
-
-        if (conf_.get_sort_mode(thread_id) == SortMode::Weight) {
-            std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
-                return edges_[l].weight < edges_[r].weight;
-            });
-        }
-        else if (conf_.get_sort_mode(thread_id) == SortMode::WeightRev) {
-            std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
-                return edges_[l].weight > edges_[r].weight;
-            });
-        }
-        else {
-            auto get_potential = [&](auto edge) {
-                auto& g = state.dl_graph;
-                return (g.node_value_defined(edge.from) ? -g.node_value(edge.from) : 0);
-            };
-            auto cost = [&](auto edge) {
-                return get_potential(edge) + edge.weight - get_potential(edge);
-            };
-
-            if (conf_.get_sort_mode(thread_id) == SortMode::Potential) {
-                std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
-                    return cost(edges_[l]) < cost(edges_[r]);
-                });
-            }
-            else if (conf_.get_sort_mode(thread_id) == SortMode::PotentialRev) {
-                std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
-                    return cost(edges_[l]) > cost(edges_[r]);
-                });
-            }
-        }
-
+        sort_edges(conf_.get_sort_mode(thread_id), state);
         for (auto edge : state.todo_edges) {
             if (state.dl_graph.edge_is_active(edge)) {
                 auto ret = state.dl_graph.add_edge(edge, [&](std::vector<int> const &neg_cycle) {
