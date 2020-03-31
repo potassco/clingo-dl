@@ -380,6 +380,9 @@ public:
                         t.visited_from = 1;
                         visited_from_.emplace_back(st.to);
                         costs_heap_.push(m, st.to);
+                        if (st.to == uv.from) {
+                            break;
+                        }
                     }
                     else {
                         costs_heap_.decrease(m, m.offset(st.to));
