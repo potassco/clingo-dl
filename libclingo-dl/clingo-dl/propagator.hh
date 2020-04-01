@@ -1200,36 +1200,39 @@ public:
         }
     }
 
-    void sort_edges(SortMode mode, DLState<T>& state) {
-        auto get_potential = [&](auto edge) {
-            auto& g = state.dl_graph;
-            return (g.node_value_defined(edge.from) ? -g.node_value(edge.from) : 0);
-        };
-        auto cost = [&](auto edge) {
-            return get_potential(edge) + edge.weight - get_potential(edge);
-        };
+    int get_potential_(DifferenceLogicGraph<T> const &graph, int idx) {
+        return graph.node_value_defined(idx) ? -graph.node_value(idx) : 0;
+    };
+
+    int cost_(DifferenceLogicGraph<T> const &graph, Edge<T> const &edge) {
+        return get_potential_(graph, edge.from) + edge.weight - get_potential_(graph, edge.to);
+    };
+
+    int cost_(SortMode mode, DifferenceLogicGraph<T> const &graph, int i) {
         switch(mode) {
-            case SortMode::Weight:
-                std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
-                    return edges_[l].weight < edges_[r].weight;
-                });
+            case SortMode::Weight: {
+                return edges_[i].weight;
+            }
+            case SortMode::WeightRev: {
+                return -edges_[i].weight;
+            }
+            case SortMode::Potential: {
+                return cost_(graph, edges_[i]);
+            }
+            case SortMode::PotentialRev: {
+                return -cost_(graph, edges_[i]);
+            }
+            case SortMode::No: {
                 break;
-            case SortMode::WeightRev:
-                std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
-                    return edges_[l].weight > edges_[r].weight;
-                });
-                break;
-            case SortMode::Potential:
-                std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
-                    return cost(edges_[l]) < cost(edges_[r]);
-                });
-                break;
-            case SortMode::PotentialRev:
-                std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
-                    return cost(edges_[l]) > cost(edges_[r]);
-                });
-                break;
+            }
         }
+        return 0;
+    }
+
+    void sort_edges(SortMode mode, DLState<T> &state) {
+        std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
+            return cost_(mode, state.dl_graph, l) < cost_(mode, state.dl_graph, r);
+        });
     }
 
     void do_propagate(PropagateControl &ctl, LiteralSpan changes) {
