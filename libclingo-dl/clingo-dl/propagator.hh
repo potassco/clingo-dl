@@ -886,6 +886,8 @@ struct Stats {
     void reset() {
         time_init  = std::chrono::steady_clock::duration::zero();
         mutexes = 0;
+        edges = 0;
+        variables = 0;
         for (auto& i : dl_stats) {
             i.reset();
         }
@@ -893,6 +895,8 @@ struct Stats {
     void accu(Stats const &x) {
         time_init += x.time_init;
         mutexes += x.mutexes;
+        edges = x.edges;
+        variables = x.variables;
         if (dl_stats.size() < x.dl_stats.size()) {
             dl_stats.resize(x.dl_stats.size());
         }
@@ -903,6 +907,8 @@ struct Stats {
     }
     Duration time_init = Duration{0};
     uint64_t mutexes{0};
+    uint64_t edges{0};
+    uint64_t variables{0};
     std::vector<DLStats> dl_stats;
 };
 
@@ -993,6 +999,9 @@ public:
                 add_edge_atom(init, atom);
             }
         }
+
+        stats_.edges = edges_.size();
+        stats_.variables = num_vertices();
 
         // let r and s be edge literals and T be the true literal:
         //
