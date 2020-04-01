@@ -162,16 +162,18 @@ struct EdgeState {
 };
 
 enum class PropagationMode { Check = 0, Trivial = 1, Weak = 2, WeakPlus = 3, Strong = 4 };
+enum class SortMode { No = 0, Weight = 1, WeightRev = 2, Potential = 3 , PotentialRev = 4};
 
 struct ThreadConfig {
     std::pair<bool,uint64_t> propagate_root{false,0};
     std::pair<bool,uint64_t> propagate_budget{false,0};
     std::pair<bool,PropagationMode> mode{false,PropagationMode::Check};
+    std::pair<bool,SortMode> sort_edges{false,SortMode::Weight};
 };
 
 struct PropagatorConfig {
     bool strict{false};
-    bool sort_edges{true};
+    SortMode sort_edges{SortMode::Weight};
     uint64_t mutex_size{0};
     uint64_t mutex_cutoff{10};
     uint64_t propagate_root{0};
@@ -191,12 +193,19 @@ struct PropagatorConfig {
         }
         return propagate_budget;
     }
-    PropagationMode get_mode(id_t thread_id) {
+    PropagationMode get_propagate_mode(id_t thread_id) {
         if (thread_id < thread_config.size() && thread_config[thread_id].mode.first) {
             return thread_config[thread_id].mode.second;
         }
         return mode;
     }
+    SortMode get_sort_mode(id_t thread_id) {
+        if (thread_id < thread_config.size() && thread_config[thread_id].sort_edges.first) {
+            return thread_config[thread_id].sort_edges.second;
+        }
+        return sort_edges;
+    }
+
 
     ThreadConfig &ensure(id_t thread_id) {
         if (thread_config.size() < thread_id + 1) {
@@ -1133,7 +1142,7 @@ public:
         bool add = false;
         for (int i = 0; i < init.number_of_threads(); ++i) {
             init.add_watch(lit, i);
-            if (conf_.get_mode(i) >= PropagationMode::Strong || conf_.get_propagate_root(i) > 0 || conf_.get_propagate_budget(i) > 0) {
+            if (conf_.get_propagate_mode(i) >= PropagationMode::Strong || conf_.get_propagate_root(i) > 0 || conf_.get_propagate_budget(i) > 0) {
                 add = true;
                 init.add_watch(-lit, i);
             }
@@ -1164,7 +1173,7 @@ public:
             facts_.resize(init.number_of_threads());
         }
         for (int i = 0; i < init.number_of_threads(); ++i) {
-            states_.emplace_back(stats_.dl_stats[i], edges_, conf_.get_mode(i), conf_.get_propagate_root(i), conf_.get_propagate_budget(i));
+            states_.emplace_back(stats_.dl_stats[i], edges_, conf_.get_propagate_mode(i), conf_.get_propagate_root(i), conf_.get_propagate_budget(i));
             facts_[i].limit = facts_[i].lits.size();
         }
     }
@@ -1200,8 +1209,44 @@ public:
         }
     }
 
+    int get_potential_(DifferenceLogicGraph<T> const &graph, int idx) {
+        return graph.node_value_defined(idx) ? -graph.node_value(idx) : 0;
+    };
+
+    int cost_(DifferenceLogicGraph<T> const &graph, Edge<T> const &edge) {
+        return get_potential_(graph, edge.from) + edge.weight - get_potential_(graph, edge.to);
+    };
+
+    int cost_(SortMode mode, DifferenceLogicGraph<T> const &graph, int i) {
+        switch(mode) {
+            case SortMode::Weight: {
+                return edges_[i].weight;
+            }
+            case SortMode::WeightRev: {
+                return -edges_[i].weight;
+            }
+            case SortMode::Potential: {
+                return cost_(graph, edges_[i]);
+            }
+            case SortMode::PotentialRev: {
+                return -cost_(graph, edges_[i]);
+            }
+            case SortMode::No: {
+                break;
+            }
+        }
+        return 0;
+    }
+
+    void sort_edges(SortMode mode, DLState<T> &state) {
+        std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
+            return cost_(mode, state.dl_graph, l) < cost_(mode, state.dl_graph, r);
+        });
+    }
+
     void do_propagate(PropagateControl &ctl, LiteralSpan changes) {
-        DLState<T> &state = states_[ctl.thread_id()];
+        auto thread_id = ctl.thread_id();
+        DLState<T> &state = states_[thread_id];
         Timer t{state.stats.time_propagate};
         auto level = ctl.assignment().decision_level();
         bool enable_propagate = state.dl_graph.mode() >= PropagationMode::Strong || level < state.propagate_root || state.propagate_budget > 0;
@@ -1225,13 +1270,7 @@ public:
                 if (state.dl_graph.edge_is_active(it->second)) state.todo_edges.push_back(it->second);
             }
         }
-
-        if (conf_.sort_edges) {
-            std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
-                return edges_[l].weight < edges_[r].weight;
-            });
-        }
-
+        sort_edges(conf_.get_sort_mode(thread_id), state);
         for (auto edge : state.todo_edges) {
             if (state.dl_graph.edge_is_active(edge)) {
                 auto ret = state.dl_graph.add_edge(edge, [&](std::vector<int> const &neg_cycle) {

@@ -334,6 +334,29 @@ static bool parse_mode(const char *value, void *data) {
         [mode](PropagatorConfig &config) { config.mode = mode; },
         [mode](ThreadConfig &config) { config.mode = {true, mode}; });
 }
+static bool parse_sort(const char *value, void *data) {
+    SortMode sort = SortMode::Weight;
+    char const *rem = nullptr;
+    if ((rem = iequals_pre(value, "no"))) {
+        sort = SortMode::No;
+    }
+    else if ((rem = iequals_pre(value, "weight-reversed"))) {
+        sort = SortMode::WeightRev;
+    }
+    else if ((rem = iequals_pre(value, "weight"))) {
+        sort = SortMode::Weight;
+    }
+    else if ((rem = iequals_pre(value, "potential-reversed"))) {
+        sort = SortMode::PotentialRev;
+    }
+    else if ((rem = iequals_pre(value, "potential"))) {
+        sort = SortMode::Potential;
+    }
+    return rem && set_config(rem, data,
+        [sort](PropagatorConfig &config) { config.sort_edges = sort; },
+        [sort](ThreadConfig &config) { config.sort_edges = {true, sort}; });
+}
+
 static bool parse_bool(const char *value, void *data) {
     auto &result = *static_cast<bool*>(data);
     if (iequals(value, "no") || iequals(value, "off") || iequals(value, "0")) {
@@ -371,7 +394,7 @@ extern "C" bool clingodl_configure(clingodl_theory_t *theory, char const *key, c
             return check_parse("add-mutexes", parse_mutex(value, &theory->config));
         }
         if (strcmp(key, "sort-edges") == 0) {
-            return check_parse("sort-edges", parse_bool(value, &theory->config.sort_edges));
+            return check_parse("sort-edges", parse_sort(value, &theory->config));
         }
         if (strcmp(key, "rdl") == 0) {
             return check_parse("rdl", parse_bool(value, &theory->rdl));
@@ -417,9 +440,17 @@ extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_opti
             "Add mutexes in a preprocessing step [0]\n"
             "      <arg>   : <max>[,<cut>]\n"
             "      <max>   : Maximum size of mutexes to add\n"
-            "      <cut>   : Limit costs to calculate mutexes\n",
+            "      <cut>   : Limit costs to calculate mutexes",
             &parse_mutex, &theory->config, true, "<arg>"));
-        CLINGO_CALL(clingo_options_add_flag(options, group, "sort-edges", "Sort edges by lowest weight for propagation [enabled]", &theory->config.sort_edges));
+        CLINGO_CALL(clingo_options_add(options, group, "sort-edges",
+            "Sort edges for propagation [weight]\n"
+            "      <arg>   : {no, weight, weight-reversed, potential, potential-reversed}\n"
+            "        no                 : No sorting\n"
+            "        weight             : Sort by edge weight\n"
+            "        weight-reversed    : Sort by negative edge weight\n"
+            "        potential          : Sort by relative potential\n"
+            "        potential-reversed : Sort by relative negative potential",
+            &parse_sort, &theory->config, true, "<arg>"));
         CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers", &theory->rdl));
         CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode", &theory->config.strict));
     }
