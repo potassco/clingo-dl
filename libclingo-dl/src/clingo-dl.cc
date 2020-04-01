@@ -333,7 +333,6 @@ static bool parse_mode(const char *value, void *data) {
         [mode](ThreadConfig &config) { config.mode = {true, mode}; });
 }
 static bool parse_sort(const char *value, void *data) {
-    auto &pc = *static_cast<PropagatorConfig*>(data);
     SortMode sort = SortMode::Weight;
     char const *rem = nullptr;
     if ((rem = iequals_pre(value, "no"))) {
