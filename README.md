@@ -12,6 +12,7 @@ Please consult the following resources for further information:
   - [**Installation and software requirements**](INSTALL.md)
   - [Changes between releases](CHANGES.md)
   - [Potassco clingo-dl page](https://potassco.org/labs/clingodl/)
+  - [tefoli](https://github.com/potassco/tefoli) to use clingo[DL] in combination with the python API
 
 Clingo-dl is distributed under the [MIT License](LICENSE.md).
 
