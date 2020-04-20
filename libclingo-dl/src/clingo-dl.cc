@@ -172,6 +172,7 @@ term {
     void add_statistics(UserStatistics& root, Stats const &stats) {
         UserStatistics diff = root.add_subkey("DifferenceLogic", StatisticsType::Map);
         diff.add_subkey("Time init(s)", StatisticsType::Value).set_value(stats.time_init.count());
+        diff.add_subkey("CCs", StatisticsType::Value).set_value(stats.ccs);
         diff.add_subkey("Mutexes", StatisticsType::Value).set_value(stats.mutexes);
         diff.add_subkey("Edges", StatisticsType::Value).set_value(stats.edges);
         diff.add_subkey("Variables", StatisticsType::Value).set_value(stats.variables);
