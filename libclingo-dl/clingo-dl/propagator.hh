@@ -237,6 +237,7 @@ public:
     }
 
     bool empty() const { return nodes_.empty(); }
+    bool valid_node(int idx) const { return nodes_.size() > idx; }
 
     int node_value_defined(int idx) const { return nodes_[idx].defined(); }
     T node_value(int idx) const { return -nodes_[idx].potential(); }
@@ -1388,7 +1389,7 @@ public:
         assert(vert_map_[0] == Clingo::Number(0));
         size_t count = 0;
         for (auto node : zero_nodes_) {
-            if (!state.dl_graph.empty() && state.dl_graph.node_value_defined(node)) {
+            if (!state.dl_graph.empty() && state.dl_graph.valid_node(node) && state.dl_graph.node_value_defined(node)) {
                 adjust[count] = state.dl_graph.node_value(node);
             }
             ++count;
@@ -1423,7 +1424,7 @@ public:
     }
 
     bool has_lower_bound(uint32_t thread_id, size_t index) const {
-        if (index >= vert_map_.size()) { return false; }
+        if (index >= vert_map_.size() || zero_nodes_.count(index)) { return false; }
         auto &state = states_[thread_id];
         return !states_[thread_id].dl_graph.empty() && states_[thread_id].dl_graph.node_value_defined(index);
     }
@@ -1433,8 +1434,10 @@ public:
         auto &state = states_[thread_id];
         T adjust = 0;
         assert(vert_map_[0] == Clingo::Number(0));
-        if (state.dl_graph.node_value_defined(0)) {
-            adjust = state.dl_graph.node_value(0);
+        auto cc = cc_[index].cc;
+        auto zero_node = *(std::next(zero_nodes_.begin(),cc+1));
+        if (state.dl_graph.valid_node(zero_node) && state.dl_graph.node_value_defined(zero_node)) {
+            adjust = state.dl_graph.node_value(zero_node);
         }
         return state.dl_graph.node_value(index) - adjust;
     }
