@@ -1181,12 +1181,9 @@ public:
         int cc = 0;
         cc_.resize(vert_map_.size(), CC(0,cc_used_));
         std::vector<int> node_stack;
-        for (auto& edge : edges_) {
-            if (valid_cc_non_zero_node(edge.from)) {
-                node_stack.push_back(edge.from);
-            }
-            else if (valid_cc_non_zero_node(edge.to)) {
-                node_stack.push_back(edge.to);
+        for (int node = 1; node < vert_map_.size(); ++node) {
+            if (valid_cc_non_zero_node(node)) {
+                node_stack.push_back(node);
             }
             else {
                 continue;
