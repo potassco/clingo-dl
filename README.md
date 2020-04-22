@@ -1,5 +1,7 @@
 # Clingo-dl: A grounder and solver for solving ASP modulo Difference Constraints
 
+![tests](https://github.com/potassco/clingoDL/workflows/tests/badge.svg)
+
 Clingo-dl is part of the [Potassco](https://potassco.org) project for *Answer Set
 Programming* (ASP). 
 It extends ASP with constraints over difference logic
