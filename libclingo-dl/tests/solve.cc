@@ -61,6 +61,27 @@ TEST_CASE("solving", "[clingo]") {
             result = solve(theory, ctl);
             REQUIRE(result == (ResultVec{{{a, 0}, {b, 7}}}));
         }
+        SECTION("cc") {
+            REQUIRE(clingodl_register(theory, ctl.to_c()));
+            ctl.add("base", {},
+                "&diff { 0 - a } <= -5.\n"
+                "&diff { 0 - b } <= -10.\n"
+                "&show_assignment{}.\n");
+            ctl.ground({{"base", {}}});
+            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
+            auto result = solve(theory, ctl);
+            REQUIRE(result == (ResultVec{{{a, 5}, {b, 10}}}));
+            REQUIRE(ctl.statistics()["user_step"]["DifferenceLogic"]["CCs"] == 2);
+
+            ctl.add("ext", {},
+                "&diff { b - a } <= 3.\n");
+            ctl.ground({{"ext", {}}});
+            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
+            result = solve(theory, ctl);
+            REQUIRE(result == (ResultVec{{{a, 7}, {b, 10}}}));
+            REQUIRE(ctl.statistics()["user_step"]["DifferenceLogic"]["CCs"] == 1);
+        }
+
         SECTION("configure") {
             REQUIRE(clingodl_configure(theory, "propagate", "full"));
             REQUIRE(clingodl_register(theory, ctl.to_c()));

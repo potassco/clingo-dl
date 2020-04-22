@@ -1185,6 +1185,9 @@ public:
             if (valid_cc_non_zero_node(edge.from)) {
                 node_stack.push_back(edge.from);
             }
+            else if (valid_cc_non_zero_node(edge.to)) {
+                node_stack.push_back(edge.to);
+            }
             else {
                 continue;
             }
@@ -1206,26 +1209,30 @@ public:
         }
         stats_.ccs = cc;
 
+        std::unordered_multimap<int, int> outgoing_change;
         for (auto zero_node : zero_nodes_) {
             auto range = outgoing_.equal_range(zero_node);
             for (auto edge = range.first; edge != range.second; ++edge) {
                 auto& e = edges_[edge->second];
                 auto cc = cc_[e.to].cc;
                 e.from = map_vert(Clingo::Function("__null", {Clingo::Number(cc)}));
+                outgoing_change.emplace(zero_node, edge->second);
             }
+            outgoing_.erase(range.first, range.second);
             range = incoming_.equal_range(zero_node);
             for (auto edge = range.first; edge != range.second; ++edge) {
                 auto& e = edges_[edge->second];
                 auto cc = cc_[e.from].cc;
                 e.to = map_vert(Clingo::Function("__null", {Clingo::Number(cc)}));
             }
-
         }
+        outgoing_.insert(outgoing_change.begin(), outgoing_change.end());
 
         for (int i = zero_nodes_.size()-1; i < cc+1; ++i) {
             zero_nodes_.insert(map_vert(Clingo::Function("__null", {Clingo::Number(i)})));
         }
 
+        incoming_.clear();
         cc_used_ = !cc_used_;
     }
 
@@ -1397,7 +1404,7 @@ public:
 
         SymbolVector vec;
         for (auto idx = 1; idx < vert_map_.size(); ++idx) {
-            if (state.dl_graph.node_value_defined(idx) && !zero_nodes_.count(idx)) {
+            if (!zero_nodes_.count(idx) && state.dl_graph.node_value_defined(idx)) {
                 SymbolVector params;
                 params.emplace_back(vert_map_[idx]);
                 auto cc = cc_[idx].cc;
