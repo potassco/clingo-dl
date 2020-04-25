@@ -226,6 +226,11 @@ extern "C" bool clingodl_register(clingodl_theory_t *theory, clingo_control_t* c
     CLINGODL_CATCH;
 }
 
+extern "C" bool clingodl_rewrite_statement(clingodl_theory_t *theory, clingo_ast_statement_t const *stm, clingodl_rewrite_callback_t add, void *data) {
+    static_cast<void>(theory);
+    return add(stm, data);
+}
+
 extern "C" bool clingodl_prepare(clingodl_theory_t *, clingo_control_t *) {
     return true;
 }

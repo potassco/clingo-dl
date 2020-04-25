@@ -81,6 +81,9 @@ typedef struct clingodl_value {
     };
 } clingodl_value_t;
 
+//! Callback to rewrite statements (see ::clingodl_rewrite_statement).
+typedef bool (*clingodl_rewrite_callback_t)(clingo_ast_statement_t const *statement, void *data);
+
 typedef struct clingodl_theory clingodl_theory_t;
 
 //! creates the theory
@@ -88,6 +91,9 @@ CLINGODL_VISIBILITY_DEFAULT bool clingodl_create(clingodl_theory_t **theory);
 
 //! registers the theory with the control
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_register(clingodl_theory_t *theory, clingo_control_t* control);
+
+//! Rewrite statements before adding them via the given callback.
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_rewrite_statement(clingodl_theory_t *theory, clingo_ast_statement_t const *stm, clingodl_rewrite_callback_t add, void *data);
 
 //! prepare the theory between grounding and solving
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_prepare(clingodl_theory_t *theory, clingo_control_t* control);
