@@ -988,9 +988,9 @@ inline Clingo::Symbol to_symbol(double value) {
 }
 
 struct CC {
-    CC(int cc, bool used) : cc(cc), used(used) {}
-    size_t cc : 31;
-    size_t used : 1;
+    CC(uint32_t cc, bool used) : cc(cc), used(used) {}
+    uint32_t cc : 31;
+    uint32_t used : 1;
 };
 
 template <typename T>
@@ -1178,7 +1178,7 @@ public:
     }
 
     void cc() {
-        int cc = 0;
+        uint32_t cc = 0;
         cc_.resize(vert_map_.size(), CC(0,cc_used_));
         std::vector<int> node_stack;
         for (int node = 1; node < vert_map_.size(); ++node) {
