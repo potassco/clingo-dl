@@ -1021,13 +1021,15 @@ public:
             }
         }
 
+        std::unordered_multimap<int, int> outgoing;
+        std::unordered_multimap<int, int> incoming;
         // build adjacency list
-        for (int edge_id = edge_start, size = edges_.size(); edge_id < size; ++edge_id) {
-            outgoing_.emplace(std::make_pair(edges_[edge_id].from, edge_id));
-            incoming_.emplace(std::make_pair(edges_[edge_id].to, edge_id));
+        for (int edge_id = 0, size = edges_.size(); edge_id < size; ++edge_id) {
+            outgoing.emplace(std::make_pair(edges_[edge_id].from, edge_id));
+            incoming.emplace(std::make_pair(edges_[edge_id].to, edge_id));
         }
 
-        cc();
+        cc(outgoing, incoming);
 
         stats_.edges = edges_.size();
         stats_.variables = num_vertices();
@@ -1070,7 +1072,7 @@ public:
                 for (int queue_offset = 0; queue_offset < queue.size(); ++queue_offset) {
                     auto rs_state = queue[queue_offset];
                     auto rs = edges_[rs_state.id];
-                    auto out = outgoing_.equal_range(rs.to);
+                    auto out = outgoing.equal_range(rs.to);
                     for (auto it = out.first; it != out.second; ++it) {
                         auto st_id = it->second;
                         auto &st = edges_[st_id];
@@ -1177,7 +1179,8 @@ public:
         return !zero_nodes_.count(node) && cc_[node].used == cc_used_;
     }
 
-    void cc() {
+    void cc(const std::unordered_multimap<int, int>& outgoing, const std::unordered_multimap<int, int>& incoming)
+    {
         uint32_t cc = 0;
         cc_.resize(vert_map_.size(), CC(0,cc_used_));
         std::vector<int> node_stack;
@@ -1193,11 +1196,11 @@ public:
                 node_stack.pop_back();
                 if (!valid_cc_non_zero_node(node)) { continue; }
                 cc_[node] = CC(cc,!cc_used_);
-                auto edges = outgoing_.equal_range(node);
+                auto edges = outgoing.equal_range(node);
                 for (auto edge = edges.first; edge != edges.second; ++edge) {
                     node_stack.push_back(edges_[edge->second].to);
                 }
-                edges = incoming_.equal_range(node);
+                edges = incoming.equal_range(node);
                 for (auto edge = edges.first; edge != edges.second; ++edge) {
                     node_stack.push_back(edges_[edge->second].from);
                 }
@@ -1206,30 +1209,25 @@ public:
         }
         stats_.ccs = cc;
 
-        std::unordered_multimap<int, int> outgoing_change;
         for (auto zero_node : zero_nodes_) {
-            auto range = outgoing_.equal_range(zero_node);
+            auto range = outgoing.equal_range(zero_node);
             for (auto edge = range.first; edge != range.second; ++edge) {
                 auto& e = edges_[edge->second];
                 auto cc = cc_[e.to].cc;
                 e.from = map_vert(Clingo::Function("__null", {Clingo::Number(cc)}));
-                outgoing_change.emplace(zero_node, edge->second);
             }
-            outgoing_.erase(range.first, range.second);
-            range = incoming_.equal_range(zero_node);
+            range = incoming.equal_range(zero_node);
             for (auto edge = range.first; edge != range.second; ++edge) {
                 auto& e = edges_[edge->second];
                 auto cc = cc_[e.from].cc;
                 e.to = map_vert(Clingo::Function("__null", {Clingo::Number(cc)}));
             }
         }
-        outgoing_.insert(outgoing_change.begin(), outgoing_change.end());
 
         for (int i = zero_nodes_.size()-1; i < cc+1; ++i) {
             zero_nodes_.insert(map_vert(Clingo::Function("__null", {Clingo::Number(i)})));
         }
 
-        incoming_.clear();
         cc_used_ = !cc_used_;
     }
 
@@ -1452,8 +1450,6 @@ private:
     std::unordered_multimap<literal_t, int> lit_to_edges_;
     std::unordered_multimap<literal_t, int> false_lit_to_edges_;
     std::vector<Edge<T>> edges_;
-    std::unordered_multimap<int, int> outgoing_;
-    std::unordered_multimap<int, int> incoming_;
     std::vector<Clingo::Symbol> vert_map_;
     std::unordered_map<Clingo::Symbol, int> vert_map_inv_;
     std::vector<CC> cc_; // node to CC
