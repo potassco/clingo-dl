@@ -996,10 +996,10 @@ template <typename T>
 class DifferenceLogicPropagator : public Propagator {
 public:
     DifferenceLogicPropagator(Stats &stats, PropagatorConfig const &conf)
-    : zero_node(map_vert(Clingo::Number(0)))
-    , cc_visited_(false)
-    , stats_(stats)
-    , conf_{conf} {
+    : stats_(stats)
+    , conf_{conf}
+    , zero_node(map_vert(Clingo::Number(0)))
+    , cc_visited_(false) {
     }
 
 public:
@@ -1187,6 +1187,10 @@ public:
         cc_visited_ = !cc_visited_;
         node_info_.clear();
         node_info_.resize(vert_map_.size(), NodeInfo(0, !cc_visited_));
+        for (unsigned int i = 0; i < zero_nodes_.size(); ++i) {
+            node_info_[zero_nodes_[i]] = NodeInfo(i, !cc_visited_);
+        }
+
         std::vector<int> node_stack;
         for (int node = 0; node < vert_map_.size(); ++node) {
             if (!cc_visited(node) && !is_zero(node)) {
@@ -1196,7 +1200,7 @@ public:
             else {
                 continue;
             }
-            while (node_stack.size()) {
+            while (!node_stack.empty()) {
                 auto node = node_stack.back();
                 node_stack.pop_back();
                 auto edges = outgoing.equal_range(node);
@@ -1228,8 +1232,8 @@ public:
             node_info_[node] = NodeInfo(i, cc_visited_);
         }
 
-        std::unordered_multimap<int, int> outgoing_change; 
-        std::unordered_multimap<int, int> incoming_change; 
+        std::vector< std::pair<int, int> > outgoing_change; 
+        std::vector< std::pair<int, int> > incoming_change; 
         zero_nodes_.emplace_back(map_vert(Clingo::Number(0)));
         for (auto zero_node : zero_nodes_) {
             auto range = outgoing.equal_range(zero_node);
@@ -1237,7 +1241,7 @@ public:
                 auto& e = edges_[edge->second];
                 auto cc = node_info_[e.to].cc;
                 e.from = zero_nodes_[cc]; 
-                outgoing_change.emplace(zero_nodes_[cc], edge->second);
+                outgoing_change.emplace_back(zero_nodes_[cc], edge->second);
             }
             outgoing.erase(range.first, range.second);
             range = incoming.equal_range(zero_node);
@@ -1245,7 +1249,7 @@ public:
                 auto& e = edges_[edge->second];
                 auto cc = node_info_[e.from].cc;
                 e.to = zero_nodes_[cc];
-                incoming_change.emplace(zero_nodes_[cc], edge->second);
+                incoming_change.emplace_back(zero_nodes_[cc], edge->second);
             }
             incoming.erase(range.first, range.second);
         }
@@ -1477,10 +1481,10 @@ private:
     std::unordered_map<Clingo::Symbol, int> vert_map_inv_;
     std::vector<NodeInfo> node_info_;
     std::vector<int> zero_nodes_; // all nodes that are equivalent to 0 except zero_node Clingo::Number(0)
-    int zero_node;
-    bool cc_visited_;
     Stats &stats_;
     PropagatorConfig conf_;
+    int zero_node;
+    bool cc_visited_;
 };
 
 
