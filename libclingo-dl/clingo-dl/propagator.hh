@@ -29,7 +29,6 @@
 #include <clingo-dl/util.hh>
 
 #include <unordered_map>
-#include <set>
 
 #if CLINGO_VERSION_MAJOR*1000 + CLINGO_VERSION_MINOR >= 5005
 #   define CLINGODL_UNDO_NOEXCEPT noexcept
@@ -988,17 +987,17 @@ inline Clingo::Symbol to_symbol(double value) {
 }
 
 struct NodeInfo {
-    NodeInfo(uint32_t cc, bool used) : cc(cc), used(used) {}
+    NodeInfo(uint32_t cc, bool visited) : cc(cc), visited(visited) {}
     uint32_t cc : 31;
-    uint32_t used : 1;
+    uint32_t visited : 1;
 };
 
 template <typename T>
 class DifferenceLogicPropagator : public Propagator {
 public:
     DifferenceLogicPropagator(Stats &stats, PropagatorConfig const &conf)
-    : cc_visited_(false)
-    , zero_node(map_vert(Clingo::Number(0)))
+    : zero_node(map_vert(Clingo::Number(0)))
+    , cc_visited_(false)
     , stats_(stats)
     , conf_{conf} {
     }
@@ -1176,7 +1175,7 @@ public:
     }
 
     bool cc_visited(int node) const {
-        return node_info_[node].used == cc_visited_;
+        return node_info_[node].visited == cc_visited_;
     }
 
     bool is_zero(int node) const {
@@ -1190,10 +1189,9 @@ public:
         node_info_.resize(vert_map_.size(), NodeInfo(0, !cc_visited_));
         std::vector<int> node_stack;
         for (int node = 0; node < vert_map_.size(); ++node) {
-            std::set<int> node_set;
             if (!cc_visited(node) && !is_zero(node)) {
+                node_info_[node] = NodeInfo(cc, cc_visited_);
                 node_stack.emplace_back(node);
-                node_set.emplace(node);
             }
             else {
                 continue;
@@ -1201,22 +1199,20 @@ public:
             while (node_stack.size()) {
                 auto node = node_stack.back();
                 node_stack.pop_back();
-                if (cc_visited(node) || is_zero(node)) { continue; }
-                node_info_[node] = NodeInfo(cc, cc_visited_);
                 auto edges = outgoing.equal_range(node);
                 for (auto edge = edges.first; edge != edges.second; ++edge) {
                     auto add_node = edges_[edge->second].to;
-                    if (!cc_visited(add_node) && !is_zero(add_node) && !node_set.count(add_node)) {
+                    if (!cc_visited(add_node) && !is_zero(add_node)) {
+                        node_info_[add_node] = NodeInfo(cc, cc_visited_);
                         node_stack.emplace_back(add_node);
-                        node_set.emplace(add_node);
                     }
                 }
                 edges = incoming.equal_range(node);
                 for (auto edge = edges.first; edge != edges.second; ++edge) {
                     auto add_node = edges_[edge->second].from;
-                    if (!cc_visited(add_node) && !is_zero(add_node) && !node_set.count(add_node)) {
+                    if (!cc_visited(add_node) && !is_zero(add_node)) {
+                        node_info_[add_node] = NodeInfo(cc, cc_visited_);
                         node_stack.emplace_back(add_node);
-                        node_set.emplace(add_node);
                     }
                 }
             }
@@ -1480,9 +1476,9 @@ private:
     std::vector<Clingo::Symbol> vert_map_;
     std::unordered_map<Clingo::Symbol, int> vert_map_inv_;
     std::vector<NodeInfo> node_info_;
-    bool cc_visited_;
     std::vector<int> zero_nodes_; // all nodes that are equivalent to 0 except zero_node Clingo::Number(0)
     int zero_node;
+    bool cc_visited_;
     Stats &stats_;
     PropagatorConfig conf_;
 };
