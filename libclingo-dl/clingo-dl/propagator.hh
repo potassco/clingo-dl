@@ -1183,11 +1183,11 @@ public:
     }
 
     void cc(std::unordered_multimap<int, int> &outgoing, std::unordered_multimap<int, int> &incoming) {
-        uint32_t cc = 1;
+        uint32_t cc = 0;
         cc_visited_ = !cc_visited_;
         node_info_.clear();
         node_info_.resize(vert_map_.size(), NodeInfo(0, !cc_visited_));
-        for (unsigned int i = 0; i < zero_nodes_.size(); ++i) {
+        for (unsigned int i = 1; i < zero_nodes_.size(); ++i) {
             node_info_[zero_nodes_[i]] = NodeInfo(i, !cc_visited_);
         }
 
@@ -1222,7 +1222,7 @@ public:
             }
             ++cc;
         }
-        stats_.ccs = cc-1;
+        stats_.ccs = cc;
 
         zero_nodes_.resize(std::max(static_cast<size_t>(cc), zero_nodes_.size()), 0);
         for (int i = 1; i < zero_nodes_.size(); ++i) {
