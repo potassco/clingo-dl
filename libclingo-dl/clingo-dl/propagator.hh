@@ -1222,19 +1222,40 @@ public:
         if (covec.size() > 2) {
             throw std::runtime_error(msg);
         }
+//		for (auto i : covec) {
+//			std::cout << i.first << "*" << i.second;
+//		}
+//		std::cout << std::endl;
 
         auto u_id = map_vert(Clingo::Number(0));
         auto v_id = map_vert(Clingo::Number(0));
-        if (covec.size() > 0) {
-            if (covec[0].first != 0) throw std::runtime_error(msg);
-            u_id = covec[0].second;
+        if (covec.size() == 1) {
+            if (covec[0].first == 1) {
+				u_id = covec[0].second;
+			}
+			else if (covec[0].first == -1) {
+				v_id = covec[0].second;
+			}
+			else throw std::runtime_error(msg);
+        }
+		if (covec.size() == 2) {
+            if (covec[0].first == 1) {
+				u_id = covec[0].second;
+            	if (covec[1].first == -1) {
+					v_id = covec[0].second;
+				}
+				else throw std::runtime_error(msg);
+			}
+			else if (covec[0].first == -1) {
+				v_id = covec[0].second;
+            	if (covec[1].first == 1) {
+					u_id = covec[0].second;
+				}
+				else throw std::runtime_error(msg);
+			}
+			else throw std::runtime_error(msg);
         }
 
-        if (covec.size() > 1 && covec[1].first != -1) {
-            throw std::runtime_error(msg);
-            v_id = covec[1].second;
-        }
-        
         //if (term.type() != Clingo::TheoryTermType::Function || std::strcmp(term.name(), "-") != 0) {
         //    throw std::runtime_error(msg);
         //}
@@ -1583,7 +1604,7 @@ private:
         check_syntax(false);
     }
 
-    template <class F, std::enable_if_t<std::is_integral_v<T>, int> = 0>
+    template <class F, class N, typename std::enable_if<std::is_integral<N>::value, int>::type = 0>
     Clingo::Symbol evaluate(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F f) const {
         auto ea = evaluate(a);
         check_syntax(ea.type() == Clingo::SymbolType::Number);
@@ -1592,7 +1613,7 @@ private:
         return Clingo::Number(f(ea.number(), eb.number()));
     }
     
-    template <class F, std::enable_if_t<std::is_floating_point_v<T>, int> = 0>
+    template <class F, class N, typename std::enable_if<std::is_floating_point<N>::value, int>::type = 0>
     Clingo::Symbol evaluate(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F f) const {
         auto ea = evaluate(a);
         check_syntax(ea.type() == Clingo::SymbolType::String);
@@ -1600,6 +1621,11 @@ private:
         check_syntax(eb.type() == Clingo::SymbolType::String);
         //TODO: does Clingo copy string ?
         return Clingo::String(std::to_string(f(std::stod(ea.string()), std::stod(eb.string()))).c_str());
+    }
+
+    template <class F>
+    Clingo::Symbol evaluate(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F &&f) const {
+        return evaluate<F, T>(a, b, std::forward<F>(f));
     }
 
 
