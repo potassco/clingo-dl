@@ -966,13 +966,7 @@ T evaluate_binary(char const *op, T left, T right) {
     throw std::runtime_error("could not evaluate term: unknown binary operator");
 }
 
-template <typename T>
-T evaluate(Clingo::TheoryTerm term);
-
-template <typename T>
-T get_weight(TheoryAtom const &atom);
-
-Clingo::Symbol evaluate_term(Clingo::TheoryTerm term);
+//Clingo::Symbol evaluate_term(Clingo::TheoryTerm term);
 
 template <typename T>
 Clingo::Symbol to_symbol(T value);
@@ -993,8 +987,35 @@ struct NodeInfo {
     uint32_t visited : 1;
 };
 
+constexpr int INVALID_VAR{std::numeric_limits<int>::max()};
+[[nodiscard]] bool match(Clingo::TheoryTerm const &term, char const *name, size_t arity);
+
+//! Test whether a variable is valid.
+inline bool is_valid_var(int var) {
+    return var < INVALID_VAR;
+}
+
+namespace {
+template <typename T=void>
+T throw_syntax_error(char const *message="Invalid Syntax") {
+    throw std::runtime_error(message);
+}
+
+void check_syntax(bool condition, char const *message="Invalid Syntax") {
+    if (!condition) {
+        throw_syntax_error(message);
+    }
+}
+
+}
+
+
+
 template <typename T>
 class DifferenceLogicPropagator : public Propagator {
+private:
+
+    using CoVarVec = std::vector<std::pair<T,int>>; // vector of coefficients and variables
 public:
     DifferenceLogicPropagator(Stats &stats, PropagatorConfig const &conf)
     : stats_(stats)
@@ -1123,13 +1144,69 @@ public:
         initialize_states(init);
     }
 
+    void parse_constraint_elem(Clingo::TheoryTerm const &term, CoVarVec &res) {
+        if (term.type() == Clingo::TheoryTermType::Number) {
+            res.emplace_back(term.number(), INVALID_VAR);
+        }
+        else if (match(term, "+", 2)) {
+            auto args = term.arguments();
+            parse_constraint_elem(args.front(), res);
+            parse_constraint_elem(args.back(), res);
+        }
+        else if (match(term, "-", 2)) {
+            auto args = term.arguments();
+            parse_constraint_elem(args.front(), res);
+            auto pos = res.size();
+            parse_constraint_elem(args.back(), res);
+            for (auto it = res.begin() + pos, ie = res.end(); it != ie; ++it) {
+                it->first = safe_inv(it->first);
+            }
+        }
+        else if (match(term, "-", 1)) {
+            auto pos = res.size();
+            parse_constraint_elem(term.arguments().front(), res);
+            for (auto it = res.begin() + pos, ie = res.end(); it != ie; ++it) {
+                it->first = safe_inv(it->first);
+            }
+        }
+        else if (match(term, "+", 1)) {
+            parse_constraint_elem(term.arguments().front(), res);
+        }
+        else if (match(term, "*", 2)) {
+            auto args = term.arguments();
+            CoVarVec lhs, rhs; // NOLINT
+            parse_constraint_elem(args.front(), lhs);
+            parse_constraint_elem(args.back(), rhs);
+            for (auto &l : lhs) {
+                for (auto &r : rhs) {
+                    if (!is_valid_var(l.second)) {
+                        res.emplace_back(safe_mul(l.first, r.first), r.second);
+                    }
+                    else if (!is_valid_var(r.second)) {
+                        res.emplace_back(safe_mul(l.first, r.first), l.second);
+                    }
+                    else {
+                        throw_syntax_error("Invalid Syntax: only linear difference constraints are supported");
+                    }
+                }
+            }
+        }
+        else if (term.type() == Clingo::TheoryTermType::Symbol || term.type() == Clingo::TheoryTermType::Function || term.type() == Clingo::TheoryTermType::Tuple) {
+            res.emplace_back(1, map_vert(evaluate(term)));
+        }
+        else {
+            throw_syntax_error("Invalid Syntax: invalid diff constraint");
+        }
+    }
+
+
     void add_edge_atom(PropagateInit &init, TheoryAtom const &atom) {
         char const *msg = "parsing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";
         int lit = init.solver_literal(atom.literal());
         if (!atom.has_guard()) {
             throw std::runtime_error(msg);
         }
-        T weight = get_weight<T>(atom);
+        T weight = get_weight(atom);
         auto elems = atom.elements();
         if (elems.size() != 1) {
             throw std::runtime_error(msg);
@@ -1139,15 +1216,34 @@ public:
             throw std::runtime_error(msg);
         }
         auto term = tuple[0];
-        if (term.type() != Clingo::TheoryTermType::Function || std::strcmp(term.name(), "-") != 0) {
+        CoVarVec covec;
+        parse_constraint_elem(term, covec);
+        //normalize
+        if (covec.size() > 2) {
             throw std::runtime_error(msg);
         }
-        auto args = term.arguments();
-        if (args.size() != 2) {
-            throw std::runtime_error(msg);
+
+        auto u_id = map_vert(Clingo::Number(0));
+        auto v_id = map_vert(Clingo::Number(0));
+        if (covec.size() > 0) {
+            if (covec[0].first != 0) throw std::runtime_error(msg);
+            u_id = covec[0].second;
         }
-        auto u_id = map_vert(evaluate_term(args[0]));
-        auto v_id = map_vert(evaluate_term(args[1]));
+
+        if (covec.size() > 1 && covec[1].first != -1) {
+            throw std::runtime_error(msg);
+            v_id = covec[1].second;
+        }
+        
+        //if (term.type() != Clingo::TheoryTermType::Function || std::strcmp(term.name(), "-") != 0) {
+        //    throw std::runtime_error(msg);
+        //}
+        //auto args = term.arguments();
+        //if (args.size() != 2) {
+        //    throw std::runtime_error(msg);
+        //}
+        //auto u_id = map_vert(evaluate_term(args[0]));
+        //auto v_id = map_vert(evaluate_term(args[1]));
         auto id = numeric_cast<int>(edges_.size());
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
@@ -1465,8 +1561,104 @@ public:
         }
         return state.dl_graph.node_value(index) - adjust;
     }
+private:
+
+    T to_T(T const &num) const {
+        return num;
+    }
+    
+    T to_T(const char* str) const {
+        return std::stod(str);
+    }
+
+
+    T get_weight(TheoryAtom const &atom) const {
+        auto ret = evaluate(atom.guard().second);
+        if (ret.type() == Clingo::SymbolType::Number) {
+            return to_T(ret.number());
+        }
+        if (ret.type() == Clingo::SymbolType::String) {
+            return to_T(ret.string());
+        }
+        check_syntax(false);
+    }
+
+    template <class F, std::enable_if_t<std::is_integral_v<T>, int> = 0>
+    Clingo::Symbol evaluate(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F f) const {
+        auto ea = evaluate(a);
+        check_syntax(ea.type() == Clingo::SymbolType::Number);
+        auto eb = evaluate(b);
+        check_syntax(eb.type() == Clingo::SymbolType::Number);
+        return Clingo::Number(f(ea.number(), eb.number()));
+    }
+    
+    template <class F, std::enable_if_t<std::is_floating_point_v<T>, int> = 0>
+    Clingo::Symbol evaluate(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F f) const {
+        auto ea = evaluate(a);
+        check_syntax(ea.type() == Clingo::SymbolType::String);
+        auto eb = evaluate(b);
+        check_syntax(eb.type() == Clingo::SymbolType::String);
+        //TODO: does Clingo copy string ?
+        return Clingo::String(std::to_string(f(std::stod(ea.string()), std::stod(eb.string()))).c_str());
+    }
+
+
+    Clingo::Symbol evaluate(Clingo::TheoryTerm const &term) const {
+        if (term.type() == Clingo::TheoryTermType::Symbol) {
+            return Clingo::Function(term.name(), {});
+        }
+
+        if (term.type() == Clingo::TheoryTermType::Number) {
+            return Clingo::Number(term.number());
+        }
+
+        if (match(term, "+", 2)) {
+            return evaluate(term.arguments().front(), term.arguments().back(), safe_add<T>);
+        }
+        if (match(term, "-", 2)) {
+            return evaluate(term.arguments().front(), term.arguments().back(), safe_sub<T>);
+        }
+        if (match(term, "*", 2)) {
+            return evaluate(term.arguments().front(), term.arguments().back(), safe_mul<T>);
+        }
+        if (match(term, "/", 2)) {
+            return evaluate(term.arguments().front(), term.arguments().back(), safe_div<T>);
+        }
+        if (match(term, "\\", 2)) {
+            return evaluate(term.arguments().front(), term.arguments().back(), safe_mod<T>);
+        }
+        if (match(term, "**", 2)) {
+            return evaluate(term.arguments().front(), term.arguments().back(), safe_pow<T>);
+        }
+
+        if (match(term, "-", 1)) {
+            auto ea = evaluate(term.arguments().front());
+            if (ea.type() == Clingo::SymbolType::Number) {
+                return Clingo::Number(safe_inv(ea.number()));
+            }
+            if (ea.type() == Clingo::SymbolType::Function && std::strlen(ea.name()) > 0) {
+                return Clingo::Function(ea.name(), ea.arguments(), !ea.is_positive());
+            }
+            return throw_syntax_error<Clingo::Symbol>();
+        }
+
+        check_syntax(!match(term, "..", 2));
+
+        if (term.type() == Clingo::TheoryTermType::Tuple || term.type() == Clingo::TheoryTermType::Function) {
+            std::vector<Clingo::Symbol> args;
+            args.reserve(term.arguments().size());
+            for (auto const &arg : term.arguments()) {
+                args.emplace_back(evaluate(arg));
+            }
+            return Clingo::Function(term.type() == Clingo::TheoryTermType::Function ? term.name() : "", args);
+        }
+
+        return throw_syntax_error<Clingo::Symbol>();
+    }
+
 
 private:
+
     std::vector<DLState<T>> states_;
     std::vector<FactState> facts_;
     std::unordered_multimap<literal_t, int> lit_to_edges_;
