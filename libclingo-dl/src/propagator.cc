@@ -140,7 +140,7 @@ int require_number(Clingo::Symbol sym) { return sym.type() == Clingo::SymbolType
 //    }
 //}
 
-[[nodiscard]] bool match(Clingo::TheoryTerm const &term, char const *name, size_t arity) {
+bool match(Clingo::TheoryTerm const &term, char const *name, size_t arity) {
     return (term.type() == Clingo::TheoryTermType::Symbol &&
         std::strcmp(term.name(), name) == 0 &&
         arity == 0) ||

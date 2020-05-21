@@ -988,7 +988,7 @@ struct NodeInfo {
 };
 
 constexpr int INVALID_VAR{std::numeric_limits<int>::max()};
-[[nodiscard]] bool match(Clingo::TheoryTerm const &term, char const *name, size_t arity);
+bool match(Clingo::TheoryTerm const &term, char const *name, size_t arity);
 
 //! Test whether a variable is valid.
 inline bool is_valid_var(int var) {
@@ -1620,6 +1620,7 @@ private:
             return std::stod(a.string());
         }
         check_syntax(false);
+        return static_cast<T>(0); // remove warning
     }
 
     template <class F, class N, typename std::enable_if<std::is_integral<N>::value, int>::type = 0>
