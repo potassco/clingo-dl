@@ -1248,6 +1248,7 @@ public:
         for (auto it = covec.begin(), ie = covec.end(); it != ie; ++it) {
             it->first = safe_inv<T>(it->first);
         }
+        auto rel = atom.guard().first;
 
         auto elems = atom.elements();
         if (elems.size() != 1) {
@@ -1258,9 +1259,17 @@ public:
             check_syntax(!tuple.empty() && element.condition().empty(), "Invalid Syntax: invalid sum constraint");
             parse_constraint_elem(element.tuple().front(), covec);
         }
-        auto weight = simplify(covec);
+        auto rhs = simplify(covec);
 
-        //normalize
+        normalize_constraint(init, lit, covec, rel, rhs, conf_.strict);
+
+    }
+
+    bool add_edge(PropagateInit& init, int literal, CoVarVec const &covec, T rhs, bool strict) {
+        char const *msg = "parsing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";
+        if (strict && init.assignment().is_false(literal)) {
+            return true;
+        }
         if (covec.size() > 2) {
             throw std::runtime_error(msg);
         }
@@ -1292,9 +1301,13 @@ public:
 			}
 			else throw std::runtime_error(msg);
         }
+        add_edge(init, u_id, v_id, rhs, literal, strict);
+        return true;
+    }
 
+    void add_edge(PropagateInit& init, int u_id, int v_id, T weight, int lit, bool strict) {
         add_edge(init, u_id, v_id, weight, lit);
-        if (conf_.strict) {
+        if (strict) {
             add_edge(init, v_id, u_id, -weight-1, -lit);
         }
     }
@@ -1315,6 +1328,113 @@ public:
             false_lit_to_edges_.emplace(-lit, id);
         }
     }
+
+    bool normalize_constraint(PropagateInit &init, int literal, CoVarVec const &elements, char const *op, T rhs, bool strict) {
+    CoVarVec copy;
+    CoVarVec const *elems = &elements;
+
+    // rewrite '>', '<', and '>=' into '<='
+    if (std::strcmp(op, ">") == 0) {
+        op = ">=";
+        rhs = safe_add<T>(rhs, epsilon<T>());
+    }
+    else if (std::strcmp(op, "<") == 0) {
+        op = "<=";
+        rhs = safe_sub<T>(rhs, epsilon<T>());
+    }
+    if (std::strcmp(op, ">=") == 0) {
+        op = "<=";
+        rhs = safe_inv<T>(rhs);
+        copy.reserve(elements.size());
+        for (auto const &covar : elements) {
+            copy.emplace_back(safe_inv<T>(covar.first), covar.second);
+        }
+        elems = &copy;
+    }
+
+    // hanle remainig '<=', '=', and '!='
+    if (std::strcmp(op, "<=") == 0) {
+        if (!init.assignment().is_true(-literal) && !add_edge(init, literal, *elems, rhs, false)) {
+            return false;
+        }
+    }
+    else if (std::strcmp(op, "=") == 0) {
+        int a, b;
+        if (strict) {
+            if (init.assignment().is_true(literal)) {
+                a = b = 1;
+            }
+            else {
+                a = init.add_literal();
+                b = init.add_literal();
+            }
+
+            // Note: this cannot fail because constraint normalization does not propagate
+            if (!init.add_clause({-literal, a})) {
+                return false;
+            }
+            if (!init.add_clause({-literal, b})) {
+                return false;
+            }
+            if (!init.add_clause({-a, -b, literal})) {
+                return false;
+            }
+        }
+        else {
+            a = b = literal;
+        }
+
+        if (!normalize_constraint(init, a, *elems, "<=", rhs, strict)) {
+            return false;
+        }
+        if (!normalize_constraint(init, b, *elems, ">=", rhs, strict)) {
+            return false;
+        }
+
+        if (strict) {
+            return true;
+        }
+    }
+    else if (std::strcmp(op, "!=") == 0) {
+        if (strict) {
+            return normalize_constraint(init, -literal, *elems, "=", rhs, true);
+        }
+
+        auto a = init.add_literal();
+        auto b = init.add_literal();
+
+        if (!init.add_clause({a, b, -literal})) {
+            return false;
+        }
+        if (!init.add_clause({-a, -b})) {
+            return false;
+        }
+
+        if (!normalize_constraint(init, a, *elems, "<", rhs, false)) {
+            return false;
+        }
+        if (!normalize_constraint(init, b, *elems, ">", rhs, false)) {
+            return false;
+        }
+    }
+
+    if (strict) {
+        assert(std::strcmp(op, "=") != 0);
+
+        if (std::strcmp(op, "<=") == 0) {
+            op = ">";
+        }
+        else if (std::strcmp(op, "!=") == 0) {
+            op = "=";
+        }
+
+        if (!normalize_constraint(init, -literal, *elems, op, rhs, false)) {
+            return false;
+        }
+    }
+
+    return true;
+}
 
     void cc_reset() {
         node_info_.clear();
@@ -1640,6 +1760,16 @@ private:
     template <class F>
     Clingo::Symbol evaluate(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F &&f) const {
         return evaluate<F, T>(a, b, std::forward<F>(f));
+    }
+    
+    template <class N, typename std::enable_if<std::is_integral<N>::value, int>::type = 0>
+    T epsilon() const {
+        return 1;
+    }
+
+    template <class N, typename std::enable_if<std::is_floating_point<N>::value, int>::type = 0>
+    T epsilon() const {
+        return 0.00001;
     }
 
 
