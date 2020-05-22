@@ -1293,14 +1293,16 @@ public:
 			else throw std::runtime_error(msg);
         }
 
+        add_edge(init, u_id, v_id, weight, lit);
+        if (conf_.strict) {
+            add_edge(init, v_id, u_id, -weight-1, -lit);
+        }
+    }
+
+    void add_edge(PropagateInit &init, int u_id, int v_id, T weight, int lit) {
         auto id = numeric_cast<int>(edges_.size());
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
-        if (conf_.strict) {
-            auto id = numeric_cast<int>(edges_.size());
-            edges_.push_back({v_id, u_id, -weight - 1, -lit});
-            lit_to_edges_.emplace(-lit, id);
-        }
         bool add = false;
         for (int i = 0; i < init.number_of_threads(); ++i) {
             init.add_watch(lit, i);
@@ -1308,15 +1310,9 @@ public:
                 add = true;
                 init.add_watch(-lit, i);
             }
-            else if (conf_.strict) {
-                init.add_watch(-lit, i);
-            }
         }
         if (add) {
             false_lit_to_edges_.emplace(-lit, id);
-            if (conf_.strict) {
-                false_lit_to_edges_.emplace(lit, id);
-            }
         }
     }
 
