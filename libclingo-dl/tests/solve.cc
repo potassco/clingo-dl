@@ -13,7 +13,7 @@ private:
     clingodl_theory_t *theory_;
 };
 
-using ResultVec = std::vector<std::vector<std::pair<Clingo::Symbol, int>>>;
+using ResultVec = std::vector<std::vector<std::pair<Clingo::Symbol, double>>>;
 ResultVec solve(clingodl_theory_t *theory, Clingo::Control &ctl) {
     Handler h{theory};
     using namespace Clingo;
@@ -26,8 +26,15 @@ ResultVec solve(clingodl_theory_t *theory, Clingo::Control &ctl) {
         for (clingodl_assignment_begin(theory, id, &index); clingodl_assignment_next(theory, id, &index); ) {
             clingodl_value_t value;
             clingodl_assignment_get_value(theory, id, index, &value);
-            REQUIRE(value.type == clingodl_value_type_int);
-            sol.emplace_back(Symbol{clingodl_get_symbol(theory, index)}, value.int_number);
+            if (value.type == clingodl_value_type_int) {
+                sol.emplace_back(Symbol{clingodl_get_symbol(theory, index)}, value.int_number);
+            }
+            else if (value.type == clingodl_value_type_double) {
+                sol.emplace_back(Symbol{clingodl_get_symbol(theory, index)}, value.double_number);
+            }
+            else {
+                REQUIRE(false);
+            }
         }
         std::sort(sol.begin(), sol.end());
     }
@@ -97,8 +104,21 @@ TEST_CASE("solving", "[clingo]") {
             auto result = solve(theory, ctl);
             REQUIRE(result == (ResultVec{{{a, 0}}}));
 
-            REQUIRE(ctl.statistics()["user_accu"]["DifferenceLogic"]["Thread"][(size_t)0]["Edges propagated"].value() >= 1);
         }
+        SECTION("rdl") {
+            REQUIRE(clingodl_configure(theory, "rdl", "yes"));
+            REQUIRE(clingodl_register(theory, ctl.to_c()));
+
+            ctl.add("base", {},
+                "&diff { a } >= \"0.5\"*3.\n"
+                );
+            ctl.ground({{"base", {}}});
+            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
+
+            auto result = solve(theory, ctl);
+            REQUIRE(result == (ResultVec{{{a, 1.5}}}));
+        }
+
         SECTION("parse") {
             REQUIRE(clingodl_register(theory, ctl.to_c()));
 

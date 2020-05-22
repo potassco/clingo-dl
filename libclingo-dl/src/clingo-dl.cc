@@ -104,8 +104,8 @@ void set_value<int>(clingodl_value_t *variant, int value) {
 
 template<>
 void set_value<double>(clingodl_value_t *variant, double value) {
-    variant->type = clingodl_value_type_int;
-    variant->int_number = value;
+    variant->type = clingodl_value_type_double;
+    variant->double_number = value;
 }
 
 template<typename T>
@@ -121,7 +121,7 @@ term {
   / : 2, binary, left;
   - : 3, unary
 };
-&diff/0 : term, {<=}, term, any;
+&diff/0 : term, {<=,>=,<,>,=,!=}, term, any;
 &show_assignment/0 : term, directive
 }.)"));
         static clingo_propagator_t prop = {

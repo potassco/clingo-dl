@@ -1144,6 +1144,35 @@ public:
         initialize_states(init);
     }
 
+    template <class N, typename std::enable_if<std::is_integral<N>::value, int>::type = 0>
+    T round(double val) {
+        if (ceilf(val) == val) {
+            return static_cast<T>(val);
+        }
+        throw std::runtime_error("could not evaluate term: for real numbers use option rdl");
+    }
+
+    template <class N, typename std::enable_if<std::is_floating_point<N>::value, int>::type = 0>
+    T round(T val) {
+        return static_cast<T>(val);
+    }
+
+
+    bool evaluate_real(char const *name, T &val) {
+        static const std::string chars = "\"";
+        auto len = std::strlen(name);
+        if (len < 2 || name[0] != '"' || name[len - 1] != '"') {
+            return false;
+        }
+        char *parsed = nullptr;
+        auto ret = std::strtod(name + 1, &parsed);
+        if (parsed != name + len - 1) {
+            return false;
+        }
+        val = round<T>(ret);
+        return true;
+    }
+
     void parse_constraint_elem(Clingo::TheoryTerm const &term, CoVarVec &res) {
         if (term.type() == Clingo::TheoryTermType::Number) {
             res.emplace_back(term.number(), INVALID_VAR);
@@ -1192,7 +1221,13 @@ public:
             }
         }
         else if (term.type() == Clingo::TheoryTermType::Symbol || term.type() == Clingo::TheoryTermType::Function || term.type() == Clingo::TheoryTermType::Tuple) {
-            res.emplace_back(1, map_vert(evaluate(term)));
+            T val;
+            if (evaluate_real(term.name(), val)) {
+                res.emplace_back(val, INVALID_VAR);
+            }
+            else {
+                res.emplace_back(1, map_vert(evaluate(term)));
+            }
         }
         else {
             throw_syntax_error("Invalid Syntax: invalid diff constraint");
@@ -1721,6 +1756,7 @@ public:
         T adjust = 0;
         auto cc = node_info_[index].cc;
         auto zero_node = zero_nodes_[cc];
+
         if (state.dl_graph.has_value(zero_node)) {
             adjust = state.dl_graph.node_value(zero_node);
         }
