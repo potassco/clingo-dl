@@ -32,18 +32,24 @@ namespace Detail {
 template <typename T, typename N, typename V, typename = void>
 struct has_visit : std::false_type { };
 
-template <typename T, typename N, typename V>
-struct has_visit<T, N, V, std::void_t<decltype(std::declval<T>().visit(std::declval<N>(), std::declval<V>()))>> : std::true_type { };
+template< class... >
+using cpp14_void_t = void;
 
 template <typename T, typename N, typename V>
+struct has_visit<T, N, V, cpp14_void_t<decltype(std::declval<T>().visit(std::declval<N>(), std::declval<V>()))>> : std::true_type { };
+
+template <typename T, typename N, typename V, typename std::enable_if<has_visit<T, N, V>::value, int>::type = 0>
 bool call_visit(T& t, N&& node, V&& value) {
-    if (has_visit<T, N, V>::value) { // NOLINT(readability-braces-around-statements)
-        t.visit(std::forward<N>(node), std::forward<V>(value));
-        return false;
-    }
-    else {
-        return true;
-    }
+    t.visit(std::forward<N>(node), std::forward<V>(value));
+    return false;
+}
+
+template <typename T, typename N, typename V, typename std::enable_if<!has_visit<T, N, V>::value, int>::type = 0>
+bool call_visit(T& t, N&& node, V&& value) {
+    static_cast<void>(t);
+    static_cast<void>(node);
+    static_cast<void>(value);
+    return true;
 }
 
 template <bool C, typename T>

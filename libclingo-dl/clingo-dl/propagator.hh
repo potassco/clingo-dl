@@ -55,7 +55,7 @@ void check_syntax(bool condition, char const *message="Invalid Syntax") {
 
 }
 
-char const *negate_relation(char const *op) {
+inline char const *negate_relation(char const *op) {
     if (std::strcmp(op, "=") == 0) {
         return "!=";
     }
@@ -240,7 +240,7 @@ struct TheoryRewriter {
 };
 
 
-void transform(Clingo::AST::Statement &&stm, Clingo::StatementCallback const &cb, bool shift) {
+inline void transform(Clingo::AST::Statement &&stm, Clingo::StatementCallback const &cb, bool shift) {
     unpool(std::move(stm), [&](Clingo::AST::Statement &&unpooled) {
         if (shift) {
             TheoryShifter shifter;
@@ -1982,7 +1982,7 @@ private:
         check_syntax(eb.type() == Clingo::SymbolType::Number);
         return Clingo::Number(f(to_T(ea), to_T(eb)));
     }
-    
+
     template <class F, class N, typename std::enable_if<std::is_floating_point<N>::value, int>::type = 0>
     Clingo::Symbol evaluate(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F f) const {
         auto ea = evaluate(a);
@@ -1996,7 +1996,7 @@ private:
     Clingo::Symbol evaluate(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F &&f) const {
         return evaluate<F, T>(a, b, std::forward<F>(f));
     }
-    
+
     template <class N, typename std::enable_if<std::is_integral<N>::value, int>::type = 0>
     T epsilon() const {
         return 1;

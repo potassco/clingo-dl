@@ -88,7 +88,7 @@ struct TermUnpooler {
             pools.emplace_back(accept(term));
         }
         Ret ret;
-        ::Clingcon::cross_product(pools, [&](auto it, auto ie){
+        cross_product(pools, [&](auto it, auto ie){
             ret.push_back({node.location, Clingo::AST::Function{value.name, {it, ie}, value.external}});
         });
         return ret;
@@ -115,7 +115,7 @@ struct LiteralUnpooler {
 
     [[nodiscard]] static Ret visit(Clingo::AST::Term &value, Clingo::AST::Literal &node) {
         Ret ret;
-        for (auto &term : ::Clingcon::unpool(std::move(value))) {
+        for (auto &term : unpool(std::move(value))) {
             ret.push_back({node.location, node.sign, std::move(term)});
         }
         return ret;
@@ -123,8 +123,8 @@ struct LiteralUnpooler {
 
     [[nodiscard]] static Ret visit(Clingo::AST::Comparison &value, Clingo::AST::Literal &node) {
         Ret ret;
-        auto pool_left = ::Clingcon::unpool(std::move(value.left));
-        auto pool_right = ::Clingcon::unpool(std::move(value.right));
+        auto pool_left = unpool(std::move(value.left));
+        auto pool_right = unpool(std::move(value.right));
         for (auto &left : pool_left) {
             for (auto &right : pool_right) {
                 ret.push_back({node.location, node.sign, Clingo::AST::Comparison{value.comparison, left, right}});
