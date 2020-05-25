@@ -1286,7 +1286,7 @@ public:
         auto rel = atom.guard().first;
 
         auto elems = atom.elements();
-        if (elems.size() != 1) {
+        if (elems.size() > 1) {
             throw std::runtime_error(msg);
         }
         for (auto const &element : elems) {

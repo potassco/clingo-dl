@@ -123,7 +123,7 @@ TEST_CASE("solving", "[clingo]") {
             REQUIRE(clingodl_register(theory, ctl.to_c()));
 
             ctl.add("base", {},
-                "&diff { p(1+2)-q(3*4-7) } <= 3-9.\n"
+                "&diff { p(1+2)-q(3*4-7) } <= 3-\"9.0\".\n"
                 );
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
@@ -132,6 +132,24 @@ TEST_CASE("solving", "[clingo]") {
             auto p = Clingo::parse_term("p(3)"),  q = Clingo::parse_term("q(5)");
             REQUIRE(result == (ResultVec{{{p, 0}, {q, 6}}}));
         }
+        SECTION("normalize") {
+            REQUIRE(clingodl_register(theory, ctl.to_c()));
+
+            ctl.add("base", {},
+                "&diff { a } = b.\n"
+                "&diff { 5 } >= 0.\n"
+                "&diff { b } > c.\n"
+                "&diff { c } >= d + 1.\n"
+                "&diff { e } != f.\n"
+                );
+            ctl.ground({{"base", {}}});
+            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
+
+            auto result = solve(theory, ctl);
+            auto b = Id("b"),  c = Id("c"), d = Id("d"),  e = Id("e"), f = Id("f");
+            REQUIRE(result == (ResultVec{{{a, 2},{b, 2},{c, 1},{d, 0},{e, 0}, {f, 1}},{{a, 2},{b, 2},{c, 1},{d, 0},{e, 1}, {f, 0}}}));
+        }
+
         clingodl_destroy(theory);
     }
 }
