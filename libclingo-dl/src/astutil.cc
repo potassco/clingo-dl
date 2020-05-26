@@ -24,6 +24,8 @@
 
 #include "clingo-dl/astutil.hh"
 
+namespace ClingoDL {
+
 namespace {
 
 // Unpooling could still be improved. Since this is tricky, the current
@@ -353,3 +355,4 @@ void unpool(Clingo::AST::Statement &&stm, Clingo::StatementCallback const &cb) {
     }
 }
 
+} // namespace ClingoDL

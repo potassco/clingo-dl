@@ -41,18 +41,16 @@
 #define CHECKSOLUTION
 using namespace Clingo;
 
-namespace {
+namespace ClingoDL {
 template <typename T=void>
 T throw_syntax_error(char const *message="Invalid Syntax") {
     throw std::runtime_error(message);
 }
 
-void check_syntax(bool condition, char const *message="Invalid Syntax") {
+inline void check_syntax(bool condition, char const *message="Invalid Syntax") {
     if (!condition) {
         throw_syntax_error(message);
     }
-}
-
 }
 
 inline char const *negate_relation(char const *op) {
@@ -2082,5 +2080,6 @@ private:
     PropagatorConfig conf_;
 };
 
+} // namespace ClingoDL
 
 #endif // CLINGODL_PROPAGATOR_HH

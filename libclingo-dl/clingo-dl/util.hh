@@ -41,7 +41,7 @@ struct hash<std::pair<int, int>> {
     }
 };
 
-}
+} // namespace std
 
 namespace Detail {
 

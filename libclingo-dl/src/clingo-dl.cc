@@ -27,6 +27,8 @@
 
 #include <sstream>
 
+namespace ClingoDL {
+
 #define CLINGODL_TRY try
 #define CLINGODL_CATCH catch (...){ Clingo::Detail::handle_cxx_error(); return false; } return true
 
@@ -204,6 +206,10 @@ private:
     Stats accu_;
     DifferenceLogicPropagator<T> prop_;
 };
+
+} // namespace ClingoDL
+
+using namespace ClingoDL;
 
 struct clingodl_theory {
     std::unique_ptr<PropagatorFacade> clingodl{nullptr};

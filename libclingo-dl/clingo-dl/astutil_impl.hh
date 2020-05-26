@@ -27,6 +27,8 @@
 
 #include "clingo-dl/astutil.hh" // for completion
 
+namespace ClingoDL {
+
 namespace Detail {
 
 template <typename T, typename N, typename V, typename = void>
@@ -481,18 +483,18 @@ struct VarCollector {
 
 template <typename V, typename N>
 void transform_ast(V&& v, N &node) {
-    ::Detail::Visitor<V, false> vv{v};
+    ClingoDL::Detail::Visitor<V, false> vv{v};
     node.data.accept(vv, node);
 }
 template <typename V, typename N>
 void visit_ast(V&& v, N const &node) {
-    ::Detail::Visitor<V, true> vv{v};
+    ClingoDL::Detail::Visitor<V, true> vv{v};
     node.data.accept(vv, node);
 }
 
 template <typename N>
 void collect_variables(VarSet &vars, N const &node) {
-    ::Detail::VarCollector v{vars};
+    ClingoDL::Detail::VarCollector v{vars};
     visit_ast(v, node);
 }
 
@@ -524,5 +526,7 @@ inline void cross_product(Seq seq, F f) {
 }
 
 // }}}
+
+} // namespace ClingoDL
 
 #endif

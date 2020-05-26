@@ -33,6 +33,7 @@
 //!
 //! @author Roland Kaminski
 
+namespace ClingoDL {
 
 //! Comparison operator to compare C strings.
 struct CStrCmp {
@@ -86,6 +87,7 @@ std::vector<Clingo::AST::BodyLiteral> unpool(Clingo::AST::BodyLiteral &&lit);
 //! Unpool theory atoms in statements.
 void unpool(Clingo::AST::Statement &&stm, Clingo::StatementCallback const &cb);
 
+} // namespace ClingoDL
 
 #endif // CLINGODL_ASTUTIL_H
 
