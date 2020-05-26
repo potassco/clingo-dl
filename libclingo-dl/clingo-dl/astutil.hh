@@ -61,7 +61,7 @@ void collect_variables(VarSet &vars, It ib,It ie);
 
 //! Collect variables in an AST.
 template <typename N>
-[[nodiscard]] VarSet collect_variables(N const &node);
+VarSet collect_variables(N const &node);
 
 //! Collect variables in a sequence of ASTs.
 template <typename It>
@@ -72,16 +72,16 @@ template <typename Seq, typename F>
 inline void cross_product(Seq seq, F f);
 
 //! Unpool the given term.
-[[nodiscard]] std::vector<Clingo::AST::Term> unpool(Clingo::AST::Term &&term);
+std::vector<Clingo::AST::Term> unpool(Clingo::AST::Term &&term);
 
 //! Unpool the given literal.
-[[nodiscard]] std::vector<Clingo::AST::Literal> unpool(Clingo::AST::Literal &&lit);
+std::vector<Clingo::AST::Literal> unpool(Clingo::AST::Literal &&lit);
 
 //! Unpool theory atoms in the given head literal.
-[[nodiscard]] std::vector<Clingo::AST::HeadLiteral> unpool(Clingo::AST::HeadLiteral &&lit);
+std::vector<Clingo::AST::HeadLiteral> unpool(Clingo::AST::HeadLiteral &&lit);
 
 //! Unpool theory atoms in the given body literal.
-[[nodiscard]] std::vector<Clingo::AST::BodyLiteral> unpool(Clingo::AST::BodyLiteral &&lit);
+std::vector<Clingo::AST::BodyLiteral> unpool(Clingo::AST::BodyLiteral &&lit);
 
 //! Unpool theory atoms in statements.
 void unpool(Clingo::AST::Statement &&stm, Clingo::StatementCallback const &cb);

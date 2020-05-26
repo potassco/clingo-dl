@@ -35,22 +35,22 @@ namespace {
 struct TermUnpooler {
     using Ret = std::vector<Clingo::AST::Term>;
 
-    [[nodiscard]] static Ret accept(Clingo::AST::Term &term) {
+    static Ret accept(Clingo::AST::Term &term) {
         TermUnpooler v;
         return term.data.accept(v, term);
     }
 
-    [[nodiscard]] static Ret visit(Clingo::Symbol &value, Clingo::AST::Term &node) {
+    static Ret visit(Clingo::Symbol &value, Clingo::AST::Term &node) {
         static_cast<void>(value);
         return {std::move(node)};
     }
 
-    [[nodiscard]] static Ret visit(Clingo::AST::Variable &value, Clingo::AST::Term &node) {
+    static Ret visit(Clingo::AST::Variable &value, Clingo::AST::Term &node) {
         static_cast<void>(value);
         return {std::move(node)};
     }
 
-    [[nodiscard]] static Ret visit(Clingo::AST::UnaryOperation &value, Clingo::AST::Term &node) {
+    static Ret visit(Clingo::AST::UnaryOperation &value, Clingo::AST::Term &node) {
         Ret ret;
         for (auto &argument : accept(value.argument)) {
             ret.push_back({node.location, Clingo::AST::UnaryOperation{value.unary_operator, std::move(argument)}});
@@ -58,7 +58,7 @@ struct TermUnpooler {
         return ret;
     }
 
-    [[nodiscard]] static Ret visit(Clingo::AST::BinaryOperation &value, Clingo::AST::Term &node) {
+    static Ret visit(Clingo::AST::BinaryOperation &value, Clingo::AST::Term &node) {
         Ret ret;
         auto pool_left = accept(value.left);
         auto pool_right = accept(value.right);
@@ -70,7 +70,7 @@ struct TermUnpooler {
         return ret;
     }
 
-    [[nodiscard]] static Ret visit(Clingo::AST::Interval &value, Clingo::AST::Term &node) {
+    static Ret visit(Clingo::AST::Interval &value, Clingo::AST::Term &node) {
         Ret ret;
         auto pool_left = accept(value.left);
         auto pool_right = accept(value.right);
@@ -82,7 +82,7 @@ struct TermUnpooler {
         return ret;
     }
 
-    [[nodiscard]] static Ret visit(Clingo::AST::Function &value, Clingo::AST::Term &node) {
+    static Ret visit(Clingo::AST::Function &value, Clingo::AST::Term &node) {
         std::vector<Ret> pools;
         for (auto &term : value.arguments) {
             pools.emplace_back(accept(term));
@@ -94,7 +94,7 @@ struct TermUnpooler {
         return ret;
     }
 
-    [[nodiscard]] static Ret visit(Clingo::AST::Pool &value, Clingo::AST::Term &node) {
+    static Ret visit(Clingo::AST::Pool &value, Clingo::AST::Term &node) {
         static_cast<void>(node);
         Ret ret;
         for (auto &term : value.arguments) {
@@ -108,12 +108,12 @@ struct TermUnpooler {
 struct LiteralUnpooler {
     using Ret = std::vector<Clingo::AST::Literal>;
 
-    [[nodiscard]] static Ret visit(Clingo::AST::Boolean &value, Clingo::AST::Literal &node) {
+    static Ret visit(Clingo::AST::Boolean &value, Clingo::AST::Literal &node) {
         static_cast<void>(value);
         return {std::move(node)};
     }
 
-    [[nodiscard]] static Ret visit(Clingo::AST::Term &value, Clingo::AST::Literal &node) {
+    static Ret visit(Clingo::AST::Term &value, Clingo::AST::Literal &node) {
         Ret ret;
         for (auto &term : unpool(std::move(value))) {
             ret.push_back({node.location, node.sign, std::move(term)});
@@ -121,7 +121,7 @@ struct LiteralUnpooler {
         return ret;
     }
 
-    [[nodiscard]] static Ret visit(Clingo::AST::Comparison &value, Clingo::AST::Literal &node) {
+    static Ret visit(Clingo::AST::Comparison &value, Clingo::AST::Literal &node) {
         Ret ret;
         auto pool_left = unpool(std::move(value.left));
         auto pool_right = unpool(std::move(value.right));
@@ -133,7 +133,7 @@ struct LiteralUnpooler {
         return ret;
     }
 
-    [[nodiscard]] static Ret visit(Clingo::AST::CSPLiteral &value, Clingo::AST::Literal &node) {
+    static Ret visit(Clingo::AST::CSPLiteral &value, Clingo::AST::Literal &node) {
         static_cast<void>(value);
         static_cast<void>(node);
         throw std::runtime_error("not implemented!!!");
@@ -155,7 +155,7 @@ void unpool_elements(Clingo::AST::TheoryAtom &atom) {
 }
 
 struct HeadBodyUnpooler {
-    [[nodiscard]] static std::vector<Clingo::AST::BodyLiteral> visit(Clingo::AST::TheoryAtom &value, Clingo::AST::BodyLiteral &lit) {
+    static std::vector<Clingo::AST::BodyLiteral> visit(Clingo::AST::TheoryAtom &value, Clingo::AST::BodyLiteral &lit) {
         unpool_elements(value);
         std::vector<Clingo::AST::BodyLiteral> ret;
         for (auto &term : unpool(std::move(value.term))) {
@@ -164,7 +164,7 @@ struct HeadBodyUnpooler {
         return ret;
     }
 
-    [[nodiscard]] static std::vector<Clingo::AST::HeadLiteral> visit(Clingo::AST::TheoryAtom &value, Clingo::AST::HeadLiteral &lit) {
+    static std::vector<Clingo::AST::HeadLiteral> visit(Clingo::AST::TheoryAtom &value, Clingo::AST::HeadLiteral &lit) {
         unpool_elements(value);
         std::vector<Clingo::AST::HeadLiteral> ret;
         for (auto &term : unpool(std::move(value.term))) {
@@ -174,7 +174,7 @@ struct HeadBodyUnpooler {
     }
 
     template <class T, class R>
-    [[nodiscard]] static std::vector<R> visit(T &value, R &lit) {
+    static std::vector<R> visit(T &value, R &lit) {
         static_cast<void>(value);
         std::vector<R> ret;
         ret.emplace_back(std::move(lit));

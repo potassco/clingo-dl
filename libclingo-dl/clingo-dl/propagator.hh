@@ -80,34 +80,34 @@ inline char const *negate_relation(char const *op) {
 // Checks if the given theory atom is shiftable.
 struct SigMatcher {
     template <typename CStr>
-    [[nodiscard]] static bool visit(Clingo::Symbol const &f, CStr str) {
+    static bool visit(Clingo::Symbol const &f, CStr str) {
         return f.match(str, 0);
     }
 
     template <typename CStr, typename... CStrs>
-    [[nodiscard]] static bool visit(Clingo::Symbol const &f, CStr str, CStrs... strs) {
+    static bool visit(Clingo::Symbol const &f, CStr str, CStrs... strs) {
         return (f.match(str, 0) || visit(f, strs...));
     }
 
     template <typename CStr>
-    [[nodiscard]] static bool visit(Clingo::AST::Function const &f, CStr str) {
+    static bool visit(Clingo::AST::Function const &f, CStr str) {
         return !f.external && f.arguments.empty() && (std::strcmp(f.name, str) == 0);
     }
 
     template <typename CStr, typename... CStrs>
-    [[nodiscard]] static bool visit(Clingo::AST::Function const &f, CStr str, CStrs... strs) {
+    static bool visit(Clingo::AST::Function const &f, CStr str, CStrs... strs) {
         return !f.external && f.arguments.empty() && ((std::strcmp(f.name, str) == 0) || visit(f, strs...));
     }
 
     template <class T, typename CStr>
-    [[nodiscard]] static bool visit(T const &x, CStr str) {
+    static bool visit(T const &x, CStr str) {
         static_cast<void>(x);
         static_cast<void>(str);
         return false;
     }
 
     template <class T, typename CStr, typename... CStrs>
-    [[nodiscard]] static bool visit(T const &x, CStr str, CStrs... strs) {
+    static bool visit(T const &x, CStr str, CStrs... strs) {
         static_cast<void>(x);
         static_cast<void>(str);
         return visit(x, strs...);
