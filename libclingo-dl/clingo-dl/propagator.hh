@@ -131,7 +131,7 @@ struct TheoryShifter {
             if (it->data.is<Clingo::AST::TheoryAtom>()) {
                 auto &atom = it->data.get<Clingo::AST::TheoryAtom>();
                 SigMatcher matcher;
-                if (atom.term.data.accept(matcher, "sum", "diff")) {
+                if (atom.term.data.accept(matcher, "diff")) {
                     check_syntax(atom.guard.get() != nullptr);
                     if (it->sign != Clingo::AST::Sign::Negation) {
                         auto *guard = atom.guard.get();
@@ -385,7 +385,6 @@ struct ThreadConfig {
 };
 
 struct PropagatorConfig {
-    bool strict{false};
     SortMode sort_edges{SortMode::Weight};
     uint64_t mutex_size{0};
     uint64_t mutex_cutoff{10};
@@ -1236,7 +1235,7 @@ public:
         Timer t{stats_.time_init};
         for (auto atom : init.theory_atoms()) {
             auto term = atom.term();
-            if (term.to_string() == "diff") {
+            if (term.to_string() == "__diff_h" || term.to_string() == "__diff_b") {
                 add_edge_atom(init, atom);
             }
         }
@@ -1477,6 +1476,12 @@ public:
         if (!atom.has_guard()) {
             throw std::runtime_error(msg);
         }
+
+        auto term = atom.term();
+        bool strict = (term.to_string() == "__diff_b");
+        if (strict && std::is_floating_point<T>::value) {
+            std::runtime_error("real difference logic not available with strict semantics in the body of a rule");
+        }
         CoVarVec covec;
         parse_constraint_elem(atom.guard().second, covec);
         for (auto it = covec.begin(), ie = covec.end(); it != ie; ++it) {
@@ -1495,7 +1500,7 @@ public:
         }
         auto rhs = simplify(covec);
 
-        normalize_constraint(init, lit, covec, rel, rhs, conf_.strict);
+        normalize_constraint(init, lit, covec, rel, rhs, strict);
 
     }
 

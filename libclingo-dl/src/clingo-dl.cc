@@ -121,7 +121,8 @@ term {
   / : 2, binary, left;
   - : 3, unary
 };
-&diff/0 : term, {<=,>=,<,>,=,!=}, term, any;
+&__diff_h/0 : term, {<=,>=,<,>,=,!=}, term, head;
+&__diff_b/0 : term, {<=,>=,<,>,=,!=}, term, body;
 &show_assignment/0 : term, directive
 }.)"));
         static clingo_propagator_t prop = {
@@ -416,9 +417,6 @@ extern "C" bool clingodl_configure(clingodl_theory_t *theory, char const *key, c
         if (strcmp(key, "rdl") == 0) {
             return check_parse("rdl", parse_bool(value, &theory->rdl));
         }
-        if (strcmp(key, "strict") == 0) {
-            return check_parse("strict", parse_bool(value, &theory->config));
-        }
         std::ostringstream msg;
         msg << "invalid configuration key '" << key << "'";
         clingo_set_error(clingo_error_runtime, msg.str().c_str());
@@ -469,18 +467,12 @@ extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_opti
             "        potential-reversed : Sort by relative negative potential",
             &parse_sort, &theory->config, true, "<arg>"));
         CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers", &theory->rdl));
-        CLINGO_CALL(clingo_options_add_flag(options, group, "strict", "Enable strict mode", &theory->config.strict));
     }
     CLINGODL_CATCH;
 }
 
 extern "C" bool clingodl_validate_options(clingodl_theory_t *theory) {
-    CLINGODL_TRY {
-        if (theory->config.strict && theory->rdl) {
-            throw std::runtime_error("real difference logic not available with strict semantics");
-        }
-    }
-    CLINGODL_CATCH;
+    return true;
 }
 
 extern "C" bool clingodl_on_model(clingodl_theory_t *theory, clingo_model_t* model) {

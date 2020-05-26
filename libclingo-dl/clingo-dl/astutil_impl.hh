@@ -481,18 +481,18 @@ struct VarCollector {
 
 template <typename V, typename N>
 void transform_ast(V&& v, N &node) {
-    Detail::Visitor<V, false> vv{v};
+    ::Detail::Visitor<V, false> vv{v};
     node.data.accept(vv, node);
 }
 template <typename V, typename N>
 void visit_ast(V&& v, N const &node) {
-    Detail::Visitor<V, true> vv{v};
+    ::Detail::Visitor<V, true> vv{v};
     node.data.accept(vv, node);
 }
 
 template <typename N>
 void collect_variables(VarSet &vars, N const &node) {
-    Detail::VarCollector v{vars};
+    ::Detail::VarCollector v{vars};
     visit_ast(v, node);
 }
 
