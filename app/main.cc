@@ -25,10 +25,53 @@
 #include <clingo.hh>
 #include <clingo-dl.h>
 #include <sstream>
+#include <fstream>
 
 using namespace Clingo;
 
 #define CLINGO_CALL(x) Clingo::Detail::handle_error(x)
+
+class Rewriter {
+public:
+    Rewriter(clingodl_theory_t *theory, clingo_program_builder_t *builder)
+    : theory_{theory}
+    , builder_{builder} {
+    }
+
+    void load(char const *file) {
+        std::string program;
+        if (strcmp(file, "-") == 0) {
+            program.assign(std::istreambuf_iterator<char>{std::cin}, std::istreambuf_iterator<char>{});
+        }
+        else {
+            std::ifstream ifs{file};
+            if (!ifs.is_open()) {
+                std::ostringstream oss;
+                oss << "could not open file: " << file;
+                throw std::runtime_error(oss.str());
+            }
+            program.assign(std::istreambuf_iterator<char>{ifs}, std::istreambuf_iterator<char>{});
+        }
+
+        // TODO: parsing from file would be nice
+        CLINGO_CALL(clingo_parse_program(program.c_str(), rewrite_, this, nullptr, nullptr, 0));
+    }
+
+private:
+    static bool add_(clingo_ast_statement_t const *stm, void *data) {
+        auto *self = static_cast<Rewriter*>(data);
+        return clingo_program_builder_add(self->builder_, stm);
+    }
+
+    static bool rewrite_(clingo_ast_statement_t const *stm, void *data) {
+        auto *self = static_cast<Rewriter*>(data);
+        return clingodl_rewrite_statement(self->theory_, stm, add_, self);
+    }
+
+    clingodl_theory_t *theory_;
+    clingo_program_builder_t *builder_;
+};
+
 
 class ClingoDLApp : public Clingo::Application, private SolveEventHandler {
 public:
@@ -77,12 +120,7 @@ public:
 
     void main(Control &ctl, StringSpan files) override {
         CLINGO_CALL(clingodl_register(theory_, ctl.to_c()));
-        for (auto &file : files) {
-            ctl.load(file);
-        }
-        if (files.empty()) {
-            ctl.load("-");
-        }
+        parse_(ctl, files);
 
         ctl.ground({{"base", {}}});
 
@@ -148,6 +186,19 @@ public:
     void validate_options() override {
         CLINGO_CALL(clingodl_validate_options(theory_));
     }
+private:
+    void parse_(Clingo::Control &control, Clingo::StringSpan files) {
+        control.with_builder([&](Clingo::ProgramBuilder &builder) {
+            Rewriter rewriter{theory_, builder.to_c()};
+            for (auto const &file : files) {
+                rewriter.load(file);
+            }
+            if (files.empty()) {
+                rewriter.load("-");
+            }
+        });
+    }
+
 private:
     clingodl_theory_t *theory_;
     Clingo::Symbol bound_symbol;
