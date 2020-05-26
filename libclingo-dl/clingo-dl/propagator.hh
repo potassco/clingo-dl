@@ -43,7 +43,7 @@ using namespace Clingo;
 
 namespace ClingoDL {
 template <typename T=void>
-T throw_syntax_error(char const *message="Invalid Syntax") {
+inline T throw_syntax_error(char const *message="Invalid Syntax") {
     throw std::runtime_error(message);
 }
 
@@ -53,203 +53,9 @@ inline void check_syntax(bool condition, char const *message="Invalid Syntax") {
     }
 }
 
-inline char const *negate_relation(char const *op) {
-    if (std::strcmp(op, "=") == 0) {
-        return "!=";
-    }
-    if (std::strcmp(op, "!=") == 0) {
-        return "=";
-    }
-    if (std::strcmp(op, "<") == 0) {
-        return ">=";
-    }
-    if (std::strcmp(op, "<=") == 0) {
-        return ">";
-    }
-    if (std::strcmp(op, ">") == 0) {
-        return "<=";
-    }
-    if (std::strcmp(op, ">=") == 0) {
-        return "<";
-    }
-    throw std::runtime_error("unexpected operator");
-}
+char const *negate_relation(char const *op);
 
-// Checks if the given theory atom is shiftable.
-struct SigMatcher {
-    template <typename CStr>
-    static bool visit(Clingo::Symbol const &f, CStr str) {
-        return f.match(str, 0);
-    }
-
-    template <typename CStr, typename... CStrs>
-    static bool visit(Clingo::Symbol const &f, CStr str, CStrs... strs) {
-        return (f.match(str, 0) || visit(f, strs...));
-    }
-
-    template <typename CStr>
-    static bool visit(Clingo::AST::Function const &f, CStr str) {
-        return !f.external && f.arguments.empty() && (std::strcmp(f.name, str) == 0);
-    }
-
-    template <typename CStr, typename... CStrs>
-    static bool visit(Clingo::AST::Function const &f, CStr str, CStrs... strs) {
-        return !f.external && f.arguments.empty() && ((std::strcmp(f.name, str) == 0) || visit(f, strs...));
-    }
-
-    template <class T, typename CStr>
-    static bool visit(T const &x, CStr str) {
-        static_cast<void>(x);
-        static_cast<void>(str);
-        return false;
-    }
-
-    template <class T, typename CStr, typename... CStrs>
-    static bool visit(T const &x, CStr str, CStrs... strs) {
-        static_cast<void>(x);
-        static_cast<void>(str);
-        return visit(x, strs...);
-    }
-};
-
-// Shifts constraints into rule heads.
-struct TheoryShifter {
-    static void visit(Clingo::AST::Rule &rule) {
-        if (!rule.head.data.is<Clingo::AST::Literal>()) {
-            return;
-        }
-        auto &head = rule.head.data.get<Clingo::AST::Literal>();
-        if (!head.data.is<Clingo::AST::Boolean>() || head.data.get<Clingo::AST::Boolean>().value) {
-            return;
-        }
-        auto it = rule.body.begin();
-        auto ie = rule.body.end();
-        auto jt = it;
-        for (; it != ie; ++it) {
-            if (it->data.is<Clingo::AST::TheoryAtom>()) {
-                auto &atom = it->data.get<Clingo::AST::TheoryAtom>();
-                SigMatcher matcher;
-                if (atom.term.data.accept(matcher, "diff")) {
-                    check_syntax(atom.guard.get() != nullptr);
-                    if (it->sign != Clingo::AST::Sign::Negation) {
-                        auto *guard = atom.guard.get();
-                        guard->operator_name = negate_relation(guard->operator_name);
-                    }
-                    rule.head.location = it->location;
-                    rule.head.data = std::move(atom);
-                    for (++it; it != ie; ++it, ++jt) {
-                        if (it != jt) {
-                            std::iter_swap(it, jt);
-                        }
-                    }
-                    break;
-                }
-            }
-            if (it != jt) {
-                std::iter_swap(it, jt);
-            }
-            ++jt;
-        }
-        rule.body.erase(jt, ie);
-    }
-
-    template <class T>
-    static void visit(T &value) {
-        static_cast<void>(value);
-    }
-};
-
-struct TermTagger {
-    static void visit(Clingo::AST::Function &term, char const *tag) {
-        std::string name{"__"};
-        name += term.name;
-        name += tag;
-        term.name = Clingo::add_string(name.c_str());
-    }
-
-    static void visit(Clingo::Symbol &term, char const *tag) {
-        std::string name{"__"};
-        name += term.name();
-        name += tag;
-        term = Clingo::Function(name.c_str(), {});
-    }
-
-    template <typename T>
-    static void visit(T &value, char const *tag) {
-        static_cast<void>(value);
-        static_cast<void>(tag);
-        throw_syntax_error();
-    }
-};
-
-
-// Tags head and body atoms and ensures multiset semantics.
-struct TheoryRewriter {
-    // Add variables to tuple to ensure multiset semantics.
-    static void rewrite_tuple(Clingo::AST::TheoryAtomElement &element, int number) {
-        check_syntax(element.tuple.size() == 1);
-        auto vars_condition = collect_variables(element.condition.begin(), element.condition.end());
-        for (auto const &name : collect_variables(element.tuple.begin(), element.tuple.end())) {
-            vars_condition.erase(name);
-        }
-        vars_condition.erase("_");
-        if (number >= 0) {
-            element.tuple.push_back({element.tuple.front().location, Clingo::Number(number)});
-        }
-        for (auto const &name : vars_condition) {
-            element.tuple.push_back({element.tuple.front().location, Clingo::AST::Variable{name}});
-        }
-    }
-
-    // Add variables to tuples of elements to ensure multiset semantics.
-    static void rewrite_tuples(Clingo::AST::TheoryAtom &atom) {
-        int number = atom.elements.size() > 1 ? 0 : -1;
-        for (auto &element : atom.elements) {
-            rewrite_tuple(element, number++);
-        }
-    }
-
-    static char const *tag(Clingo::AST::HeadLiteral const &lit) {
-        static_cast<void>(lit);
-        return "_h";
-    }
-
-    static char const *tag(Clingo::AST::BodyLiteral const &lit) {
-        static_cast<void>(lit);
-        return "_b";
-    }
-
-    // Mark head/body literals and ensure multiset semantics for theory atoms.
-    template <class Lit>
-    static void visit(Lit &node, Clingo::AST::TheoryAtom &atom) {
-        SigMatcher matcher;
-        if (atom.term.data.accept(matcher, "diff")) {
-            int number = atom.elements.size() > 1 ? 0 : -1;
-            for (auto &element : atom.elements) {
-                rewrite_tuple(element, number++);
-            }
-        }
-
-        if (atom.term.data.accept(matcher, "diff")) {
-            TermTagger tagger;
-            atom.term.data.accept(tagger, tag(node));
-        }
-    }
-};
-
-
-inline void transform(Clingo::AST::Statement &&stm, Clingo::StatementCallback const &cb, bool shift) {
-    unpool(std::move(stm), [&](Clingo::AST::Statement &&unpooled) {
-        if (shift) {
-            TheoryShifter shifter;
-            unpooled.data.accept(shifter);
-        }
-        TheoryRewriter tagger;
-        transform_ast(tagger, unpooled);
-        cb(std::move(unpooled));
-    });
-}
-
+void transform(Clingo::AST::Statement &&stm, Clingo::StatementCallback const &cb, bool shift);
 
 template <typename T>
 struct Edge {
@@ -1176,8 +982,6 @@ T evaluate_binary(char const *op, T left, T right) {
     throw std::runtime_error("could not evaluate term: unknown binary operator");
 }
 
-//Clingo::Symbol evaluate_term(Clingo::TheoryTerm term);
-
 template <typename T>
 Clingo::Symbol to_symbol(T value);
 
@@ -1514,29 +1318,29 @@ public:
         auto v_id = map_vert(Clingo::Number(0));
         if (covec.size() == 1) {
             if (covec[0].first == 1) {
-				u_id = covec[0].second;
-			}
-			else if (covec[0].first == -1) {
-				v_id = covec[0].second;
-			}
-			else throw std::runtime_error(msg);
+                u_id = covec[0].second;
+            }
+            else if (covec[0].first == -1) {
+                v_id = covec[0].second;
+            }
+            else throw std::runtime_error(msg);
         }
-		if (covec.size() == 2) {
+        else if (covec.size() == 2) {
             if (covec[0].first == 1) {
-				u_id = covec[0].second;
-            	if (covec[1].first == -1) {
-					v_id = covec[1].second;
-				}
-				else throw std::runtime_error(msg);
-			}
-			else if (covec[0].first == -1) {
-				v_id = covec[0].second;
-            	if (covec[1].first == 1) {
-					u_id = covec[1].second;
-				}
-				else throw std::runtime_error(msg);
-			}
-			else throw std::runtime_error(msg);
+                u_id = covec[0].second;
+                if (covec[1].first == -1) {
+                    v_id = covec[1].second;
+                }
+                else throw std::runtime_error(msg);
+            }
+            else if (covec[0].first == -1) {
+                v_id = covec[0].second;
+                if (covec[1].first == 1) {
+                    u_id = covec[1].second;
+                }
+                else throw std::runtime_error(msg);
+            }
+            else throw std::runtime_error(msg);
         }
         add_edge(init, u_id, v_id, rhs, literal, strict);
         return true;
@@ -1567,111 +1371,111 @@ public:
     }
 
     bool normalize_constraint(PropagateInit &init, int literal, CoVarVec const &elements, char const *op, T rhs, bool strict) {
-    CoVarVec copy;
-    CoVarVec const *elems = &elements;
+        CoVarVec copy;
+        CoVarVec const *elems = &elements;
 
-    // rewrite '>', '<', and '>=' into '<='
-    if (std::strcmp(op, ">") == 0) {
-        op = ">=";
-        rhs = safe_add<T>(rhs, epsilon<T>());
-    }
-    else if (std::strcmp(op, "<") == 0) {
-        op = "<=";
-        rhs = safe_sub<T>(rhs, epsilon<T>());
-    }
-    if (std::strcmp(op, ">=") == 0) {
-        op = "<=";
-        rhs = safe_inv<T>(rhs);
-        copy.reserve(elements.size());
-        for (auto const &covar : elements) {
-            copy.emplace_back(safe_inv<T>(covar.first), covar.second);
+        // rewrite '>', '<', and '>=' into '<='
+        if (std::strcmp(op, ">") == 0) {
+            op = ">=";
+            rhs = safe_add<T>(rhs, epsilon<T>());
         }
-        elems = &copy;
-    }
+        else if (std::strcmp(op, "<") == 0) {
+            op = "<=";
+            rhs = safe_sub<T>(rhs, epsilon<T>());
+        }
+        if (std::strcmp(op, ">=") == 0) {
+            op = "<=";
+            rhs = safe_inv<T>(rhs);
+            copy.reserve(elements.size());
+            for (auto const &covar : elements) {
+                copy.emplace_back(safe_inv<T>(covar.first), covar.second);
+            }
+            elems = &copy;
+        }
 
-    // hanle remainig '<=', '=', and '!='
-    if (std::strcmp(op, "<=") == 0) {
-        if (!init.assignment().is_true(-literal) && !add_edge(init, literal, *elems, rhs, false)) {
-            return false;
+        // hanle remainig '<=', '=', and '!='
+        if (std::strcmp(op, "<=") == 0) {
+            if (!init.assignment().is_true(-literal) && !add_edge(init, literal, *elems, rhs, false)) {
+                return false;
+            }
         }
-    }
-    else if (std::strcmp(op, "=") == 0) {
-        int a, b;
-        if (strict) {
-            if (init.assignment().is_true(literal)) {
-                a = b = 1;
+        else if (std::strcmp(op, "=") == 0) {
+            int a, b;
+            if (strict) {
+                if (init.assignment().is_true(literal)) {
+                    a = b = 1;
+                }
+                else {
+                    a = init.add_literal();
+                    b = init.add_literal();
+                }
+
+                // Note: this cannot fail because constraint normalization does not propagate
+                if (!init.add_clause({-literal, a})) {
+                    return false;
+                }
+                if (!init.add_clause({-literal, b})) {
+                    return false;
+                }
+                if (!init.add_clause({-a, -b, literal})) {
+                    return false;
+                }
             }
             else {
-                a = init.add_literal();
-                b = init.add_literal();
+                a = b = literal;
             }
 
-            // Note: this cannot fail because constraint normalization does not propagate
-            if (!init.add_clause({-literal, a})) {
+            if (!normalize_constraint(init, a, *elems, "<=", rhs, strict)) {
                 return false;
             }
-            if (!init.add_clause({-literal, b})) {
+            if (!normalize_constraint(init, b, *elems, ">=", rhs, strict)) {
                 return false;
             }
-            if (!init.add_clause({-a, -b, literal})) {
-                return false;
+
+            if (strict) {
+                return true;
             }
-        }
-        else {
-            a = b = literal;
-        }
-
-        if (!normalize_constraint(init, a, *elems, "<=", rhs, strict)) {
-            return false;
-        }
-        if (!normalize_constraint(init, b, *elems, ">=", rhs, strict)) {
-            return false;
-        }
-
-        if (strict) {
-            return true;
-        }
-    }
-    else if (std::strcmp(op, "!=") == 0) {
-        if (strict) {
-            return normalize_constraint(init, -literal, *elems, "=", rhs, true);
-        }
-
-        auto a = init.add_literal();
-        auto b = init.add_literal();
-
-        if (!init.add_clause({a, b, -literal})) {
-            return false;
-        }
-        if (!init.add_clause({-a, -b})) {
-            return false;
-        }
-
-        if (!normalize_constraint(init, a, *elems, "<", rhs, false)) {
-            return false;
-        }
-        if (!normalize_constraint(init, b, *elems, ">", rhs, false)) {
-            return false;
-        }
-    }
-
-    if (strict) {
-        assert(std::strcmp(op, "=") != 0);
-
-        if (std::strcmp(op, "<=") == 0) {
-            op = ">";
         }
         else if (std::strcmp(op, "!=") == 0) {
-            op = "=";
+            if (strict) {
+                return normalize_constraint(init, -literal, *elems, "=", rhs, true);
+            }
+
+            auto a = init.add_literal();
+            auto b = init.add_literal();
+
+            if (!init.add_clause({a, b, -literal})) {
+                return false;
+            }
+            if (!init.add_clause({-a, -b})) {
+                return false;
+            }
+
+            if (!normalize_constraint(init, a, *elems, "<", rhs, false)) {
+                return false;
+            }
+            if (!normalize_constraint(init, b, *elems, ">", rhs, false)) {
+                return false;
+            }
         }
 
-        if (!normalize_constraint(init, -literal, *elems, op, rhs, false)) {
-            return false;
+        if (strict) {
+            assert(std::strcmp(op, "=") != 0);
+
+            if (std::strcmp(op, "<=") == 0) {
+                op = ">";
+            }
+            else if (std::strcmp(op, "!=") == 0) {
+                op = "=";
+            }
+
+            if (!normalize_constraint(init, -literal, *elems, op, rhs, false)) {
+                return false;
+            }
         }
+
+        return true;
     }
-
-    return true;
-}
 
     void cc_reset() {
         node_info_.clear();
