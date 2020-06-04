@@ -151,7 +151,7 @@ TEST_CASE("solving", "[clingo]") {
 
             parse_program(theory, ctl,
                 "#program base.\n"
-                "&diff { a } >= \"0.5\"*3.\n"
+                "&diff { a } >= \"0.5\" * 3.\n"
                 );
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
@@ -165,7 +165,7 @@ TEST_CASE("solving", "[clingo]") {
 
             parse_program(theory, ctl,
                 "#program base.\n"
-                "&diff { p(1+2)-q(3*4-7) } <= 3-\"9.0\".\n"
+                "&diff { p( 1 + 2 ) - q( 3 * 4 - 7 ) } <= 3 - \"9.0\".\n"
                 );
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
@@ -197,8 +197,8 @@ TEST_CASE("solving", "[clingo]") {
 
             parse_program(theory, ctl,
                 "#program base.\n"
-                "a :- &diff {a-a} <= 5.\n"
-                "{b}.\n"
+                "a :- &diff { a - a } <= 5.\n"
+                "{ b }.\n"
                 "&diff {} < -4 :- b.\n"
                 );
             ctl.ground({{"base", {}}});
