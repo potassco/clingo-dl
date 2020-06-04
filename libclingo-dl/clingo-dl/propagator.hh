@@ -1315,12 +1315,10 @@ public:
         auto u_id = map_vert(Clingo::Number(0));
         auto v_id = map_vert(Clingo::Number(0));
         if (covec.size() == 0) {
-            int eval_lit = (0 <= rhs) ? 1 : -1;
-            if (!init.add_clause({-literal, eval_lit})) return false;
-            if (strict) {
-                if (!init.add_clause({-eval_lit, -literal})) return false;
-            }
-            return true;
+			if (rhs < 0) {
+				return init.add_clause({-literal});
+			}
+			return !strict || init.add_clause({literal});
         }
         else if (covec.size() == 1) {
             if (covec[0].first == 1) {
