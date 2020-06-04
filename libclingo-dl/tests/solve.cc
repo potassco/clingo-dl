@@ -201,17 +201,7 @@ TEST_CASE("solving", "[clingo]") {
 
             auto result = solve(theory, ctl);
             REQUIRE(result == (ResultVec{{}}));
-            StatisticsType type= ctl.statistics().type();
-            if (type == StatisticsType::Value)
-                std::cout << "Value " << std::endl;
-            if (type == StatisticsType::Map)
-                std::cout << "Map " << std::endl;
-            if (type == StatisticsType::Array)
-                std::cout << "Array " << std::endl;
-            for (const auto i : ctl.statistics().keys()) {
-                std::cout << i << std::endl;
-            }
-//            REQUIRE(ctl.statistics()["solving"]["solvers"]["choices"] == 0);
+            REQUIRE(ctl.statistics()["solving"]["solvers"]["choices"] == 0);
         }
         clingodl_destroy(theory);
     }
