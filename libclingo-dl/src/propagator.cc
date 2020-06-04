@@ -24,128 +24,185 @@
 
 #include <clingo-dl/propagator.hh>
 
-template <typename T>
-T evaluate_real(char const *);
+namespace ClingoDL {
 
-template <>
-int evaluate_real(char const *) {
-    throw std::runtime_error("could not evaluate term: integer expected");
-}
-
-template <>
-double evaluate_real(char const *name) {
-    static const std::string chars = "\"";
-    auto len = std::strlen(name);
-    if (len < 2 || name[0] != '"' || name[len - 1] != '"') {
-        throw std::runtime_error("could not evaluate term: real numbers have to be represented as strings");
+char const *negate_relation(char const *op) {
+    if (std::strcmp(op, "=") == 0) {
+        return "!=";
     }
-    char *parsed = nullptr;
-    auto ret = std::strtod(name + 1, &parsed);
-    if (parsed != name + len - 1) {
-        throw std::runtime_error("could not evaluate term: not a valid real number");
+    if (std::strcmp(op, "!=") == 0) {
+        return "=";
     }
-    return ret;
-}
-
-template <typename T>
-T evaluate(Clingo::TheoryTerm term) {
-    switch (term.type()) {
-        case Clingo::TheoryTermType::Number: {
-            return term.number();
-        }
-        case Clingo::TheoryTermType::Symbol: {
-            return evaluate_real<T>(term.name());
-        }
-        case Clingo::TheoryTermType::Function: {
-            auto args = term.arguments();
-            if (args.size() == 2) {
-                return evaluate_binary(term.name(), evaluate<T>(args[0]), evaluate<T>(args[1]));
-            }
-            if (args.size() == 1) {
-                if (std::strcmp(term.name(), "-") == 0) {
-                    return -evaluate<T>(args[0]);
-                }
-                else {
-                    throw std::runtime_error("could not evaluate term: unknown unary operator");
-                }
-            }
-            // [[fallthrough]]
-        }
-        default: { throw std::runtime_error("could not evaluate term: only numeric terms with basic arithmetic operations are supported"); }
+    if (std::strcmp(op, "<") == 0) {
+        return ">=";
     }
+    if (std::strcmp(op, "<=") == 0) {
+        return ">";
+    }
+    if (std::strcmp(op, ">") == 0) {
+        return "<=";
+    }
+    if (std::strcmp(op, ">=") == 0) {
+        return "<";
+    }
+    throw std::runtime_error("unexpected operator");
 }
 
-template int evaluate<int>(Clingo::TheoryTerm term);
-template double evaluate<double>(Clingo::TheoryTerm term);
+// Checks if the given theory atom is shiftable.
+struct SigMatcher {
+    template <typename CStr>
+    static bool visit(Clingo::Symbol const &f, CStr str) {
+        return f.match(str, 0);
+    }
 
-int require_number(Clingo::Symbol sym) { return sym.type() == Clingo::SymbolType::Number ? sym.number() : throw std::runtime_error("could not evaluate term: artithmetic on non-integer"); }
+    template <typename CStr, typename... CStrs>
+    static bool visit(Clingo::Symbol const &f, CStr str, CStrs... strs) {
+        return (f.match(str, 0) || visit(f, strs...));
+    }
 
-template <>
-int get_weight(TheoryAtom const &atom) {
-    return evaluate<int>(atom.guard().second);
-}
-template <>
-double get_weight(TheoryAtom const &atom) {
-    return evaluate<double>(atom.guard().second);
-}
+    template <typename CStr>
+    static bool visit(Clingo::AST::Function const &f, CStr str) {
+        return !f.external && f.arguments.empty() && (std::strcmp(f.name, str) == 0);
+    }
 
-extern Clingo::Symbol evaluate_term(Clingo::TheoryTerm term) {
-    switch (term.type()) {
-        case Clingo::TheoryTermType::Number: {
-            return Clingo::Number(term.number());
+    template <typename CStr, typename... CStrs>
+    static bool visit(Clingo::AST::Function const &f, CStr str, CStrs... strs) {
+        return !f.external && f.arguments.empty() && ((std::strcmp(f.name, str) == 0) || visit(f, strs...));
+    }
+
+    template <class T, typename CStr>
+    static bool visit(T const &x, CStr str) {
+        static_cast<void>(x);
+        static_cast<void>(str);
+        return false;
+    }
+
+    template <class T, typename CStr, typename... CStrs>
+    static bool visit(T const &x, CStr str, CStrs... strs) {
+        static_cast<void>(x);
+        static_cast<void>(str);
+        return visit(x, strs...);
+    }
+};
+
+// Shifts constraints into rule heads.
+struct TheoryShifter {
+    static void visit(Clingo::AST::Rule &rule) {
+        if (!rule.head.data.is<Clingo::AST::Literal>()) {
+            return;
         }
-        case Clingo::TheoryTermType::Symbol: {
-            return Clingo::Id(term.name(), true);
+        auto &head = rule.head.data.get<Clingo::AST::Literal>();
+        if (!head.data.is<Clingo::AST::Boolean>() || head.data.get<Clingo::AST::Boolean>().value) {
+            return;
         }
-        case Clingo::TheoryTermType::Function: {
-            auto op = term.name();
-            std::vector<Clingo::Symbol> args;
-            for (auto arg : term.arguments()) {
-                args.emplace_back(evaluate_term(arg));
-            }
-            if (args.size() == 2) {
-                if (std::strcmp(op, "+") == 0) {
-                    return Clingo::Number(require_number(args[0]) + require_number(args[1]));
-                }
-                else if (std::strcmp(op, "-") == 0) {
-                    return Clingo::Number(require_number(args[0]) - require_number(args[1]));
-                }
-                else if (std::strcmp(op, "*") == 0) {
-                    return Clingo::Number(require_number(args[0]) * require_number(args[1]));
-                }
-                else if (std::strcmp(op, "/") == 0) {
-                    if (args[1] == Clingo::Number(0)) {
-                        throw std::runtime_error("could not evaluate term: division by zero");
+        auto it = rule.body.begin();
+        auto ie = rule.body.end();
+        auto jt = it;
+        for (; it != ie; ++it) {
+            if (it->data.is<Clingo::AST::TheoryAtom>()) {
+                auto &atom = it->data.get<Clingo::AST::TheoryAtom>();
+                SigMatcher matcher;
+                if (atom.term.data.accept(matcher, "diff")) {
+                    check_syntax(atom.guard.get() != nullptr);
+                    if (it->sign != Clingo::AST::Sign::Negation) {
+                        auto *guard = atom.guard.get();
+                        guard->operator_name = negate_relation(guard->operator_name);
                     }
-                    return Clingo::Number(require_number(args[0]) / require_number(args[1]));
-                }
-            }
-            else if (args.size() == 1) {
-                if (std::strcmp(op, "-") == 0) {
-                    switch (args[0].type()) {
-                        case Clingo::SymbolType::Number: {
-                            return Clingo::Number(-args[0].number());
+                    rule.head.location = it->location;
+                    rule.head.data = std::move(atom);
+                    for (++it; it != ie; ++it, ++jt) {
+                        if (it != jt) {
+                            std::iter_swap(it, jt);
                         }
-                        case Clingo::SymbolType::Function: {
-                            if (std::strcmp(args[0].name(), "") != 0) {
-                                return Clingo::Function(args[0].name(), args[0].arguments(), args[0].is_negative());
-                            }
-                            // [[fallthrough]]
-                        }
-                        default: { throw std::runtime_error("could not evaluate term: only numbers and functions can be inverted"); }
                     }
+                    break;
                 }
             }
-            return Clingo::Function(op, args);
-        }
-        case Clingo::TheoryTermType::Tuple: {
-            std::vector<Clingo::Symbol> args;
-            for (auto arg : term.arguments()) {
-                args.emplace_back(evaluate_term(arg));
+            if (it != jt) {
+                std::iter_swap(it, jt);
             }
-            return Clingo::Function("", args);
+            ++jt;
         }
-        default: { throw std::runtime_error("could not evaluate term: sets and lists are not supported"); }
+        rule.body.erase(jt, ie);
     }
+
+    template <class T>
+    static void visit(T &value) {
+        static_cast<void>(value);
+    }
+};
+
+struct TermTagger {
+    static void visit(Clingo::AST::Function &term, char const *tag) {
+        std::string name{"__"};
+        name += term.name;
+        name += tag;
+        term.name = Clingo::add_string(name.c_str());
+    }
+
+    static void visit(Clingo::Symbol &term, char const *tag) {
+        std::string name{"__"};
+        name += term.name();
+        name += tag;
+        term = Clingo::Function(name.c_str(), {});
+    }
+
+    template <typename T>
+    static void visit(T &value, char const *tag) {
+        static_cast<void>(value);
+        static_cast<void>(tag);
+        throw_syntax_error();
+    }
+};
+
+// Tags head and body atoms and ensures multiset semantics.
+struct TheoryRewriter {
+    static char const *tag(Clingo::AST::HeadLiteral const &lit) {
+        static_cast<void>(lit);
+        return "_h";
+    }
+
+    static char const *tag(Clingo::AST::BodyLiteral const &lit) {
+        static_cast<void>(lit);
+        return "_b";
+    }
+
+    // Mark head/body literals and ensure multiset semantics for theory atoms.
+    template <class Lit>
+    static void visit(Lit &node, Clingo::AST::TheoryAtom &atom) {
+        SigMatcher matcher;
+        if (atom.term.data.accept(matcher, "diff")) {
+            TermTagger tagger;
+            char const *msg = "Diff atoms must consist of a single term without conditions.";
+            check_syntax(atom.elements.size() == 1, msg);
+            auto &element = atom.elements.front();
+            check_syntax(element.condition.empty() && element.tuple.size() == 1, msg);
+            atom.term.data.accept(tagger, tag(node));
+        }
+    }
+};
+
+
+void transform(Clingo::AST::Statement &&stm, Clingo::StatementCallback const &cb, bool shift) {
+    unpool(std::move(stm), [&](Clingo::AST::Statement &&unpooled) {
+        if (shift) {
+            TheoryShifter shifter;
+            unpooled.data.accept(shifter);
+        }
+        TheoryRewriter tagger;
+        transform_ast(tagger, unpooled);
+        cb(std::move(unpooled));
+    });
 }
 
+
+bool match(Clingo::TheoryTerm const &term, char const *name, size_t arity) {
+    return (term.type() == Clingo::TheoryTermType::Symbol &&
+        std::strcmp(term.name(), name) == 0 &&
+        arity == 0) ||
+        (term.type() == Clingo::TheoryTermType::Function &&
+        std::strcmp(term.name(), name) == 0 &&
+        term.arguments().size() == arity);
+}
+
+} // namespace ClingoDL
