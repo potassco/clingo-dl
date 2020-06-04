@@ -1301,9 +1301,7 @@ public:
             parse_constraint_elem(element.tuple().front(), covec);
         }
         auto rhs = simplify(covec);
-
         normalize_constraint(init, lit, covec, rel, rhs, strict);
-
     }
 
     bool add_edge(PropagateInit& init, int literal, CoVarVec const &covec, T rhs, bool strict) {
@@ -1785,8 +1783,7 @@ private:
         if (a.type() == Clingo::SymbolType::String) {
             return std::stod(a.string());
         }
-        check_syntax(false);
-        return static_cast<T>(0); // remove warning
+        return throw_syntax_error<T>();
     }
 
     template <class F, class N, typename std::enable_if<std::is_integral<N>::value, int>::type = 0>
@@ -1802,9 +1799,7 @@ private:
     Clingo::Symbol evaluate(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F f) const {
         auto ea = evaluate(a);
         auto eb = evaluate(b);
-        //TODO: does Clingo copy string ?
         return Clingo::String(std::to_string(f(to_T(ea), to_T(eb))).c_str());
-
     }
 
     template <class F>
@@ -1821,7 +1816,6 @@ private:
     T epsilon() const {
         return 0.00001;
     }
-
 
     Clingo::Symbol evaluate(Clingo::TheoryTerm const &term) const {
         if (term.type() == Clingo::TheoryTermType::Symbol) {
@@ -1872,10 +1866,8 @@ private:
             }
             return Clingo::Function(term.type() == Clingo::TheoryTermType::Function ? term.name() : "", args);
         }
-
         return throw_syntax_error<Clingo::Symbol>();
     }
-
 
 private:
 

@@ -21,7 +21,6 @@ public:
     , builder_{builder} {
     }
 
-
     static bool add_(clingo_ast_statement_t const *stm, void *data) {
         auto *self = static_cast<Rewriter*>(data);
         return clingo_program_builder_add(self->builder_, stm);
@@ -35,8 +34,6 @@ public:
     clingodl_theory_t *theory_;
     clingo_program_builder_t *builder_;
 };
-
-
 
 using ResultVec = std::vector<std::vector<std::pair<Clingo::Symbol, double>>>;
 ResultVec solve(clingodl_theory_t *theory, Clingo::Control &ctl) {
@@ -216,8 +213,6 @@ TEST_CASE("solving", "[clingo]") {
             }
 //            REQUIRE(ctl.statistics()["solving"]["solvers"]["choices"] == 0);
         }
-
-
         clingodl_destroy(theory);
     }
 }
