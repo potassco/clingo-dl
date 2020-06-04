@@ -199,7 +199,7 @@ TEST_CASE("solving", "[clingo]") {
                 "#program base.\n"
                 "a :- &diff { a - a } <= 5.\n"
                 "{ b }.\n"
-                "&diff {} < -4 :- b.\n"
+                "&diff { 0 } < -4 :- b.\n"
                 );
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));

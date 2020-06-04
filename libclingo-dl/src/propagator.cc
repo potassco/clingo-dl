@@ -173,12 +173,10 @@ struct TheoryRewriter {
         SigMatcher matcher;
         if (atom.term.data.accept(matcher, "diff")) {
             TermTagger tagger;
-            if (atom.elements.size() > 1) {
-                throw_syntax_error("Can not have multiple tuples in a difference constraint.");
-            }
-            if (atom.elements.size() && atom.elements[0].condition.size()) {
-                throw_syntax_error("Conditions not allowed in a difference constraint.");
-            }
+            char const *msg = "Diff atoms must consist of a single term without conditions.";
+            check_syntax(atom.elements.size() == 1, msg);
+            auto &element = atom.elements.front();
+            check_syntax(element.condition.empty() && element.tuple.size() == 1, msg);
             atom.term.data.accept(tagger, tag(node));
         }
     }
