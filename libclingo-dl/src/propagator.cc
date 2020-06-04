@@ -155,7 +155,6 @@ struct TermTagger {
     }
 };
 
-
 // Tags head and body atoms and ensures multiset semantics.
 struct TheoryRewriter {
     // Add variables to tuple to ensure multiset semantics.

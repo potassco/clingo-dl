@@ -21,7 +21,6 @@ public:
     , builder_{builder} {
     }
 
-
     static bool add_(clingo_ast_statement_t const *stm, void *data) {
         auto *self = static_cast<Rewriter*>(data);
         return clingo_program_builder_add(self->builder_, stm);
@@ -35,8 +34,6 @@ public:
     clingodl_theory_t *theory_;
     clingo_program_builder_t *builder_;
 };
-
-
 
 using ResultVec = std::vector<std::vector<std::pair<Clingo::Symbol, double>>>;
 ResultVec solve(clingodl_theory_t *theory, Clingo::Control &ctl) {
@@ -190,7 +187,22 @@ TEST_CASE("solving", "[clingo]") {
             auto b = Id("b"),  c = Id("c"), d = Id("d"),  e = Id("e"), f = Id("f");
             REQUIRE(result == (ResultVec{{{a, 2},{b, 2},{c, 1},{d, 0},{e, 0}, {f, 1}},{{a, 2},{b, 2},{c, 1},{d, 0},{e, 1}, {f, 0}}}));
         }
+        SECTION("empty constraints") {
+            REQUIRE(clingodl_register(theory, ctl.to_c()));
 
+            parse_program(theory, ctl,
+                "#program base.\n"
+                "a :- &diff {a-a} <= 5.\n"
+                "{b}.\n"
+                "&diff {} < -4 :- b.\n"
+                );
+            ctl.ground({{"base", {}}});
+            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
+
+            auto result = solve(theory, ctl);
+            REQUIRE(result == (ResultVec{{}}));
+            REQUIRE(ctl.statistics()["solving"]["solvers"]["choices"] == 0);
+        }
         clingodl_destroy(theory);
     }
 }
