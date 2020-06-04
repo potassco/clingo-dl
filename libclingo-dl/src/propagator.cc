@@ -157,30 +157,6 @@ struct TermTagger {
 
 // Tags head and body atoms and ensures multiset semantics.
 struct TheoryRewriter {
-    // Add variables to tuple to ensure multiset semantics.
-    static void rewrite_tuple(Clingo::AST::TheoryAtomElement &element, int number) {
-        check_syntax(element.tuple.size() == 1);
-        auto vars_condition = collect_variables(element.condition.begin(), element.condition.end());
-        for (auto const &name : collect_variables(element.tuple.begin(), element.tuple.end())) {
-            vars_condition.erase(name);
-        }
-        vars_condition.erase("_");
-        if (number >= 0) {
-            element.tuple.push_back({element.tuple.front().location, Clingo::Number(number)});
-        }
-        for (auto const &name : vars_condition) {
-            element.tuple.push_back({element.tuple.front().location, Clingo::AST::Variable{name}});
-        }
-    }
-
-    // Add variables to tuples of elements to ensure multiset semantics.
-    static void rewrite_tuples(Clingo::AST::TheoryAtom &atom) {
-        int number = atom.elements.size() > 1 ? 0 : -1;
-        for (auto &element : atom.elements) {
-            rewrite_tuple(element, number++);
-        }
-    }
-
     static char const *tag(Clingo::AST::HeadLiteral const &lit) {
         static_cast<void>(lit);
         return "_h";
@@ -196,14 +172,13 @@ struct TheoryRewriter {
     static void visit(Lit &node, Clingo::AST::TheoryAtom &atom) {
         SigMatcher matcher;
         if (atom.term.data.accept(matcher, "diff")) {
-            int number = atom.elements.size() > 1 ? 0 : -1;
-            for (auto &element : atom.elements) {
-                rewrite_tuple(element, number++);
-            }
-        }
-
-        if (atom.term.data.accept(matcher, "diff")) {
             TermTagger tagger;
+            if (atom.elements.size() > 1) {
+                throw_syntax_error("Can not have multiple tuples in a difference constraint.");
+            }
+            if (atom.elements.size() && atom.elements[0].condition.size()) {
+                throw_syntax_error("Conditions not allowed in a difference constraint.");
+            }
             atom.term.data.accept(tagger, tag(node));
         }
     }
