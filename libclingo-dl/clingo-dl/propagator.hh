@@ -1235,42 +1235,40 @@ public:
     }
 
     T simplify(CoVarVec &vec) const {
-    static thread_local std::unordered_map<int, typename CoVarVec::iterator> seen;
-    T rhs = 0;
+        static thread_local std::unordered_map<int, typename CoVarVec::iterator> seen;
+        T rhs = 0;
+        seen.clear();
 
-    seen.clear();
-
-    auto jt = vec.begin();
-    for (auto it = jt, ie = vec.end(); it != ie; ++it) {
-        auto &co = it->first;
-        auto &var = it->second;
-        if (co == 0) {
-            continue;
-        }
-        if (!is_valid_var(var)) {
-            rhs = safe_sub<T>(rhs, co);
-        }
-        else {
-            auto r = seen.emplace(var, jt);
-            auto kt = r.first;
-            auto ins = r.second;
-            if (!ins) {
-                kt->second->first = safe_add<T>(kt->second->first, co);
+        auto jt = vec.begin();
+        for (auto it = jt, ie = vec.end(); it != ie; ++it) {
+            auto &co = it->first;
+            auto &var = it->second;
+            if (co == 0) {
+                continue;
+            }
+            if (!is_valid_var(var)) {
+                rhs = safe_sub<T>(rhs, co);
             }
             else {
-                if (it != jt) {
-                    *jt = *it;
+                auto r = seen.emplace(var, jt);
+                auto kt = r.first;
+                auto ins = r.second;
+                if (!ins) {
+                    kt->second->first = safe_add<T>(kt->second->first, co);
                 }
-                ++jt;
+                else {
+                    if (it != jt) {
+                        *jt = *it;
+                    }
+                    ++jt;
+                }
             }
         }
+
+        jt = std::remove_if(vec.begin(), jt, [](auto &co_var) { return co_var.first == 0; } );
+        vec.erase(jt, vec.end());
+        return rhs;
     }
-
-    jt = std::remove_if(vec.begin(), jt, [](auto &co_var) { return co_var.first == 0; } );
-    vec.erase(jt, vec.end());
-    return rhs;
-}
-
 
     void add_edge_atom(PropagateInit &init, TheoryAtom const &atom) {
         char const *msg = "parsing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";
