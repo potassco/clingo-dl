@@ -183,13 +183,13 @@ TEST_CASE("solving", "[clingo]") {
                 "&diff { 5 } >= 0.\n"
                 "&diff { b } > c.\n"
                 "&diff { c } >= d + 1.\n"
-                "&diff { e } != f.\n"
+                "&diff { e } != (f,f).\n"
                 );
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
 
             auto result = solve(theory, ctl);
-            auto b = Id("b"),  c = Id("c"), d = Id("d"),  e = Id("e"), f = Id("f");
+            auto b = Id("b"),  c = Id("c"), d = Id("d"),  e = Id("e"), f = Function("",{Id("f"),Id("f")});
             REQUIRE(result == (ResultVec{{{{a, 2},{b, 2},{c, 1},{d, 0},{e, 0}, {f, 1}},{}},{{{a, 2},{b, 2},{c, 1},{d, 0},{e, 1}, {f, 0}},{}}}));
         }
         SECTION("empty constraints") {
