@@ -1220,7 +1220,7 @@ public:
                 }
             }
         }
-        else if (term.type() == Clingo::TheoryTermType::Symbol || term.type() == Clingo::TheoryTermType::Function || term.type() == Clingo::TheoryTermType::Tuple) {
+        else if (term.type() == Clingo::TheoryTermType::Symbol) {
             T val;
             if (evaluate_real(term.name(), val)) {
                 res.emplace_back(val, INVALID_VAR);
@@ -1228,6 +1228,9 @@ public:
             else {
                 res.emplace_back(1, map_vert(evaluate(term)));
             }
+        }
+        else if (term.type() == Clingo::TheoryTermType::Function || term.type() == Clingo::TheoryTermType::Tuple) {
+            res.emplace_back(1, map_vert(evaluate(term)));
         }
         else {
             throw_syntax_error("Invalid Syntax: invalid diff constraint");
