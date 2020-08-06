@@ -1455,6 +1455,12 @@ public:
             if (!init.add_clause({-a, -b})) {
                 return false;
             }
+            if (!init.add_clause({literal, -a})) {
+                return false;
+            }
+            if (!init.add_clause({literal, -b})) {
+                return false;
+            }
 
             if (!normalize_constraint(init, a, *elems, "<", rhs, false)) {
                 return false;

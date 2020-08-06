@@ -104,6 +104,18 @@ TEST_CASE("solving", "[clingo]") {
             result = solve(theory, ctl);
             REQUIRE(result == (ResultVec{{{{a, 0}, {b, 7}},{b}}}));
         }
+        SECTION("unequal") {
+            REQUIRE(clingodl_register(theory, ctl.to_c()));
+            parse_program(theory, ctl,
+                "#program base.\n"
+                "{ a }. &diff { b } != 5 :- not a.\n"
+                "&show_assignment{}.\n");
+            ctl.ground({{"base", {}}});
+            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
+            auto result = solve(theory, ctl);
+            REQUIRE(result == (ResultVec{{{},{a}}, {{{b, 0}},{}},{{{b, 6}},{}}}));
+        }
+
         SECTION("cc") {
             REQUIRE(clingodl_register(theory, ctl.to_c()));
             parse_program(theory, ctl,
