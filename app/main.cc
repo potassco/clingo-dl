@@ -38,23 +38,8 @@ public:
     , builder_{builder} {
     }
 
-    void load(char const *file) {
-        std::string program;
-        if (strcmp(file, "-") == 0) {
-            program.assign(std::istreambuf_iterator<char>{std::cin}, std::istreambuf_iterator<char>{});
-        }
-        else {
-            std::ifstream ifs{file};
-            if (!ifs.is_open()) {
-                std::ostringstream oss;
-                oss << "could not open file: " << file;
-                throw std::runtime_error(oss.str());
-            }
-            program.assign(std::istreambuf_iterator<char>{ifs}, std::istreambuf_iterator<char>{});
-        }
-
-        // TODO: parsing from file would be nice
-        CLINGO_CALL(clingo_parse_program(program.c_str(), rewrite_, this, nullptr, nullptr, 0));
+    void rewrite(StringSpan files) {
+        CLINGO_CALL(clingo_parse_files(files.begin(), files.size(), rewrite_, this, nullptr, nullptr, 0));
     }
 
 private:
@@ -190,12 +175,7 @@ private:
     void parse_(Clingo::Control &control, Clingo::StringSpan files) {
         control.with_builder([&](Clingo::ProgramBuilder &builder) {
             Rewriter rewriter{theory_, builder.to_c()};
-            for (auto const &file : files) {
-                rewriter.load(file);
-            }
-            if (files.empty()) {
-                rewriter.load("-");
-            }
+            rewriter.rewrite(files);
         });
     }
 
