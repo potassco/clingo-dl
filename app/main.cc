@@ -105,7 +105,11 @@ public:
 
     void main(Control &ctl, StringSpan files) override {
         CLINGO_CALL(clingodl_register(theory_, ctl.to_c()));
-        parse_(ctl, files);
+
+        ctl.with_builder([&](Clingo::ProgramBuilder &builder) {
+            Rewriter rewriter{theory_, builder.to_c()};
+            rewriter.rewrite(files);
+        });
 
         ctl.ground({{"base", {}}});
 
@@ -170,13 +174,6 @@ public:
 
     void validate_options() override {
         CLINGO_CALL(clingodl_validate_options(theory_));
-    }
-private:
-    void parse_(Clingo::Control &control, Clingo::StringSpan files) {
-        control.with_builder([&](Clingo::ProgramBuilder &builder) {
-            Rewriter rewriter{theory_, builder.to_c()};
-            rewriter.rewrite(files);
-        });
     }
 
 private:
