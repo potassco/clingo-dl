@@ -157,7 +157,7 @@ public:
         });
 
         int upper_bound = std::numeric_limits<int>::max();
-        unsigned int exp=0;
+        double adapt = 1;
 
         do
         {
@@ -169,7 +169,7 @@ public:
             has_bound_ = false;
             for (auto &&m : h) {
                 upper_bound = get_bound(m);
-                bound_value_ = std::max(static_cast<int>(upper_bound - pow(2,(exp++))),lower_bound_+1);
+                bound_value_ = std::max(static_cast<int>(upper_bound - adapt),lower_bound_+1);
                 if (bound_value_ < upper_bound) {
                     has_bound_ = true;
                 }
@@ -178,15 +178,16 @@ public:
             }
             if (h.get().is_unsatisfiable()) {
                 lower_bound_ = bound_value_;
-                ctl.release_external(Function("ub", {Number(bound_value_)}));
                 ctl.ground({{"__lb", {bound_symbol, Number(lower_bound_)}}});
                 ctl.assign_external(Function("lb", {Number(lower_bound_)}), TruthValue::True);
-                exp=0;
-                bound_value_ = std::max(static_cast<int>(upper_bound - pow(2,(exp++))), lower_bound_);
+                adapt=1;
+                bound_value_ = std::max(static_cast<int>(upper_bound - adapt), lower_bound_);
                 if (lower_bound_<bound_value_) {
                     has_bound_ = true;
+                    ctl.release_external(Function("ub", {Number(lower_bound_)}));
                 }
             }
+            adapt = std::min(static_cast<double>(std::numeric_limits<int>::max()), adapt*2);
             if (h.get().is_interrupted()) {
                 break;
             }
