@@ -99,9 +99,7 @@ public:
         if (found_bound_) {
             UserStatistics diff = root.add_subkey("DifferenceLogic", StatisticsType::Map);
             diff.add_subkey("Optimization", StatisticsType::Value).set_value(bound_value_);
-            if (lower_bound_ > std::numeric_limits<int>::min()) {
-                diff.add_subkey("Lowerbound", StatisticsType::Value).set_value(lower_bound_);
-            }
+            diff.add_subkey("Lowerbound", StatisticsType::Value).set_value(lower_bound_);
         }
     }
 
@@ -115,37 +113,10 @@ public:
         ctl.solve(Clingo::SymbolicLiteralSpan{}, this, false, false).get();
     }
 
-    void solve_optimal_linear(Control& ctl) {
+    void solve_optimal(Control& ctl) {
         // NOTE: with an API extension to implement a custom enumerator,
         //       one could implement this more nicely
         //       right now this implementation is restricted to the application
-        ctl.with_builder([&](Clingo::ProgramBuilder &builder) {
-           Rewriter rewriter{theory_, builder.to_c()};
-           rewriter.rewrite("#program __bound(s,b)."
-                            "&diff { s-0 } <= b."
-                            "#program base.");
-        });
-        do
-        {
-            if (has_bound_) {
-                ctl.ground({{"__bound", {bound_symbol, Number(bound_value_ - 1)}}});
-            }
-            has_bound_ = false;
-            auto h = ctl.solve(Clingo::SymbolicLiteralSpan{}, this, false, true);
-            for (auto &&m : h) {
-                bound_value_ = get_bound(m);
-                has_bound_ = true;
-                found_bound_ = true;
-                break;
-            }
-            if (h.get().is_interrupted()) {
-                break;
-            }
-        }
-        while (has_bound_);
-    }
-
-    void solve_optimal_exponential(Control& ctl) {
         ctl.with_builder([&](Clingo::ProgramBuilder &builder) {
            Rewriter rewriter{theory_, builder.to_c()};
            rewriter.rewrite("#program __ub(s,b)."
@@ -158,7 +129,6 @@ public:
 
         int upper_bound = std::numeric_limits<int>::max();
         double adapt = 1;
-
         do
         {
             if (has_bound_) {
@@ -169,7 +139,11 @@ public:
             has_bound_ = false;
             for (auto &&m : h) {
                 upper_bound = get_bound(m);
-                bound_value_ = std::max(static_cast<int>(upper_bound - adapt),lower_bound_+1);
+                double aux = std::max(upper_bound - adapt, lower_bound_+1.0);
+                if (aux > std::numeric_limits<int>::max()) {
+                    throw std::overflow_error("Integer overflow during optimization");
+                }
+                bound_value_ = aux;
                 if (bound_value_ < upper_bound) {
                     has_bound_ = true;
                 }
@@ -187,13 +161,12 @@ public:
                     ctl.release_external(Function("ub", {Number(lower_bound_)}));
                 }
             }
-            adapt = std::min(static_cast<double>(std::numeric_limits<int>::max()), adapt*2);
+            adapt = std::min(static_cast<double>(std::numeric_limits<int>::max()), adapt*factor_);
             if (h.get().is_interrupted()) {
                 break;
             }
         }
         while (has_bound_);
-
     }
 
     void main(Control &ctl, StringSpan files) override {
@@ -208,11 +181,8 @@ public:
         if (!minimize_) {
             solve_satisfiability(ctl);
         }
-        else if (strategy_linear_) {
-            solve_optimal_linear(ctl);
-        }
         else {
-            solve_optimal_exponential(ctl);
+            solve_optimal(ctl);
         }
 
     }
@@ -235,16 +205,10 @@ public:
         return true;
     }
 
-    bool parse_strategy(char const *value) {
-        if (strcmp(value,"linear") == 0) {
-            strategy_linear_ = true;
-        }
-        else if (strcmp(value,"exponential") == 0) {
-            strategy_linear_ = false;
-        }
-        else {
-            return false;
-        }
+    bool parse_factor(char const *value) {
+        std::stringstream strValue;
+        strValue << value;
+        strValue >> factor_;
         return true;
     }
 
@@ -257,15 +221,18 @@ public:
             "      <variable>: the variable to minimize\n"
             "      <initial> : upper bound for the variable",
             [this](char const *value) { return parse_bound(value); });
-        options.add(group, "minimize-strategy",
-            "Minimize with the given strategy\n"
-            "      <arg>   : {linear (default), exponential}",
-            [this](char const *value) { return parse_strategy(value); });
+        options.add(group, "minimize-factor",
+            "Decrease optimization steps \n"
+            "      <factor>   : {multiplication factor, 1=linear (default)}",
+            [this](char const *value) { return parse_factor(value); });
 
     }
 
     void validate_options() override {
         CLINGO_CALL(clingodl_validate_options(theory_));
+        if (factor_ < std::numeric_limits<int>::min() || factor_ > std::numeric_limits<int>::max()) {
+            throw std::overflow_error("minimize-factor out of bounds");
+        }
     }
 
 private:
@@ -277,7 +244,7 @@ private:
     bool minimize_ = false;
     bool has_bound_ = false;
     bool found_bound_ = false;
-    bool strategy_linear_ = true;
+    double factor_ = 1;
 };
 
 int main(int argc, char *argv[]) {
