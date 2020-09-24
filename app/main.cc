@@ -42,6 +42,10 @@ public:
         CLINGO_CALL(clingo_parse_files(files.begin(), files.size(), rewrite_, this, nullptr, nullptr, 0));
     }
 
+    void rewrite(char const *str) {
+        CLINGO_CALL(clingo_parse_program(str, rewrite_, this, nullptr, nullptr, 0));
+    }
+
 private:
     static bool add_(clingo_ast_statement_t const *stm, void *data) {
         auto *self = static_cast<Rewriter*>(data);
@@ -120,7 +124,12 @@ public:
             // NOTE: with an API extension to implement a custom enumerator,
             //       one could implement this more nicely
             //       right now this implementation is restricted to the application
-            ctl.add("__bound", {"s", "b"}, "&diff { s-0 } <= b.");
+            ctl.with_builder([&](Clingo::ProgramBuilder &builder) {
+               Rewriter rewriter{theory_, builder.to_c()};
+               rewriter.rewrite("#program __bound(s,b)."
+                                "&diff { s-0 } <= b."
+                                "#program base.");
+            });
             do
             {
                 if (has_bound_) {
