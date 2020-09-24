@@ -117,27 +117,33 @@ public:
         // NOTE: with an API extension to implement a custom enumerator,
         //       one could implement this more nicely
         //       right now this implementation is restricted to the application
+        // Note: it would be possible to add ub(b) as facts after an upper bound has
+        //       been verified. We would get rid of the external. The constraint in
+        //       clingo-dl could be removed nevertheless.
         ctl.with_builder([&](Clingo::ProgramBuilder &builder) {
            Rewriter rewriter{theory_, builder.to_c()};
            rewriter.rewrite("#program __ub(s,b)."
                             "#external ub(b)."
                             "&diff { s-0 } <= b :- ub(b)."
                             "#program __lb(s,b)."
-                            "#external lb(b)."
-                            "&diff { 0-s } <= -b-1 :- lb(b).");
+                            "&diff { 0-s } <= -b-1.");
         });
 
         int upper_bound = std::numeric_limits<int>::max();
         double adapt = 1;
         do
         {
+            auto ubs = Number(bound_value_);
             if (has_bound_) {
-                ctl.ground({{"__ub", {bound_symbol, Number(bound_value_)}}});
-                ctl.assign_external(Function("ub", {Number(bound_value_)}), TruthValue::True);
+                ctl.ground({{"__ub", {bound_symbol, ubs}}});
+                ctl.assign_external(Function("ub", {ubs}), TruthValue::True);
             }
             auto h = ctl.solve(Clingo::SymbolicLiteralSpan{}, this, false, true);
             has_bound_ = false;
             for (auto &&m : h) {
+                if (has_bound_) {
+                    ctl.release_external(Function("ub", {ubs}));
+                }
                 upper_bound = get_bound(m);
                 double aux = std::max(upper_bound - adapt, lower_bound_+1.0);
                 if (aux > std::numeric_limits<int>::max()) {
@@ -152,13 +158,12 @@ public:
             }
             if (h.get().is_unsatisfiable()) {
                 lower_bound_ = bound_value_;
-                ctl.ground({{"__lb", {bound_symbol, Number(lower_bound_)}}});
-                ctl.assign_external(Function("lb", {Number(lower_bound_)}), TruthValue::True);
                 adapt=1;
                 bound_value_ = std::max(static_cast<int>(upper_bound - adapt), lower_bound_);
                 if (lower_bound_<bound_value_) {
                     has_bound_ = true;
-                    ctl.release_external(Function("ub", {Number(lower_bound_)}));
+                    ctl.ground({{"__lb", {bound_symbol, Number(lower_bound_)}}});
+                    ctl.release_external(Function("ub", {ubs}));
                 }
             }
             adapt = std::min(static_cast<double>(std::numeric_limits<int>::max()), adapt*factor_);
