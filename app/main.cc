@@ -78,7 +78,7 @@ public:
 
     int get_bound(Model const &m) {
         if (!bound_index_) {
-            if (!clingodl_lookup_symbol(theory_, bound_symbol.to_c(), &bound_index_)) {
+            if (!clingodl_lookup_symbol(theory_, bound_symbol_.to_c(), &bound_index_)) {
                 throw std::runtime_error("variable to minimize not found");
             }
         }
@@ -98,8 +98,8 @@ public:
     void add_stats(UserStatistics root) {
         if (found_bound_) {
             UserStatistics diff = root.add_subkey("DifferenceLogic", StatisticsType::Map);
-            diff.add_subkey("Optimization", StatisticsType::Value).set_value(bound_value_);
-            diff.add_subkey("Lowerbound", StatisticsType::Value).set_value(lower_bound_);
+            diff.add_subkey("Optimization", StatisticsType::Value).set_value(opt_.bound_value());
+            diff.add_subkey("Lowerbound", StatisticsType::Value).set_value(opt_.lower_bound());
         }
     }
 
@@ -113,65 +113,129 @@ public:
         ctl.solve(Clingo::SymbolicLiteralSpan{}, this, false, false).get();
     }
 
+    class Optimizer {
+    public:
+
+        void set_symbol(Clingo::Symbol opt) {
+            bound_symbol_ = opt;
+        }
+
+        void set_bound(int bound) {
+            has_bound_ = true;
+            bound_value_ = bound;
+        }
+
+        void set_factor(double factor) {
+            factor_ = factor;
+        }
+
+        bool unproven() const {
+            return has_bound_;
+        }
+
+        int bound_value() const {
+            return bound_value_;
+        }
+
+        int lower_bound() const {
+            return lower_bound_;
+        }
+
+        void setup(Control& ctl, clingodl_theory_t* theory) {
+           ctl.with_builder([&](Clingo::ProgramBuilder &builder) {
+           Rewriter rewriter{theory, builder.to_c()};
+           rewriter.rewrite("#program __ub(s,b)."
+                            "#external __ub(b)."
+                            "&diff { s-0 } <= b :- __ub(b)."
+                            "#program __lb(s,b)."
+                            "&diff { 0-s } <= -b-1.");
+            });
+        }
+
+        void prepare_solve(Control& ctl) {
+            release_external(ctl); // release any old externals
+            ubs_ = Number(bound_value_);
+            if (has_bound_) {
+                ctl.ground({{"__ub", {bound_symbol_, ubs_}}});
+                ctl.assign_external(Function("__ub", {ubs_}), TruthValue::True);
+                assigned_ = true;
+            }
+            has_bound_ = false;
+        }
+
+        // Note: it would be possible to add ub(b) as facts after an upper bound has
+        //       been verified. We would get rid of the external. The constraint in
+        //       clingo-dl could be removed nevertheless.
+        void found_model(int bound) {
+            upper_bound_ = bound;
+            double aux = std::max(upper_bound_ - adapt_, lower_bound_+1.0);
+            if (aux > std::numeric_limits<int>::max()) {
+                throw std::overflow_error("Integer overflow during optimization");
+            }
+            bound_value_ = aux;
+            if (bound_value_ < upper_bound_) {
+                has_bound_ = true;
+            }
+            update_adapt();
+        }
+
+        void found_unsat(Control& ctl) {
+            lower_bound_ = bound_value_;
+            adapt_=1;
+            bound_value_ = std::max(static_cast<int>(upper_bound_ - adapt_), lower_bound_);
+            if (lower_bound_<bound_value_) {
+                has_bound_ = true;
+                ctl.ground({{"__lb", {bound_symbol_, Number(lower_bound_)}}});
+            }
+            update_adapt();
+        }
+
+    public:
+
+        void release_external(Control& ctl) const {
+            if (assigned_) {
+                ctl.release_external(Function("__ub", {ubs_}));
+            }
+        }
+
+        void update_adapt() {
+            adapt_ = std::min(static_cast<double>(std::numeric_limits<int>::max()), adapt_*factor_);
+        }
+
+        Clingo::Symbol bound_symbol_;   // which symbol to optimize
+        Clingo::Symbol ubs_;            // last used upper bound symbol
+        int bound_value_ = 0;
+        bool has_bound_ = false;
+        int lower_bound_ = std::numeric_limits<int>::min();
+        int upper_bound_ = std::numeric_limits<int>::max();
+        double factor_ = 1;
+        double adapt_ = 1;
+        bool assigned_ = false;
+    };
+
     void solve_optimal(Control& ctl) {
         // NOTE: with an API extension to implement a custom enumerator,
         //       one could implement this more nicely
         //       right now this implementation is restricted to the application
-        // Note: it would be possible to add ub(b) as facts after an upper bound has
-        //       been verified. We would get rid of the external. The constraint in
-        //       clingo-dl could be removed nevertheless.
-        ctl.with_builder([&](Clingo::ProgramBuilder &builder) {
-           Rewriter rewriter{theory_, builder.to_c()};
-           rewriter.rewrite("#program __ub(s,b)."
-                            "#external ub(b)."
-                            "&diff { s-0 } <= b :- ub(b)."
-                            "#program __lb(s,b)."
-                            "&diff { 0-s } <= -b-1.");
-        });
-
-        int upper_bound = std::numeric_limits<int>::max();
-        double adapt = 1;
+        opt_.setup(ctl, theory_);
         do
         {
-            auto ubs = Number(bound_value_);
-            if (has_bound_) {
-                ctl.ground({{"__ub", {bound_symbol, ubs}}});
-                ctl.assign_external(Function("ub", {ubs}), TruthValue::True);
-            }
+            //Need some functionality that assigns external and releases the previous one
+            opt_.prepare_solve(ctl);
             auto h = ctl.solve(Clingo::SymbolicLiteralSpan{}, this, false, true);
-            has_bound_ = false;
             for (auto &&m : h) {
-                if (has_bound_) {
-                    ctl.release_external(Function("ub", {ubs}));
-                }
-                upper_bound = get_bound(m);
-                double aux = std::max(upper_bound - adapt, lower_bound_+1.0);
-                if (aux > std::numeric_limits<int>::max()) {
-                    throw std::overflow_error("Integer overflow during optimization");
-                }
-                bound_value_ = aux;
-                if (bound_value_ < upper_bound) {
-                    has_bound_ = true;
-                }
+                opt_.found_model(get_bound(m));
                 found_bound_ = true;
                 break;
             }
             if (h.get().is_unsatisfiable()) {
-                lower_bound_ = bound_value_;
-                adapt=1;
-                bound_value_ = std::max(static_cast<int>(upper_bound - adapt), lower_bound_);
-                if (lower_bound_<bound_value_) {
-                    has_bound_ = true;
-                    ctl.ground({{"__lb", {bound_symbol, Number(lower_bound_)}}});
-                    ctl.release_external(Function("ub", {ubs}));
-                }
+                opt_.found_unsat(ctl);
             }
-            adapt = std::min(static_cast<double>(std::numeric_limits<int>::max()), adapt*factor_);
             if (h.get().is_interrupted()) {
                 break;
             }
         }
-        while (has_bound_);
+        while (opt_.unproven());
     }
 
     void main(Control &ctl, StringSpan files) override {
@@ -202,10 +266,10 @@ public:
             return false;
         }
         minimize_ = true;
-        bound_symbol = args[0];
+        opt_.set_symbol(args[0]);
+        bound_symbol_ = args[0];
         if (size > 1) {
-            has_bound_ = true;
-            bound_value_ = args[1].number();
+            opt_.set_bound(args[1].number());
         }
         return true;
     }
@@ -213,7 +277,12 @@ public:
     bool parse_factor(char const *value) {
         std::stringstream strValue;
         strValue << value;
-        strValue >> factor_;
+        double factor;
+        strValue >> factor;
+        if (factor < std::numeric_limits<int>::min() || factor > std::numeric_limits<int>::max()) {
+            throw std::overflow_error("minimize-factor out of bounds");
+        }
+        opt_.set_factor(factor);
         return true;
     }
 
@@ -235,21 +304,15 @@ public:
 
     void validate_options() override {
         CLINGO_CALL(clingodl_validate_options(theory_));
-        if (factor_ < std::numeric_limits<int>::min() || factor_ > std::numeric_limits<int>::max()) {
-            throw std::overflow_error("minimize-factor out of bounds");
-        }
     }
 
 private:
     clingodl_theory_t *theory_;
-    Clingo::Symbol bound_symbol;
+    Optimizer opt_;
+    Clingo::Symbol bound_symbol_;
     size_t bound_index_ = 0;
-    int bound_value_ = 0;
-    int lower_bound_ = std::numeric_limits<int>::min();
     bool minimize_ = false;
-    bool has_bound_ = false;
     bool found_bound_ = false;
-    double factor_ = 1;
 };
 
 int main(int argc, char *argv[]) {
