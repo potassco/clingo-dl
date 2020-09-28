@@ -125,7 +125,7 @@ public:
             bound_value_ = bound;
         }
 
-        voidrset_factor(double factor) {
+        void set_factor(double factor) {
             factor_ = factor;
         }
 
