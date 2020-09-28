@@ -125,7 +125,7 @@ public:
             bound_value_ = bound;
         }
 
-        void set_factor(double factor) {
+        voidrset_factor(double factor) {
             factor_ = factor;
         }
 
@@ -220,7 +220,6 @@ public:
         opt_.setup(ctl, theory_);
         do
         {
-            //Need some functionality that assigns external and releases the previous one
             opt_.prepare_solve(ctl);
             auto h = ctl.solve(Clingo::SymbolicLiteralSpan{}, this, false, true);
             for (auto &&m : h) {
