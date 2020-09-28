@@ -276,6 +276,7 @@ public:
 
     bool parse_factor(char const *value) {
         std::stringstream strValue;
+        strValue.imbue(std::locale::classic());
         strValue << value;
         double factor;
         strValue >> factor;
@@ -283,7 +284,7 @@ public:
             throw std::overflow_error("minimize-factor out of bounds");
         }
         opt_.set_factor(factor);
-        return true;
+        return strValue.rdbuf()->in_avail() == 0;
     }
 
     void register_options(ClingoOptions &options) override {
