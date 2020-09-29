@@ -73,7 +73,7 @@ enum clingodl_value_type {
 typedef int clingodl_value_type_t;
 
 typedef struct clingodl_value {
-    clingodl_value_type type;
+    clingodl_value_type_t type;
     union {
         int int_number;
         double double_number;
