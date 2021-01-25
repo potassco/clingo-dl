@@ -29,7 +29,7 @@
 
 using namespace Clingo;
 
-#define CLINGO_CALL(x) Clingo::Detail::handle_error(x)
+using Clingo::Detail::handle_error;
 
 class Rewriter {
 public:
@@ -39,22 +39,22 @@ public:
     }
 
     void rewrite(StringSpan files) {
-        CLINGO_CALL(clingo_parse_files(files.begin(), files.size(), rewrite_, this, nullptr, nullptr, 0));
+        handle_error(clingo_ast_parse_files(files.begin(), files.size(), rewrite_, this, nullptr, nullptr, 0));
     }
 
     void rewrite(char const *str) {
-        CLINGO_CALL(clingo_parse_program(str, rewrite_, this, nullptr, nullptr, 0));
+        handle_error(clingo_ast_parse_string(str, rewrite_, this, nullptr, nullptr, 0));
     }
 
 private:
-    static bool add_(clingo_ast_statement_t const *stm, void *data) {
+    static bool add_(clingo_ast_t *stm, void *data) {
         auto *self = static_cast<Rewriter*>(data);
-        return clingo_program_builder_add(self->builder_, stm);
+        return clingo_program_builder_add_ast(self->builder_, stm);
     }
 
-    static bool rewrite_(clingo_ast_statement_t const *stm, void *data) {
+    static bool rewrite_(clingo_ast_t *stm, void *data) {
         auto *self = static_cast<Rewriter*>(data);
-        return clingodl_rewrite_statement(self->theory_, stm, add_, self);
+        return clingodl_rewrite_ast(self->theory_, stm, add_, self);
     }
 
     clingodl_theory_t *theory_;
@@ -65,13 +65,13 @@ private:
 class ClingoDLApp : public Clingo::Application, private SolveEventHandler {
 public:
     ClingoDLApp() {
-        CLINGO_CALL(clingodl_create(&theory_));
+        handle_error(clingodl_create(&theory_));
     }
     ~ClingoDLApp() { clingodl_destroy(theory_); }
     char const *program_name() const noexcept override { return "clingo-dl"; }
     char const *version() const noexcept override { return CLINGODL_VERSION; }
     bool on_model(Model &model) override {
-        CLINGO_CALL(clingodl_on_model(theory_, model.to_c()));
+        handle_error(clingodl_on_model(theory_, model.to_c()));
         return true;
     }
 
@@ -104,11 +104,11 @@ public:
     void on_statistics(UserStatistics step, UserStatistics accu) override {
         add_stats(step);
         add_stats(accu);
-        CLINGO_CALL(clingodl_on_statistics(theory_, step.to_c(), accu.to_c()));
+        handle_error(clingodl_on_statistics(theory_, step.to_c(), accu.to_c()));
     }
 
     void main(Control &ctl, StringSpan files) override {
-        CLINGO_CALL(clingodl_register(theory_, ctl.to_c()));
+        handle_error(clingodl_register(theory_, ctl.to_c()));
 
         ctl.with_builder([&](Clingo::ProgramBuilder &builder) {
             Rewriter rewriter{theory_, builder.to_c()};
@@ -171,7 +171,7 @@ public:
     }
 
     void register_options(ClingoOptions &options) override {
-        CLINGO_CALL(clingodl_register_options(theory_, options.to_c()));
+        handle_error(clingodl_register_options(theory_, options.to_c()));
         char const * group = "Clingo.DL Options";
         options.add(group, "minimize-variable",
             "Minimize the given variable\n"
@@ -182,7 +182,7 @@ public:
     }
 
     void validate_options() override {
-        CLINGO_CALL(clingodl_validate_options(theory_));
+        handle_error(clingodl_validate_options(theory_));
     }
 
 private:
@@ -201,4 +201,3 @@ int main(int argc, char *argv[]) {
 }
 
 
-#undef CLINGO_CALL
