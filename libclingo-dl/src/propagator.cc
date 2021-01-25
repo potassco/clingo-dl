@@ -50,12 +50,16 @@ char const *negate_relation(char const *op) {
     throw std::runtime_error("unexpected operator");
 }
 
-template <typename... CStrs>
-bool match(Clingo::ASTv2::AST const &ast, CStrs... strs) {
+bool match(Clingo::ASTv2::AST const &ast) {
+    return false;
+}
+
+template <typename CStr, typename... CStrs>
+bool match(Clingo::ASTv2::AST const &ast, CStr str, CStrs... strs) {
     using namespace Clingo::ASTv2;
     if (ast.type() == Type::SymbolicTerm) {
         auto sym = ast.get<Clingo::Symbol>(Attribute::Term);
-        return (sym.match(strs, 0) || ...);
+        return (sym.match(str, 0) || match(ast, strs...));
     }
     if (ast.type() == Type::Function) {
         if (ast.get<int>(Attribute::External) != 0) {
@@ -65,7 +69,7 @@ bool match(Clingo::ASTv2::AST const &ast, CStrs... strs) {
             return false;
         }
         auto const *name = ast.get<char const *>(Attribute::Name);
-        return ((std::strcmp(name, strs) == 0) || ...);
+        return ((std::strcmp(name, str) == 0) || match(ast, strs...));
     }
     return false;
 }

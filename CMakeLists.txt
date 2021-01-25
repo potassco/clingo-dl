@@ -14,7 +14,7 @@ endif()
 
 # Enable folders in IDEs like Visual Studio
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 
@@ -40,8 +40,6 @@ if (MSVC)
         # force static runtime
         string(REGEX REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
     endif()
-    add_compile_options("/wd4244" "/wd4267" "/wd26451")
-    add_definitions("-D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS")
 endif()
 
 if (POLICY CMP0063 AND CLINGODL_BUILD_SHARED)
