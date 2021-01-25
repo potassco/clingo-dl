@@ -205,25 +205,25 @@ struct PropagatorConfig {
     PropagationMode mode{PropagationMode::Check};
     std::vector<ThreadConfig> thread_config;
 
-    uint64_t get_propagate_root(id_t thread_id) {
+    uint64_t get_propagate_root(Clingo::id_t thread_id) {
         if (thread_id < thread_config.size() && thread_config[thread_id].propagate_root.first) {
             return thread_config[thread_id].propagate_root.second;
         }
         return propagate_root;
     }
-    uint64_t get_propagate_budget(id_t thread_id) {
+    uint64_t get_propagate_budget(Clingo::id_t thread_id) {
         if (thread_id < thread_config.size() && thread_config[thread_id].propagate_budget.first) {
             return thread_config[thread_id].propagate_budget.second;
         }
         return propagate_budget;
     }
-    PropagationMode get_propagate_mode(id_t thread_id) {
+    PropagationMode get_propagate_mode(Clingo::id_t thread_id) {
         if (thread_id < thread_config.size() && thread_config[thread_id].mode.first) {
             return thread_config[thread_id].mode.second;
         }
         return mode;
     }
-    SortMode get_sort_mode(id_t thread_id) {
+    SortMode get_sort_mode(Clingo::id_t thread_id) {
         if (thread_id < thread_config.size() && thread_config[thread_id].sort_edges.first) {
             return thread_config[thread_id].sort_edges.second;
         }
@@ -231,7 +231,7 @@ struct PropagatorConfig {
     }
 
 
-    ThreadConfig &ensure(id_t thread_id) {
+    ThreadConfig &ensure(Clingo::id_t thread_id) {
         if (thread_config.size() < thread_id + 1) {
             thread_config.resize(thread_id + 1);
         }
