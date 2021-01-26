@@ -140,21 +140,8 @@ Clingo::ASTv2::AST tag_terms(Clingo::ASTv2::AST &ast, char const *tag) {
     return throw_syntax_error<AST>();
 }
 
-// Tags head and body atoms and ensures multiset semantics.
+// Mark head/body theory atoms.
 struct TheoryRewriterR {
-    // Add variables to tuple to ensure multiset semantics.
-    static Clingo::ASTv2::AST rewrite_tuple(Clingo::ASTv2::AST const &element) {
-        using namespace Clingo::ASTv2;
-        auto ret = element.copy();
-        auto tuple = ret.get<ASTVector>(Attribute::Terms);
-        check_syntax(tuple.size() == 1);
-
-        auto condition = ret.get<ASTVector>(Attribute::Condition);
-        check_syntax(condition.empty());
-        return ret;
-    }
-
-    // Mark head/body literals and ensure multiset semantics for theory atoms.
     Clingo::ASTv2::AST operator()(Clingo::ASTv2::AST const &ast) {
         using namespace Clingo::ASTv2;
         if (ast.type() == Type::Literal) {
@@ -170,7 +157,12 @@ struct TheoryRewriterR {
 
                 auto elements = atom.get<ASTVector>(Attribute::Elements);
                 check_syntax(elements.size() == 1);
-                *(elements.begin()) = rewrite_tuple(*(elements.begin()));
+                Clingo::ASTv2::AST element = *elements.begin();
+                auto tuple = element.get<ASTVector>(Attribute::Terms);
+                check_syntax(tuple.size() == 1);
+                auto condition = element.get<ASTVector>(Attribute::Condition);
+                check_syntax(condition.empty());
+
                 atom.set(Attribute::Term, tag_terms(term, in_literal ? "_b" : "_h"));
 
                 return atom;
