@@ -151,16 +151,6 @@ struct TheoryRewriterR {
 
         auto condition = ret.get<ASTVector>(Attribute::Condition);
         check_syntax(condition.empty());
-        auto vars_condition = collect_variables(condition.begin(), condition.end());
-        for (auto const &name : collect_variables(tuple.begin(), tuple.end())) {
-            vars_condition.erase(name);
-        }
-        vars_condition.erase("_");
-        for (auto const &name : vars_condition) {
-            tuple.push_back({Type::Variable,
-                             tuple.begin()->get().get<Clingo::Location>(Attribute::Location),
-                             name});
-        }
         return ret;
     }
 

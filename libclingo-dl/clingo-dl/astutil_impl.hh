@@ -492,46 +492,6 @@ void visit_ast(V&& v, N const &node) {
     node.data.accept(vv, node);
 }
 
-inline void collect_variables(VarSet &vars, Clingo::ASTv2::AST const &ast) {
-    ast.visit_ast([&](Clingo::ASTv2::AST const &child) {
-        if (child.type() == Clingo::ASTv2::Type::Variable) {
-            vars.emplace(child.get<char const *>(Clingo::ASTv2::Attribute::Name));
-        }
-        return true;
-    });
-}
-
-inline void collect_variables(VarSet &vars, Clingo::ASTv2::ASTRef ast) {
-    collect_variables(vars, ast.get());
-}
-
-template <typename N>
-void collect_variables(VarSet &vars, N const &node) {
-    ClingoDL::Detail::VarCollector v{vars};
-    visit_ast(v, node);
-}
-
-template <typename It>
-void collect_variables(VarSet &vars, It ib,It ie) {
-    for (auto it = ib; it != ie; ++it) {
-        collect_variables(vars, *it);
-    }
-}
-
-template <typename N>
-VarSet collect_variables(N const &node) {
-    VarSet vars;
-    collect_variables(vars, node);
-    return vars;
-}
-
-template <typename It>
-VarSet collect_variables(It ib,It ie) {
-    VarSet vars;
-    collect_variables(vars, ib, ie);
-    return vars;
-}
-
 template <typename Seq, typename F>
 inline void cross_product(Seq seq, F f) {
     std::vector<std::reference_wrapper<std::remove_reference_t<decltype(*begin(*begin(seq)))>>> accu;
