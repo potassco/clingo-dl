@@ -143,23 +143,19 @@ Clingo::ASTv2::AST tag_terms(Clingo::ASTv2::AST &ast, char const *tag) {
 // Tags head and body atoms and ensures multiset semantics.
 struct TheoryRewriterR {
     // Add variables to tuple to ensure multiset semantics.
-    static Clingo::ASTv2::AST rewrite_tuple(Clingo::ASTv2::AST const &element, int number) {
+    static Clingo::ASTv2::AST rewrite_tuple(Clingo::ASTv2::AST const &element) {
         using namespace Clingo::ASTv2;
         auto ret = element.copy();
         auto tuple = ret.get<ASTVector>(Attribute::Terms);
         check_syntax(tuple.size() == 1);
 
         auto condition = ret.get<ASTVector>(Attribute::Condition);
+        check_syntax(condition.empty());
         auto vars_condition = collect_variables(condition.begin(), condition.end());
         for (auto const &name : collect_variables(tuple.begin(), tuple.end())) {
             vars_condition.erase(name);
         }
         vars_condition.erase("_");
-        if (number >= 0) {
-            tuple.push_back({Type::SymbolicTerm,
-                             tuple.begin()->get().get<Clingo::Location>(Attribute::Location),
-                             Clingo::Number(number)});
-        }
         for (auto const &name : vars_condition) {
             tuple.push_back({Type::Variable,
                              tuple.begin()->get().get<Clingo::Location>(Attribute::Location),
@@ -183,10 +179,8 @@ struct TheoryRewriterR {
                 auto atom = ast.copy();
 
                 auto elements = atom.get<ASTVector>(Attribute::Elements);
-                int number = elements.size() > 1 ? 0 : -1;
-                for (auto it = elements.begin(), ie = elements.end(); it != ie; ++it) {
-                    *it = rewrite_tuple(*it, number++);
-                }
+                check_syntax(elements.size() == 1);
+                *(elements.begin()) = rewrite_tuple(*(elements.begin()));
                 atom.set(Attribute::Term, tag_terms(term, in_literal ? "_b" : "_h"));
 
                 return atom;
