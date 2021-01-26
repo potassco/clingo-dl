@@ -50,16 +50,12 @@ char const *negate_relation(char const *op) {
     throw std::runtime_error("unexpected operator");
 }
 
-bool match(Clingo::ASTv2::AST const &ast) {
-    return false;
-}
-
-template <typename CStr, typename... CStrs>
-bool match(Clingo::ASTv2::AST const &ast, CStr str, CStrs... strs) {
+template <typename CStr>
+bool match(Clingo::ASTv2::AST const &ast, CStr str) {
     using namespace Clingo::ASTv2;
     if (ast.type() == Type::SymbolicTerm) {
         auto sym = ast.get<Clingo::Symbol>(Attribute::Term);
-        return (sym.match(str, 0) || match(ast, strs...));
+        return sym.match(str, 0);
     }
     if (ast.type() == Type::Function) {
         if (ast.get<int>(Attribute::External) != 0) {
@@ -69,7 +65,7 @@ bool match(Clingo::ASTv2::AST const &ast, CStr str, CStrs... strs) {
             return false;
         }
         auto const *name = ast.get<char const *>(Attribute::Name);
-        return ((std::strcmp(name, str) == 0) || match(ast, strs...));
+        return (std::strcmp(name, str) == 0);
     }
     return false;
 }
@@ -99,7 +95,7 @@ Clingo::ASTv2::AST shift_rule(Clingo::ASTv2::AST ast) {
         AST lit = *it;
         auto atom = lit.get<AST>(Attribute::Atom);
         if (atom.type() == Type::TheoryAtom) {
-            if (match(atom.get<AST>(Attribute::Term), "sum", "diff")) {
+            if (match(atom.get<AST>(Attribute::Term), "diff")) {
                 auto ret = ast.copy();
                 auto ret_bd = ret.get<ASTVector>(Attribute::Body);
                 auto jt = ret_bd.begin() + (it - body.begin());
@@ -183,7 +179,7 @@ struct TheoryRewriterR {
         }
         if (ast.type() == Type::TheoryAtom) {
             auto term = ast.get<AST>(Attribute::Term);
-            if (match(term, "sum", "diff", "distinct", "disjoint", "minimize", "maximize")) {
+            if (match(term, "diff")) {
                 auto atom = ast.copy();
 
                 auto elements = atom.get<ASTVector>(Attribute::Elements);
@@ -191,10 +187,7 @@ struct TheoryRewriterR {
                 for (auto it = elements.begin(), ie = elements.end(); it != ie; ++it) {
                     *it = rewrite_tuple(*it, number++);
                 }
-
-                if (match(term, "sum", "diff")) {
-                    atom.set(Attribute::Term, tag_terms(term, in_literal ? "_b" : "_h"));
-                }
+                atom.set(Attribute::Term, tag_terms(term, in_literal ? "_b" : "_h"));
 
                 return atom;
             }
