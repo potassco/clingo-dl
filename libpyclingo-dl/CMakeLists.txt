@@ -55,11 +55,11 @@ endif()
 if (PYCLINGODL_INSTALL_DIR)
     file(TO_CMAKE_PATH "${PYCLINGODL_INSTALL_DIR}" _PYCLINGODL_INSTALL_DIR)
     install(TARGETS pyclingo-dl
-        RUNTIME DESTINATION ${_PYCLINGODL_INSTALL_DIR}/clingo-dl
-        LIBRARY DESTINATION ${_PYCLINGODL_INSTALL_DIR}/clingo-dl
-        ARCHIVE DESTINATION ${_PYCLINGODL_INSTALL_DIR}/clingo-dl)
+        RUNTIME DESTINATION ${_PYCLINGODL_INSTALL_DIR}/clingodl
+        LIBRARY DESTINATION ${_PYCLINGODL_INSTALL_DIR}/clingodl
+        ARCHIVE DESTINATION ${_PYCLINGODL_INSTALL_DIR}/clingodl)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/libpyclingo-dl/clingodl/
-        DESTINATION ${_PYCLINGODL_INSTALL_DIR}/clingo-dl
+        DESTINATION ${_PYCLINGODL_INSTALL_DIR}/clingodl
         FILES_MATCHING
         PATTERN "*.py"
         PATTERN "*.typed"
@@ -73,5 +73,5 @@ if (PYCLINGODL_INSTALL_DIR)
             DESTINATION ${_PYCLINGODL_INSTALL_DIR}/clingodl-${CLINGODL_VERSION}.dist-info)
     endif()
     install(FILES ${CMAKE_SOURCE_DIR}/libclingo-dl/clingo-dl.h
-        DESTINATION ${_PYCLINGODL_INSTALL_DIR}/clingo-dl)
+        DESTINATION ${_PYCLINGODL_INSTALL_DIR}/clingodl)
 endif()

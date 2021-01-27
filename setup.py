@@ -13,7 +13,7 @@ clingopath = abspath(dirname(clingo.__file__))
 
 setup(
     version = '1.2.0',
-    name = 'clingo-dl',
+    name = 'clingodl',
     description = 'CFFI-based bindings to the clingo-dl solver.',
     long_description = dedent('''\
         This package allows for adding the clingo-dl propagator as a
@@ -39,8 +39,8 @@ setup(
                  '-DPYCLINGODL_FORCE_OLD_MODULE=ON',
                  '-DPYCLINGODL_INSTALL_DIR=libpyclingo-dl',
                  f'-DPYCLINGODL_PIP_PATH={clingopath}' ],
-    packages=[ 'clingo-dl' ],
-    package_data={ 'clingo-dl': [ 'py.typed', 'import__clingo-dl.lib', 'clingo-dl.h' ] },
+    packages=[ 'clingodl' ],
+    package_data={ 'clingodl': [ 'py.typed', 'import__clingo-dl.lib', 'clingo-dl.h' ] },
     package_dir={ '': 'libpyclingo-dl' },
     python_requires=">=3.6"
 )

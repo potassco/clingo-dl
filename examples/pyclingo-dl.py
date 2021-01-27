@@ -2,7 +2,7 @@ from clingo import Control
 from clingo.ast import parse_string, ProgramBuilder
 from clingodl import ClingoDLTheory
 
-prg = '&sum { x } >= 1. &sum { x } <= 3.'
+prg = '&diff { x } >= 1. &diff { y } >= 3.'
 
 thy = ClingoDLTheory()
 ctl = Control(['0'])
