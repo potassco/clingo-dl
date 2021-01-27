@@ -30,16 +30,10 @@ class Application(clingo.Application):
         assignment = []
         cost = None
         for symbol in sorted(symbols):
-            if symbol.match("__dl", 2):
+            if symbol.match("dl", 2):
                 assignment.append("{}={}".format(*symbol.arguments))
-            if symbol.match("__dl_cost", 1):
-                cost = symbol.arguments[0].string()
         sys.stdout.write(" ".join(assignment))
         sys.stdout.write('\n')
-
-        # print cost
-        if cost is not None:
-            sys.stdout.write("Cost: {}\n".format(cost))
 
         sys.stdout.flush()
 

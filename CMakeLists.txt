@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.1)
 file(READ "libclingo-dl/clingo-dl.h" main)
 string(REGEX MATCH "#define CLINGODL_VERSION \"([^\"]*)\"" clingov ${main})
 
-project(CLINGODL VERSION "${CMAKE_MATCH_1}" LANGUAGES CXX)
+project(CLINGODL VERSION "${CMAKE_MATCH_1}" LANGUAGES C CXX)
 if (POLICY CMP0063)
     cmake_policy(SET CMP0063 NEW)
 endif()

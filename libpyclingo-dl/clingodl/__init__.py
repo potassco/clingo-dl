@@ -5,4 +5,4 @@ __all__ = ['ClingoDLTheory']
 
 class ClingoDLTheory(Theory):
     def __init__(self):
-        super().__init__("clingo-dl", _lib, _ffi)
+        super().__init__("clingodl", _lib, _ffi)
