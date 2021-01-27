@@ -24,22 +24,31 @@ set(source
     ${source-group})
 # ]]]
 
+set(clingodl_public_scope_ PUBLIC)
+set(clingodl_private_scope_ PRIVATE)
 if (CLINGODL_BUILD_SHARED)
     set(clingodl_lib_type SHARED)
+    if (CLINGODL_BUILD_SHARED_INTERFACE)
+        set(clingodl_lib_type INTERFACE)
+        set(clingodl_public_scope_ INTERFACE)
+        set(clingodl_private_scope_ INTERFACE)
+    endif()
 else()
     set(clingodl_lib_type STATIC)
 endif()
 
-add_library(libclingo-dl ${clingodl_lib_type} ${header} ${source})
-target_include_directories(libclingo-dl PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
-target_compile_definitions(libclingo-dl PRIVATE CLINGODL_BUILD_LIBRARY)
-if (NOT CLINGODL_BUILD_STATIC AND CLINGODL_BUILD_SHARED)
+add_library(libclingo-dl ${clingodl_lib_type})
+target_sources(libclingo-dl ${clingodl_private_scope_} ${header} ${source})
+target_include_directories(libclingo-dl ${clingodl_public_scope_} "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
+target_compile_definitions(libclingo-dl ${clingodl_private_scope_} CLINGODL_BUILD_LIBRARY)
+
+if (NOT CLINGODL_BUILD_STATIC AND CLINGODL_BUILD_SHARED  AND NOT CLINGODL_BUILD_SHARED_INTERFACE)
     set_target_properties(libclingo-dl PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
-target_link_libraries(libclingo-dl PRIVATE libclingo)
+target_link_libraries(libclingo-dl ${clingodl_public_scope_} libclingo)
 if (NOT CLINGODL_BUILD_SHARED)
-    target_compile_definitions(libclingo-dl PUBLIC CLINGODL_NO_VISIBILITY)
-else()
+    target_compile_definitions(libclingo-dl ${clingcon_public_scope_}  CLINGODL_NO_VISIBILITY)
+elseif(NOT CLINGODL_BUILD_SHARED_INTERFACE)
     set_target_properties(libclingo-dl PROPERTIES PUBLIC_HEADER clingo-dl.h)
     install(TARGETS libclingo-dl
         EXPORT ClingoDLTargets
@@ -64,11 +73,22 @@ else()
         ${CMAKE_CURRENT_BINARY_DIR}/ClingoDLConfigVersion.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/ClingoDL)
 endif()
-set_target_properties(libclingo-dl PROPERTIES
-    OUTPUT_NAME clingo-dl
-    LIBRARY_OUTPUT_NAME clingo-dl
-    FOLDER lib)
+if (NOT CLINGODL_BUILD_SHARED_INTERFACE)
+    set_target_properties(libclingo-dl PROPERTIES
+        OUTPUT_NAME clingo-dl
+        LIBRARY_OUTPUT_NAME clingo-dl
+        FOLDER lib)
+endif()
 
 if (CLINGODL_BUILD_TESTS)
+    # NOTE: we build statically without hiding symbols
+    add_library(libclingo-dl_t STATIC ${header} ${source})
+    target_include_directories(libclingo-dl_t PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
+    target_compile_definitions(libclingo-dl_t PUBLIC CLINGCON_NO_VISIBILITY)
+    target_link_libraries(libclingo-dl_t PUBLIC libclingo)
+    set_target_properties(libclingo-dl_t PROPERTIES
+        OUTPUT_NAME clingo-dl_t
+        LIBRARY_OUTPUT_NAME clingo-dl_t
+        FOLDER lib)
     add_subdirectory(tests)
 endif()
