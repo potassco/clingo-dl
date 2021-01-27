@@ -1,14 +1,31 @@
 # Table of Contents
 
+- [Installation using conda](#installation-using-conda)
+- [Installation using pip](#installation-using-pip)
 - [Requirements](#requirements)
 - [Build, Install, and Test](#build-install-and-test)
   - [Build Options](#build-options)
     - [Generic Options](#generic-options)
-    - [Python Support](#python-support)
-    - [Lua Support](#lua-support)
-  - [Compilation to JavaScript](#compilation-to-javascript)
-- [Troubleshooting](#troubleshooting)
-  - [Notes for Windows Users](#notes-for-windows-users)
+    - [Python and Lua Support](#python-and-lua-support)
+
+# Installation using conda
+For the latest release use:
+
+    conda install -c potassco clingo-dl
+
+or the latest development version:
+
+    conda install -c potassco/label/dev clingo-dl
+
+# Installation using pip
+
+For the latest release use:
+
+    pip install --upgrade clingo-dl
+
+or the latest development version:
+
+    pip install --upgrade --extra-index-url https://test.pypi.org/simple/ clingo-dl
 
 # Requirements
 
@@ -22,13 +39,9 @@
 - the [cmake](https://www.cmake.org/) build system
   - at least version 3.3 is recommended
   - at least version 3.1 is *required*
+- clingo(https://github.com/potassco/clingo/blob/master/INSTALL.md)
 
 # Build, Install, and Test
-
-When cloning the git repository, do not forget to update the submodules (with
-source releases, you can skip this step):
-
-    git submodule update --init --recursive
 
 To build clingo-dl in its default configurations in release
 mode, run:
@@ -58,11 +71,6 @@ or, to also print important cmake specific configuration variables
 Options and variables can be passed to
 cmake on the command line using `-D<VARIABLE>=<VALUE>` or by editing
 `<BUILD_DIR>/CMakeCache.txt` after running cmake.
-
-
-Clingo-dl uses [clingo](https://github.com/potassco/clingo).
-It has its own set of configuration variables:
-- [building clingo](https://github.com/potassco/clingo/blob/master/INSTALL.md#build-options)
 
 In the following, the most important options to control the build are listed.
 
