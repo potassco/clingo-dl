@@ -7,7 +7,6 @@ recursive-include app *
 recursive-include cmake *
 recursive-include libclingo-dl *
 include libpyclingo-dl/*.c
-include libpyclingo-dl/*.h
 include libpyclingo-dl/CMakeLists.txt
 recursive-include libpyclingo-dl/clingodl *.py *.typed
 prune _skbuild

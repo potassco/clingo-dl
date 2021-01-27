@@ -8,7 +8,7 @@ from . import ClingoDLTheory
 class Application(clingo.Application):
     def __init__(self, name):
         self.program_name = name
-        self.version = "1.0"
+        self.version = "1.2.0"
         self.__theory = ClingoDLTheory()
 
     def register_options(self, options):
