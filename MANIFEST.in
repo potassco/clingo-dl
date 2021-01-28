@@ -1,0 +1,13 @@
+include setup.py
+include pyproject.toml
+include CMakeLists.txt
+include LICENSE.md
+include README.md
+recursive-include app *
+recursive-include cmake *
+recursive-include libclingo-dl *
+include libpyclingo-dl/*.c
+include libpyclingo-dl/CMakeLists.txt
+recursive-include libpyclingo-dl/clingodl *.py *.typed
+prune _skbuild
+global-exclude *.py[cod]

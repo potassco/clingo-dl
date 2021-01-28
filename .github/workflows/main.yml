@@ -48,8 +48,8 @@ jobs:
       shell: pwsh
       run: >
         ctest
-        --build-config Debug
+        --build-config Release
         --build-generator "${{ matrix.generator }}"
         --build-and-test . build
         --build-options -DCLINGODL_BUILD_TESTS=On
-        --test-command ctest -V --build-config Debug
+        --test-command ctest -V --build-config Release

@@ -1,5 +1,9 @@
 # Changes
 
+## clingo-dl 1.2.0
+  * update to clingo 5.5.0
+  * added support for pip
+
 ## clingo-dl 1.1.0
   * add weaker but faster propagation modes
   * add option to add mutexes in a preprocessing step
