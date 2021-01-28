@@ -28,13 +28,16 @@ CMAKE_DEPENDENT_OPTION(CLINGODL_BUILD_SHARED "build clingodl library shared" ON 
 CMAKE_DEPENDENT_OPTION(CLINGODL_BUILD_SHARED_INTERFACE "share symbols in dependents" OFF "CLINGODL_BUILD_SHARED" OFF)
 
 option(PYCLINGODL_ENABLE "build with python support: OFF, auto, require, pip" "auto")
-option(PYCLINGODL_FORCE_OLD_MODULE "force use of the old find_python module" OFF)
-option(PYCLINGODL_USER_INSTALL "install the python module in the user's site directory" ON)
-CMAKE_DEPENDENT_OPTION(PYCLINGODL_USE_INSTALL_PREFIX "install the python module under the install prefix" OFF "NOT PYCLINGODL_USER_INSTALL" OFF)
+option(PYCLINGODL_INSTALL "configure where to install python module: user, system, prefix" "system")
+option(PYCLINGODL_PIP_PATH "path to clingo pip package" OFF)
+option(PYCLINGODL_SUFFIX "suffix for python module" "")
+option(PYCLINGODL_INSTALL_DIR "path where to install python module" "")
 
 mark_as_advanced(CLINGODL_BUILD_STATIC)
 mark_as_advanced(CLINGODL_BUILD_SHARED)
-mark_as_advanced(PYCLINGODL_FORCE_OLD_MODULE)
+mark_as_advanced(PYCLINGODL_PIP_PATH)
+mark_as_advanced(PYCLINGODL_SUFFIX)
+mark_as_advanced(PYCLINGODL_INSTALL_DIR)
 
 if (MSVC)
     set(VC_RELEASE_LINK_OPTIONS /LTCG)
@@ -80,7 +83,7 @@ endif()
 
 
 if (PYCLINGODL_ENABLE)
-    if(NOT PYCLINGODL_FORCE_OLD_MODULE AND (CMAKE_VERSION VERSION_GREATER "3.15.0" OR CMAKE_VERSION VERSION_EQUAL "3.15.0"))
+    if(NOT PYCLINGODL_ENABLE STREQUAL "pip" AND (CMAKE_VERSION VERSION_GREATER "3.15.0" OR CMAKE_VERSION VERSION_EQUAL "3.15.0"))
         if(DEFINED PYTHON_EXECUTABLE AND NOT DEFINED Python_EXECUTABLE)
             set(Python_EXECUTABLE "${PYTHON_EXECUTABLE}")
         endif()

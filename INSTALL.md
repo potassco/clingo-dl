@@ -78,7 +78,6 @@ In the following, the most important options to control the build are listed.
 
 - Variable `CMAKE_BUILD_TYPE` should be set to `Release`.
 - Variable `CMAKE_INSTALL_PREFIX` controls where to install clingo-dl.
-- Option `CLINGODL_BUILD_WITH_SYSTEM_CLINGO` to build with the already installed clingo version. Otherwise the local source copy will be used
 - Option `CLINGODL_MANAGE_RPATH` controls how to find libraries on platforms
   where this is supported, like Linux, macOS, or BSD but not Windows. This
   option should be enabled if clingo-dl is installed in a non-default location,
@@ -87,5 +86,4 @@ In the following, the most important options to control the build are listed.
 
 ### Python and Lua Support
 
-Python and Lua support is enabled if it is enabled in the used clingo version.
-See [Python Support](https://github.com/potassco/clingo/blob/master/INSTALL.md#python-support) or [Lua Support](https://github.com/potassco/clingo/blob/master/INSTALL.md#lua-support) for clingo.
+- TODO

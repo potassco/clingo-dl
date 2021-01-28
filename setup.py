@@ -13,7 +13,7 @@ clingopath = abspath(dirname(clingo.__file__))
 
 setup(
     version = '1.2.0',
-    name = 'clingodl',
+    name = 'clingo-dl',
     description = 'CFFI-based bindings to the clingo-dl solver.',
     long_description = dedent('''\
         This package allows for adding the clingo-dl propagator as a
@@ -21,7 +21,7 @@ setup(
 
         It can also be used as a clingo-dl solver running:
 
-            python -m clingo-dl CLINGODL_ARGUMENTS
+            python -m clingodl CLINGODL_ARGUMENTS
         '''),
     long_description_content_type='text/markdown',
     author = 'Roland Kaminski',
@@ -34,9 +34,6 @@ setup(
                  '-DCLINGODL_BUILD_SHARED=ON',
                  '-DCLINGODL_BUILD_SHARED_INTERFACE=ON',
                  '-DPYCLINGODL_ENABLE=pip',
-                 '-DPYCLINGODL_USER_INSTALL=OFF',
-                 '-DPYCLINGODL_USE_INSTALL_PREFIX=ON',
-                 '-DPYCLINGODL_FORCE_OLD_MODULE=ON',
                  '-DPYCLINGODL_INSTALL_DIR=libpyclingo-dl',
                  f'-DPYCLINGODL_PIP_PATH={clingopath}' ],
     packages=[ 'clingodl' ],
