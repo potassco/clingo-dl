@@ -36,11 +36,7 @@ if (CLINGODL_BUILD_SHARED STREQUAL "interface")
 else()
     add_library(pyclingo-dl MODULE ${source})
 endif()
-if (MSVC)
-    target_link_libraries(pyclingo-dl PRIVATE libclingo-dl Python::Python)
-else()
-    target_link_libraries(pyclingo-dl PRIVATE libclingo-dl Python::Module)
-endif()
+target_link_libraries(pyclingo-dl PRIVATE libclingo-dl Python::Module)
 set_target_properties(pyclingo-dl PROPERTIES
     FOLDER lib
     OUTPUT_NAME _clingodl
