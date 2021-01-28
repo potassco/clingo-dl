@@ -25,8 +25,14 @@ option(CLINGODL_BUILD_STATIC "do not build shared libraries" OFF)
 option(CLINGODL_MANAGE_RPATH "set rpath if not installed into system directory" ON)
 option(CLINGODL_BUILD_TESTS "build tests" OFF)
 CMAKE_DEPENDENT_OPTION(CLINGODL_BUILD_SHARED "build clingo-dl library shared" ON "NOT CLINGODL_BUILD_STATIC" OFF)
-set(PYCLINGODL_ENABLE "auto" CACHE STRING "build with python support: OFF, auto, require, pip")
-set(PYCLINGODL_INSTALL "prefix" CACHE STRING "configure where to install python module: user, system, prefix")
+set(PYCLINGODL_ENABLE "auto" CACHE STRING "build with python support: OFF, auto, require, pip
+auto: enable python support if python is available
+require: enable python support and fails if python is not available
+pip: enable python support and link against the clingo python module")
+set(PYCLINGODL_INSTALL "prefix" CACHE STRING "configure where to install python module: user, system, prefix
+user: install into user prefix
+system: install into python library
+prefix: install into install prefix")
 set(PYCLINGODL_PIP_PATH "" CACHE STRING "path to clingo pip package")
 set(PYCLINGODL_SUFFIX "" CACHE STRING "suffix for python module")
 set(PYCLINGODL_INSTALL_DIR "" CACHE STRING "path where to install python module")

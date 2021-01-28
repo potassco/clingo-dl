@@ -53,7 +53,7 @@ if (NOT CLINGODL_BUILD_STATIC AND CLINGODL_BUILD_SHARED AND NOT clingodl_build_i
 endif()
 target_link_libraries(libclingo-dl ${clingodl_public_scope_} libclingo)
 if (NOT CLINGODL_BUILD_SHARED)
-    target_compile_definitions(libclingo-dl ${clingcon_public_scope_}  CLINGODL_NO_VISIBILITY)
+    target_compile_definitions(libclingo-dl ${clingodl_public_scope_}  CLINGODL_NO_VISIBILITY)
 elseif(NOT clingodl_build_interface)
     set_target_properties(libclingo-dl PROPERTIES PUBLIC_HEADER clingo-dl.h)
     install(TARGETS libclingo-dl
@@ -90,7 +90,7 @@ if (CLINGODL_BUILD_TESTS)
     # NOTE: we build statically without hiding symbols
     add_library(libclingo-dl_t STATIC ${header} ${source})
     target_include_directories(libclingo-dl_t PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
-    target_compile_definitions(libclingo-dl_t PUBLIC CLINGCON_NO_VISIBILITY)
+    target_compile_definitions(libclingo-dl_t PUBLIC CLINGODL_NO_VISIBILITY)
     target_link_libraries(libclingo-dl_t PUBLIC libclingo)
     set_target_properties(libclingo-dl_t PROPERTIES
         OUTPUT_NAME clingo-dl_t
