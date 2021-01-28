@@ -31,7 +31,7 @@ if (NOT PYCLINGODL_SUFFIX)
     endif()
 endif()
 
-if (CLINGODL_BUILD_SHARED_INTERFACE)
+if (CLINGODL_BUILD_SHARED STREQUAL "interface")
     add_library(pyclingo-dl SHARED ${source})
 else()
     add_library(pyclingo-dl MODULE ${source})

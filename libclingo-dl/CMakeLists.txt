@@ -24,11 +24,17 @@ set(source
     ${source-group})
 # ]]]
 
+if (PYCLINGODL_ENABLE STREQUAL "pip")
+    set(clingodl_build_interface ON)
+else()
+    set(clingodl_build_interface OFF)
+endif()
+
 set(clingodl_public_scope_ PUBLIC)
 set(clingodl_private_scope_ PRIVATE)
 if (CLINGODL_BUILD_SHARED)
     set(clingodl_lib_type SHARED)
-    if (CLINGODL_BUILD_SHARED_INTERFACE)
+    if (clingodl_build_interface)
         set(clingodl_lib_type INTERFACE)
         set(clingodl_public_scope_ INTERFACE)
         set(clingodl_private_scope_ INTERFACE)
@@ -42,13 +48,13 @@ target_sources(libclingo-dl ${clingodl_private_scope_} ${header} ${source})
 target_include_directories(libclingo-dl ${clingodl_public_scope_} "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
 target_compile_definitions(libclingo-dl ${clingodl_private_scope_} CLINGODL_BUILD_LIBRARY)
 
-if (NOT CLINGODL_BUILD_STATIC AND CLINGODL_BUILD_SHARED  AND NOT CLINGODL_BUILD_SHARED_INTERFACE)
+if (NOT CLINGODL_BUILD_STATIC AND CLINGODL_BUILD_SHARED AND NOT clingodl_build_interface)
     set_target_properties(libclingo-dl PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 target_link_libraries(libclingo-dl ${clingodl_public_scope_} libclingo)
 if (NOT CLINGODL_BUILD_SHARED)
     target_compile_definitions(libclingo-dl ${clingcon_public_scope_}  CLINGODL_NO_VISIBILITY)
-elseif(NOT CLINGODL_BUILD_SHARED_INTERFACE)
+elseif(NOT clingodl_build_interface)
     set_target_properties(libclingo-dl PROPERTIES PUBLIC_HEADER clingo-dl.h)
     install(TARGETS libclingo-dl
         EXPORT ClingoDLTargets
@@ -73,7 +79,7 @@ elseif(NOT CLINGODL_BUILD_SHARED_INTERFACE)
         ${CMAKE_CURRENT_BINARY_DIR}/ClingoDLConfigVersion.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/ClingoDL)
 endif()
-if (NOT CLINGODL_BUILD_SHARED_INTERFACE)
+if (NOT clingodl_build_interface)
     set_target_properties(libclingo-dl PROPERTIES
         OUTPUT_NAME clingo-dl
         LIBRARY_OUTPUT_NAME clingo-dl
