@@ -40,17 +40,19 @@ def adjust_version():
     assert version is not None
 
     post = 0
-    for m in finditer(r'clingo[-_]dl{}\.tar\.gz'.format(escape(version)), pip):
+    for m in finditer(r'clingo[-_]dl-{}\.tar\.gz'.format(escape(version)), pip):
         post = max(post, 1)
 
-    for m in finditer(r'clingo[-_]dl{}\.post([0-9]+)\.tar\.gz'.format(escape(version)), pip):
+    for m in finditer(r'clingo[-_]dl-{}\.post([0-9]+)\.tar\.gz'.format(escape(version)), pip):
         post = max(post, int(m.group(1)))
 
-    for m in finditer(r'clingo[-_]dl{}-{}-.*-{}'.format(escape(version), escape(python_tag()), escape(platform_tag())), pip):
+    for m in finditer(r'clingo[-_]dl-{}-{}-.*-{}'.format(escape(version), escape(python_tag()), escape(platform_tag())), pip):
         post = max(post, 1)
 
-    for m in finditer(r'clingo[-_]dl{}\.post([0-9]+)-{}-.*-{}'.format(escape(version), escape(python_tag()), escape(platform_tag())), pip):
+    for m in finditer(r'clingo[-_]dl-{}\.post([0-9]+)-{}-.*-{}'.format(escape(version), escape(python_tag()), escape(platform_tag())), pip):
         post = max(post, int(m.group(1)) + 1)
+
+    print(post)
 
     with open('setup.py') as fr:
         setup = fr.read()
@@ -63,6 +65,8 @@ def adjust_version():
 
 if __name__ == "__main__":
     adjust_version()
+    import sys
+    sys.exit()
     if os.name == 'posix':
         environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
     check_call(['python', 'setup.py', 'bdist_wheel'])

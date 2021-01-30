@@ -21,14 +21,15 @@ def adjust_version():
     assert version is not None
 
     post = 0
-    for m in finditer(r'clingo[-_]dl{}\.tar\.gz'.format(escape(version)), pip):
+    for m in finditer(r'clingo[-_]dl-{}\.tar\.gz'.format(escape(version)), pip):
         post = max(post, 1)
 
-    for m in finditer(r'clingo[-_]dl{}\.post([0-9]+)\.tar\.gz'.format(escape(version)), pip):
+    for m in finditer(r'clingo[-_]dl-{}\.post([0-9]+)\.tar\.gz'.format(escape(version)), pip):
         post = max(post, int(m.group(1)) + 1)
 
-    for m in finditer(r'clingo[-_]dl{}\.post([0-9]+).*\.whl'.format(escape(version)), pip):
+    for m in finditer(r'clingo[-_]dl-{}\.post([0-9]+).*\.whl'.format(escape(version)), pip):
         post = max(post, int(m.group(1)))
+    print(post)
 
     with open('setup.py') as fr:
         setup = fr.read()
@@ -41,4 +42,4 @@ def adjust_version():
 
 if __name__ == "__main__":
     adjust_version()
-    check_call(['python3', 'setup.py', 'sdist'])
+    #check_call(['python3', 'setup.py', 'sdist'])
