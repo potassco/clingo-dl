@@ -65,8 +65,6 @@ def adjust_version():
 
 if __name__ == "__main__":
     adjust_version()
-    import sys
-    sys.exit()
     if os.name == 'posix':
         environ['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
     check_call(['python', 'setup.py', 'bdist_wheel'])
