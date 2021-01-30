@@ -25,9 +25,6 @@ def adjust_version():
     assert version is not None
 
     post = 0
-    for m in finditer(r'clingo[-_]dl-{}\.tar\.gz'.format(escape(version)), pip):
-        post = max(post, 1)
-
     for m in finditer(r'clingo[-_]dl-{}\.post([0-9]+)\.tar\.gz'.format(escape(version)), pip):
         post = max(post, int(m.group(1)))
 

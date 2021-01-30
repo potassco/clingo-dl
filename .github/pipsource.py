@@ -29,7 +29,6 @@ def adjust_version():
 
     for m in finditer(r'clingo[-_]dl-{}\.post([0-9]+).*\.whl'.format(escape(version)), pip):
         post = max(post, int(m.group(1)))
-    print(post)
 
     with open('setup.py') as fr:
         setup = fr.read()
