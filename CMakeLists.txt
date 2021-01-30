@@ -21,10 +21,9 @@ set(CMAKE_CXX_EXTENSIONS ON)
 include(GNUInstallDirs)
 include(CMakeDependentOption)
 
-option(CLINGODL_BUILD_STATIC "do not build shared libraries" OFF)
 option(CLINGODL_MANAGE_RPATH "set rpath if not installed into system directory" ON)
 option(CLINGODL_BUILD_TESTS "build tests" OFF)
-CMAKE_DEPENDENT_OPTION(CLINGODL_BUILD_SHARED "build clingo-dl library shared" ON "NOT CLINGODL_BUILD_STATIC" OFF)
+option(CLINGODL_BUILD_SHARED "build clingo-dl library shared" ON)
 set(PYCLINGODL_ENABLE "auto" CACHE STRING "build with python support: OFF, auto, require, pip
 auto: enable python support if python is available
 require: enable python support and fails if python is not available
@@ -49,10 +48,6 @@ if (MSVC)
     SET(CMAKE_MODULE_LINKER_FLAGS_RELEASE "${CMAKE_MODULE_LINKER_FLAGS_RELEASE} ${VC_RELEASE_LINK_OPTIONS}")
     SET(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} ${VC_RELEASE_LINK_OPTIONS}")
     SET(CMAKE_STATIC_LINKER_FLAGS_RELEASE "${CMAKE_STATIC_LINKER_FLAGS_RELEASE} ${VC_RELEASE_LINK_OPTIONS}")
-    if (CLINGODL_BUILD_STATIC)
-        # force static runtime
-        string(REGEX REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
-    endif()
 endif()
 
 if (POLICY CMP0063 AND CLINGODL_BUILD_SHARED)

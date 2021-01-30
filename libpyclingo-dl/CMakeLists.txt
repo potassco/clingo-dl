@@ -31,11 +31,7 @@ if (NOT PYCLINGODL_SUFFIX)
     endif()
 endif()
 
-if (CLINGODL_BUILD_SHARED STREQUAL "interface")
-    add_library(pyclingo-dl SHARED ${source})
-else()
-    add_library(pyclingo-dl MODULE ${source})
-endif()
+add_library(pyclingo-dl MODULE ${source})
 target_link_libraries(pyclingo-dl PRIVATE libclingo-dl Python::Module)
 set_target_properties(pyclingo-dl PROPERTIES
     FOLDER lib
