@@ -23,7 +23,7 @@ public:
 
     static bool add_(clingo_ast_t *stm, void *data) {
         auto *self = static_cast<Rewriter*>(data);
-        return clingo_program_builder_add_ast(self->builder_, stm);
+        return clingo_program_builder_add(self->builder_, stm);
     }
 
     static bool rewrite_(clingo_ast_t *stm, void *data) {
@@ -70,7 +70,7 @@ ResultVec solve(clingodl_theory_t *theory, Clingo::Control &ctl) {
 }
 
 void parse_program(clingodl_theory_t *theory, Clingo::Control &ctl, const char *str) {
-    ctl.with_builder([&](Clingo::ProgramBuilder &builder) {
+    Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
         Rewriter rewriter{theory, builder.to_c()};
         clingo_ast_parse_string(str, Rewriter::rewrite_, &rewriter, nullptr, nullptr, 0);
     });

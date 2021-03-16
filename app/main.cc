@@ -49,7 +49,7 @@ public:
 private:
     static bool add_(clingo_ast_t *stm, void *data) {
         auto *self = static_cast<Rewriter*>(data);
-        return clingo_program_builder_add_ast(self->builder_, stm);
+        return clingo_program_builder_add(self->builder_, stm);
     }
 
     static bool rewrite_(clingo_ast_t *stm, void *data) {
@@ -110,7 +110,7 @@ public:
     void main(Control &ctl, StringSpan files) override {
         handle_error(clingodl_register(theory_, ctl.to_c()));
 
-        ctl.with_builder([&](Clingo::ProgramBuilder &builder) {
+        AST::with_builder(ctl, [&](AST::ProgramBuilder &builder) {
             Rewriter rewriter{theory_, builder.to_c()};
             rewriter.rewrite(files);
         });
@@ -124,7 +124,7 @@ public:
             // NOTE: with an API extension to implement a custom enumerator,
             //       one could implement this more nicely
             //       right now this implementation is restricted to the application
-            ctl.with_builder([&](Clingo::ProgramBuilder &builder) {
+            AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
                Rewriter rewriter{theory_, builder.to_c()};
                rewriter.rewrite("#program __bound(s,b)."
                                 "&diff { s-0 } <= b."

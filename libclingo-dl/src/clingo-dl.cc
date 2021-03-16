@@ -235,26 +235,11 @@ extern "C" bool clingodl_register(clingodl_theory_t *theory, clingo_control_t* c
     CLINGODL_CATCH;
 }
 
-extern "C" bool clingodl_rewrite_statement(clingodl_theory_t *theory, clingo_ast_statement_t const *stm, clingodl_rewrite_callback_t add, void *data) {
-    CLINGODL_TRY {
-        Clingo::StatementCallback cb = [&](Clingo::AST::Statement &&stm) {
-            transform(std::move(stm), [add, data](Clingo::AST::Statement &&stm){
-                Clingo::AST::Detail::ASTToC visitor;
-                auto x = stm.data.accept(visitor);
-                x.location = stm.location;
-                handle_error(add(&x, data));
-            }, theory->shift_constraints);
-        };
-        Clingo::AST::Detail::convStatement(stm, cb);
-    }
-    CLINGODL_CATCH;
-}
-
 extern "C" bool clingodl_rewrite_ast(clingodl_theory_t *theory, clingo_ast_t *ast, clingodl_ast_callback_t add, void *data) {
     CLINGODL_TRY {
         clingo_ast_acquire(ast);
-        Clingo::ASTv2::AST ast_cpp{ast};
-        transform(ast_cpp, [add, data](Clingo::ASTv2::AST &&ast_trans){
+        Clingo::AST::Node ast_cpp{ast};
+        transform(ast_cpp, [add, data](Clingo::AST::Node &&ast_trans){
             handle_error(add(ast_trans.to_c(), data));
         }, theory->shift_constraints);
     }
