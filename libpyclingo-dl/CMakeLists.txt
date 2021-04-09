@@ -31,7 +31,14 @@ if (NOT PYCLINGODL_SUFFIX)
     endif()
 endif()
 
-add_library(pyclingo-dl MODULE ${source})
+# Note: For the pip package, we actually not just want to load this library but
+# also link agaist it. This is mainly for Windows to ensure that the import
+# library is installed.
+if (PYCLINGODL_ENABLE STREQUAL "pip")
+    add_library(pyclingo-dl SHARED ${source})
+else()
+    add_library(pyclingo-dl MODULE ${source})
+endif()
 target_link_libraries(pyclingo-dl PRIVATE libclingo-dl Python::Module)
 target_compile_definitions(pyclingo-dl PRIVATE _CFFI_NO_LIMITED_API)
 set_target_properties(pyclingo-dl PROPERTIES
@@ -68,7 +75,8 @@ if (PYCLINGODL_INSTALL_DIR)
             ${CMAKE_CURRENT_BINARY_DIR}/INSTALLER
             ${CMAKE_CURRENT_BINARY_DIR}/METADATA
             DESTINATION ${_PYCLINGODL_INSTALL_DIR}/clingodl-${CLINGODL_VERSION}.dist-info)
+    else()
+        install(FILES ${CMAKE_SOURCE_DIR}/libclingo-dl/clingo-dl.h
+            DESTINATION ${_PYCLINGODL_INSTALL_DIR}/clingodl)
     endif()
-    install(FILES ${CMAKE_SOURCE_DIR}/libclingo-dl/clingo-dl.h
-        DESTINATION ${_PYCLINGODL_INSTALL_DIR}/clingodl)
 endif()
