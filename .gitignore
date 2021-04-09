@@ -11,3 +11,4 @@ dist/
 __pycache__/
 MANIFEST
 *.pyc
+.mypy_cache/
