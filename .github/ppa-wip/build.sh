@@ -64,7 +64,7 @@ for act in "${@}"; do
             ;;
         changes)
             VERSION="$(sed -n '/#define CLINGODL_VERSION "/s/.*"\([0-9]\+\.[0-9\+]\.[0-9]\+\)".*/\1/p' ../../libclingo-dl/clingo-dl.h)"
-            BUILD=$(curl -sL http://ppa.launchpad.net/potassco/${ref}/ubuntu/pool/main/c/clingo-dl/ | sed -n "/${rep}[0-9]\+\.dsc/s/.*${rep}\([0-9]\+\).*/\1/p" | sort -rn | head -1)
+            BUILD=$(curl -sL http://ppa.launchpad.net/potassco/${ref}/ubuntu/pool/main/c/clingo-dl/ | sed -n "/${VERSION//./\.}${rep}[0-9]\+\.dsc/s/.*${rep}\([0-9]\+\).*/\1/p" | sort -rn | head -1)
             cat > ${rep}/debian/changelog <<EOF
 clingo-dl (${VERSION}-${rep}$[BUILD+1]) ${rep}; urgency=medium
 
