@@ -361,10 +361,12 @@ Float safe_pow(Float a, Float b) {
 	return std::pow(a,b); 
 }
 
-inline std::string unquote(char const* str, int size) {
+//! Expects quoted string with protected characters and
+//! removes quotes and protection
+inline std::string unquote(char const* str) {
     std::string res;
     bool slash = false;
-    while (size--) {
+    while (*(++str + 1) != '\0') {
         if (slash) {
             switch (*str) {
                 case 'n': {
@@ -388,7 +390,6 @@ inline std::string unquote(char const* str, int size) {
         }
         else if (*str == '\\') { slash = true; }
         else { res.push_back(*str); }
-        ++str;
     }
     return res;
 }

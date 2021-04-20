@@ -1830,11 +1830,12 @@ private:
     Clingo::Symbol evaluate(Clingo::TheoryTerm const &term) const {
         if (term.type() == Clingo::TheoryTermType::Symbol) {
             auto name = term.name();
-            if (strlen(name)>1 && name[0]=='\"' && name[strlen(name)-1]=='\"') {
-                return Clingo::String(unquote(name+1, strlen(name)-2).c_str());
+            if (name[0] == '\"') {
+                return Clingo::String(unquote(name).c_str());
             }
-            else
+            else {
                 return Clingo::Function(name, {});
+            }
         }
 
         if (term.type() == Clingo::TheoryTermType::Number) {
