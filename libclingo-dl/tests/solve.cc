@@ -220,6 +220,19 @@ TEST_CASE("solving", "[clingo]") {
             REQUIRE(result == (ResultVec{{{},{a}}}));
             REQUIRE(ctl.statistics()["solving"]["solvers"]["choices"] == 0);
         }
+        SECTION("symbols") {
+            REQUIRE(clingodl_register(theory, ctl.to_c()));
+
+            parse_program(theory, ctl,
+                "#program base.\n"
+                "&diff{ (\"foo\\\\\\nbar\\\"foo\",123) - 0 } <= 17.\n"
+                );
+            ctl.ground({{"base", {}}});
+            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
+
+            auto result = solve(theory, ctl);
+            REQUIRE(result == (ResultVec{{{{Function("",{String("foo\\\nbar\"foo"), Number(123)}), 0}},{}}}));
+        }
         clingodl_destroy(theory);
     }
 }
