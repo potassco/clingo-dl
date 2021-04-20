@@ -363,5 +363,4 @@ Float safe_pow(Float a, Float b) {
 
 
 
-
 #endif // CLINGODL_UTIL_HH
