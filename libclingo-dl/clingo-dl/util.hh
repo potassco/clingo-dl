@@ -366,9 +366,9 @@ Float safe_pow(Float a, Float b) {
 inline std::string unquote(char const* str) {
     std::string res;
     bool slash = false;
-    while (*(++str + 1) != '\0') {
+    for (char const *it = *str == '"' ? str + 1 : str; *it != '\0'; ++it) {
         if (slash) {
-            switch (*str) {
+            switch (*it) {
                 case 'n': {
                     res.push_back('\n');
                     break;
@@ -388,8 +388,9 @@ inline std::string unquote(char const* str) {
             }
             slash = false;
         }
-        else if (*str == '\\') { slash = true; }
-        else { res.push_back(*str); }
+        else if (*it == '"' && *(it + 1) == '\0') { break; }
+        else if (*it == '\\') { slash = true; }
+        else { res.push_back(*it); }
     }
     return res;
 }
