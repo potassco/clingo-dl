@@ -361,6 +361,36 @@ Float safe_pow(Float a, Float b) {
 	return std::pow(a,b); 
 }
 
-
+inline std::string unquote(char const* str, int size) {
+    std::string res;
+    bool slash = false;
+    while (size--) {
+        if (slash) {
+            switch (*str) {
+                case 'n': {
+                    res.push_back('\n');
+                    break;
+                }
+                case '\\': {
+                    res.push_back('\\');
+                    break;
+                }
+                case '"': {
+                    res.push_back('"');
+                    break;
+                }
+                default: {
+                    assert(false);
+                    break;
+                }
+            }
+            slash = false;
+        }
+        else if (*str == '\\') { slash = true; }
+        else { res.push_back(*str); }
+        ++str;
+    }
+    return res;
+}
 
 #endif // CLINGODL_UTIL_HH

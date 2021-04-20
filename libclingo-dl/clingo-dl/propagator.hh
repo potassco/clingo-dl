@@ -39,66 +39,6 @@
 //#define CROSSCHECK
 #define CHECKSOLUTION
 
-namespace {
-inline std::string quote(Clingo::StringSpan str) {
-    std::string res;
-    for (auto c : str) {
-        switch (*c) {
-            case '\n': {
-                res.push_back('\\');
-                res.push_back('n');
-                break;
-            }
-            case '\\': {
-                res.push_back('\\');
-                res.push_back('\\');
-                break;
-            }
-            case '"': {
-                res.push_back('\\');
-                res.push_back('"');
-                break;
-            }
-            default: {
-                res.push_back(*c);
-                break;
-            }
-        }
-    }
-    return res;
-}
-
-inline std::string unquote(Clingo::StringSpan str) {
-    std::string res;
-    bool slash = false;
-    for (auto c : str) {
-        if (slash) {
-            switch (*c) {
-                case 'n': {
-                    res.push_back('\n');
-                    break;
-                }
-                case '\\': {
-                    res.push_back('\\');
-                    break;
-                }
-                case '"': {
-                    res.push_back('"');
-                    break;
-                }
-                default: {
-                    assert(false);
-                    break;
-                }
-            }
-            slash = false;
-        }
-        else if (*c == '\\') { slash = true; }
-        else { res.push_back(*c); }
-    }
-    return res;
-}
-}
 namespace ClingoDL {
 template <typename T=void>
 inline T throw_syntax_error(char const *message="Invalid Syntax") {
@@ -1889,12 +1829,12 @@ private:
 
     Clingo::Symbol evaluate(Clingo::TheoryTerm const &term) const {
         if (term.type() == Clingo::TheoryTermType::Symbol) {
-            const char* const name = term.name();
-            if (name[0]=='\"' && name[strlen(name)-1]=='\"') {
-                return Clingo::String(quote({name,strlen(name)}).c_str());
+            auto name = term.name();
+            if (strlen(name)>1 && name[0]=='\"' && name[strlen(name)-1]=='\"') {
+                return Clingo::String(unquote(name+1, strlen(name)-2).c_str());
             }
             else
-                return Clingo::Function(unquote({name,strlen(name)}).c_str(), {});
+                return Clingo::Function(name, {});
         }
 
         if (term.type() == Clingo::TheoryTermType::Number) {
