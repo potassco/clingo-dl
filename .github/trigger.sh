@@ -33,7 +33,8 @@ case $1 in
         wip=false
         branch=$2
         # .github/workflows/manylinux.yml
-        dispatch 5434066 $wip $branch '"image":"manylinux2014_ppc64le"'
+        # can be enabled once we switch to the debian based manylinux images
+        #dispatch 5434066 $wip $branch '"image":"manylinux2014_ppc64le"'
         dispatch 5434066 $wip $branch '"image":"manylinux2014_aarch64"'
         ;&
     dev)
