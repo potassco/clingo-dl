@@ -44,8 +44,15 @@ def adjust_version(url):
                 version = m.group(1)
     assert version is not None
 
-    with urlopen('{}/{}'.format(url, package_name)) as uh:
-        pip = uh.read().decode()
+    try:
+        with urlopen('{}/{}'.format(url, package_name)) as uh:
+            pip = uh.read().decode()
+    except HTTPError as err:
+        if err.code == 404:
+            pip = '\n'
+        else:
+            raise
+
     post = 0
     for m in finditer(r'{}-{}\.post([0-9]+)\.tar\.gz'.format(package_regex, escape(version)), pip):
         post = max(post, int(m.group(1)))
