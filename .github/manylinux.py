@@ -92,6 +92,8 @@ def run():
 
     adjust_version(url)
 
+    if ARCH != "x86_64":
+        check_call(['sed', '-i', 's/, "cmake"//', 'pyproject.toml'])
 
     compile_wheels(idx)
 
