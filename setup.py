@@ -28,7 +28,7 @@ setup(
     author_email = 'kaminski@cs.uni-potsdam.de',
     license = 'MIT',
     url = 'https://github.com/potassco/clingo-dl',
-    install_requires=[ 'cffi', 'clingo-cffi' ],
+    install_requires=[ 'cffi', 'clingo' ],
     cmake_args=[ '-DCLINGODL_MANAGE_RPATH=OFF',
                  '-DPYCLINGODL_ENABLE=pip',
                  '-DPYCLINGODL_INSTALL_DIR=libpyclingo-dl',
