@@ -27,7 +27,6 @@
 
 #include <clingo.hh>
 #include <clingo-dl/util.hh>
-#include <clingo-dl/astutil.hh>
 
 #include <unordered_map>
 
@@ -39,7 +38,6 @@
 
 //#define CROSSCHECK
 #define CHECKSOLUTION
-using namespace Clingo;
 
 namespace ClingoDL {
 template <typename T=void>
@@ -55,14 +53,21 @@ inline void check_syntax(bool condition, char const *message="Invalid Syntax") {
 
 char const *negate_relation(char const *op);
 
-void transform(Clingo::AST::Statement &&stm, Clingo::StatementCallback const &cb, bool shift);
+using NodeCallback = std::function<void(Clingo::AST::Node &&ast)>;
+
+//! Transform the given statement with dl constraints and pass it on to the
+//! given callback.
+//!
+//! Optionally shifts constraints from rule bodies into heads of integrity
+//! constraints if possible.
+void transform(Clingo::AST::Node const &ast, NodeCallback const &cb, bool shift);
 
 template <typename T>
 struct Edge {
     int from;
     int to;
     T weight;
-    literal_t lit;
+    Clingo::literal_t lit;
 };
 
 template <class T, class P>
@@ -197,25 +202,25 @@ struct PropagatorConfig {
     PropagationMode mode{PropagationMode::Check};
     std::vector<ThreadConfig> thread_config;
 
-    uint64_t get_propagate_root(id_t thread_id) {
+    uint64_t get_propagate_root(Clingo::id_t thread_id) {
         if (thread_id < thread_config.size() && thread_config[thread_id].propagate_root.first) {
             return thread_config[thread_id].propagate_root.second;
         }
         return propagate_root;
     }
-    uint64_t get_propagate_budget(id_t thread_id) {
+    uint64_t get_propagate_budget(Clingo::id_t thread_id) {
         if (thread_id < thread_config.size() && thread_config[thread_id].propagate_budget.first) {
             return thread_config[thread_id].propagate_budget.second;
         }
         return propagate_budget;
     }
-    PropagationMode get_propagate_mode(id_t thread_id) {
+    PropagationMode get_propagate_mode(Clingo::id_t thread_id) {
         if (thread_id < thread_config.size() && thread_config[thread_id].mode.first) {
             return thread_config[thread_id].mode.second;
         }
         return mode;
     }
-    SortMode get_sort_mode(id_t thread_id) {
+    SortMode get_sort_mode(Clingo::id_t thread_id) {
         if (thread_id < thread_config.size() && thread_config[thread_id].sort_edges.first) {
             return thread_config[thread_id].sort_edges.second;
         }
@@ -223,7 +228,7 @@ struct PropagatorConfig {
     }
 
 
-    ThreadConfig &ensure(id_t thread_id) {
+    ThreadConfig &ensure(Clingo::id_t thread_id) {
         if (thread_config.size() < thread_id + 1) {
             thread_config.resize(thread_id + 1);
         }
@@ -676,7 +681,7 @@ private:
 #ifdef CROSSCHECK
                     T sum = uv.weight - xy.weight;
 #endif
-                    std::vector<literal_t> clause;
+                    std::vector<Clingo::literal_t> clause;
                     clause.push_back(-uv.lit);
                     // forward
                     for (auto next_edge_idx = u.path_from; next_edge_idx >= 0;) {
@@ -943,7 +948,7 @@ struct Stats {
 };
 
 struct FactState {
-    std::vector<literal_t> lits;
+    std::vector<Clingo::literal_t> lits;
     size_t limit{0};
 };
 
@@ -956,7 +961,7 @@ struct DLState {
         , propagate_budget{propagate_budget} { }
     DLStats &stats;
     DifferenceLogicGraph<T> dl_graph;
-    std::vector<literal_t> false_lits;
+    std::vector<Clingo::literal_t> false_lits;
     std::vector<int> todo_edges;
     uint64_t propagate_root;
     uint64_t propagate_budget;
@@ -987,12 +992,12 @@ Clingo::Symbol to_symbol(T value);
 
 template <>
 inline Clingo::Symbol to_symbol(int value) {
-    return Number(value);
+    return Clingo::Number(value);
 }
 
 template <>
 inline Clingo::Symbol to_symbol(double value) {
-    return String(std::to_string(value).c_str());
+    return Clingo::String(std::to_string(value).c_str());
 }
 
 struct NodeInfo {
@@ -1012,7 +1017,7 @@ inline bool is_valid_var(int var) {
 
 
 template <typename T>
-class DifferenceLogicPropagator : public Propagator {
+class DifferenceLogicPropagator : public Clingo::Propagator {
 private:
 
     using CoVarVec = std::vector<std::pair<T,int>>; // vector of coefficients and variables
@@ -1027,9 +1032,9 @@ public:
 public:
     // initialization
 
-    void init(PropagateInit &init) override {
+    void init(Clingo::PropagateInit &init) override {
         if (!edges_.empty()) {
-            init.set_check_mode(PropagatorCheckMode::Partial);
+            init.set_check_mode(Clingo::PropagatorCheckMode::Partial);
         }
 
         int edge_start = edges_.size();
@@ -1117,7 +1122,7 @@ public:
                             c = queue[c].previous;
                         }
                         if (found == 2) { continue; }
-                        else if (found == 0 && st_truth == TruthValue::Free) { n += 1; }
+                        else if (found == 0 && st_truth == Clingo::TruthValue::Free) { n += 1; }
                         if (st.to == start.from && w < 0) {
                             ++stats_.mutexes;
                             clause.emplace_back(-st.lit);
@@ -1273,7 +1278,7 @@ public:
         return rhs;
     }
 
-    void add_edge_atom(PropagateInit &init, TheoryAtom const &atom) {
+    void add_edge_atom(Clingo::PropagateInit &init, Clingo::TheoryAtom const &atom) {
         char const *msg = "parsing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";
         int lit = init.solver_literal(atom.literal());
         if (!atom.has_guard()) {
@@ -1305,7 +1310,7 @@ public:
         normalize_constraint(init, lit, covec, rel, rhs, strict);
     }
 
-    bool add_edge(PropagateInit& init, int literal, CoVarVec const &covec, T rhs, bool strict) {
+    bool add_edge(Clingo::PropagateInit& init, int literal, CoVarVec const &covec, T rhs, bool strict) {
         char const *msg = "parsing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";
         if (strict && init.assignment().is_false(literal)) {
             return true;
@@ -1351,14 +1356,14 @@ public:
         return true;
     }
 
-    void add_edge(PropagateInit& init, int u_id, int v_id, T weight, int lit, bool strict) {
+    void add_edge(Clingo::PropagateInit& init, int u_id, int v_id, T weight, int lit, bool strict) {
         add_edge(init, u_id, v_id, weight, lit);
         if (strict) {
             add_edge(init, v_id, u_id, -weight-1, -lit);
         }
     }
 
-    void add_edge(PropagateInit &init, int u_id, int v_id, T weight, int lit) {
+    void add_edge(Clingo::PropagateInit &init, int u_id, int v_id, T weight, int lit) {
         auto id = numeric_cast<int>(edges_.size());
         edges_.push_back({u_id, v_id, weight, lit});
         lit_to_edges_.emplace(lit, id);
@@ -1375,7 +1380,7 @@ public:
         }
     }
 
-    bool normalize_constraint(PropagateInit &init, int literal, CoVarVec const &elements, char const *op, T rhs, bool strict) {
+    bool normalize_constraint(Clingo::PropagateInit &init, int literal, CoVarVec const &elements, char const *op, T rhs, bool strict) {
         CoVarVec copy;
         CoVarVec const *elems = &elements;
 
@@ -1581,7 +1586,7 @@ public:
         return ret.first->second;
     }
 
-    void initialize_states(PropagateInit &init) {
+    void initialize_states(Clingo::PropagateInit &init) {
         stats_.dl_stats.resize(init.number_of_threads());
         states_.clear();
         if (facts_.size() < init.number_of_threads()) {
@@ -1595,7 +1600,7 @@ public:
 
     // propagation
 
-    void check(PropagateControl &ctl) override {
+    void check(Clingo::PropagateControl &ctl) override {
         DLState<T> &state = states_[ctl.thread_id()];
         auto &facts = facts_[ctl.thread_id()];
         auto assignment = ctl.assignment();
@@ -1616,7 +1621,7 @@ public:
 #endif
     }
 
-    void disable_edge_by_lit(DLState<T> &state, literal_t lit) {
+    void disable_edge_by_lit(DLState<T> &state, Clingo::literal_t lit) {
         for (auto it = false_lit_to_edges_.find(lit), ie = false_lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
             if (state.dl_graph.edge_is_active(it->second)) {
                 state.dl_graph.remove_candidate_edge(it->second);
@@ -1659,7 +1664,7 @@ public:
         });
     }
 
-    void do_propagate(PropagateControl &ctl, LiteralSpan changes) {
+    void do_propagate(Clingo::PropagateControl &ctl, Clingo::LiteralSpan changes) {
         auto thread_id = ctl.thread_id();
         DLState<T> &state = states_[thread_id];
         Timer t{state.stats.time_propagate};
@@ -1689,7 +1694,7 @@ public:
         for (auto edge : state.todo_edges) {
             if (state.dl_graph.edge_is_active(edge)) {
                 auto ret = state.dl_graph.add_edge(edge, [&](std::vector<int> const &neg_cycle) {
-                    std::vector<literal_t> clause;
+                    std::vector<Clingo::literal_t> clause;
                     for (auto eid : neg_cycle) {
                         auto lit = -edges_[eid].lit;
                         if (ctl.assignment().is_true(lit)) { return true; }
@@ -1710,7 +1715,7 @@ public:
         }
     }
 
-    void propagate(PropagateControl &ctl, LiteralSpan changes) override {
+    void propagate(Clingo::PropagateControl &ctl, Clingo::LiteralSpan changes) override {
         if (ctl.assignment().decision_level() == 0) {
             auto &facts = facts_[ctl.thread_id()];
             facts.lits.insert(facts.lits.end(), changes.begin(), changes.end());
@@ -1720,14 +1725,14 @@ public:
 
     // undo
 
-    void undo(PropagateControl const &ctl, LiteralSpan changes) CLINGODL_UNDO_NOEXCEPT override {
+    void undo(Clingo::PropagateControl const &ctl, Clingo::LiteralSpan changes) CLINGODL_UNDO_NOEXCEPT override {
         static_cast<void>(changes);
         auto &state = states_[ctl.thread_id()];
         Timer t{state.stats.time_undo};
         state.dl_graph.backtrack();
     }
 
-    void extend_model(Model &model) {
+    void extend_model(Clingo::Model &model) {
         auto &state = states_[model.thread_id()];
         std::vector<T> adjust;
         adjust.reserve(zero_nodes_.size());
@@ -1735,10 +1740,10 @@ public:
             adjust.emplace_back(state.dl_graph.has_value(node) ? state.dl_graph.node_value(node) : 0);
         }
 
-        SymbolVector vec;
+        Clingo::SymbolVector vec;
         for (auto idx = 0; idx < vert_map_.size(); ++idx) {
             if (!is_zero(idx) && state.dl_graph.has_value(idx)) {
-                SymbolVector params;
+                Clingo::SymbolVector params;
                 params.emplace_back(vert_map_[idx]);
                 auto cc = node_info_[idx].cc;
                 params.emplace_back(to_symbol<T>(state.dl_graph.node_value(idx) - adjust[cc]));
@@ -1752,7 +1757,7 @@ public:
         return vert_map_.size();
     }
 
-    Symbol symbol(size_t index) const {
+    Clingo::Symbol symbol(size_t index) const {
         return vert_map_[index];
     }
 
@@ -1824,7 +1829,13 @@ private:
 
     Clingo::Symbol evaluate(Clingo::TheoryTerm const &term) const {
         if (term.type() == Clingo::TheoryTermType::Symbol) {
-            return Clingo::Function(term.name(), {});
+            auto name = term.name();
+            if (name[0] == '\"') {
+                return Clingo::String(unquote(name).c_str());
+            }
+            else {
+                return Clingo::Function(name, {});
+            }
         }
 
         if (term.type() == Clingo::TheoryTermType::Number) {
@@ -1878,8 +1889,8 @@ private:
 
     std::vector<DLState<T>> states_;
     std::vector<FactState> facts_;
-    std::unordered_multimap<literal_t, int> lit_to_edges_;
-    std::unordered_multimap<literal_t, int> false_lit_to_edges_;
+    std::unordered_multimap<Clingo::literal_t, int> lit_to_edges_;
+    std::unordered_multimap<Clingo::literal_t, int> false_lit_to_edges_;
     std::vector<Edge<T>> edges_;
     std::vector<Clingo::Symbol> vert_map_;
     std::unordered_map<Clingo::Symbol, int> vert_map_inv_;

@@ -21,14 +21,14 @@ public:
     , builder_{builder} {
     }
 
-    static bool add_(clingo_ast_statement_t const *stm, void *data) {
+    static bool add_(clingo_ast_t *stm, void *data) {
         auto *self = static_cast<Rewriter*>(data);
         return clingo_program_builder_add(self->builder_, stm);
     }
 
-    static bool rewrite_(clingo_ast_statement_t const *stm, void *data) {
+    static bool rewrite_(clingo_ast_t *stm, void *data) {
         auto *self = static_cast<Rewriter*>(data);
-        return clingodl_rewrite_statement(self->theory_, stm, add_, self);
+        return clingodl_rewrite_ast(self->theory_, stm, add_, self);
     }
 
     clingodl_theory_t *theory_;
@@ -70,9 +70,9 @@ ResultVec solve(clingodl_theory_t *theory, Clingo::Control &ctl) {
 }
 
 void parse_program(clingodl_theory_t *theory, Clingo::Control &ctl, const char *str) {
-    ctl.with_builder([&](Clingo::ProgramBuilder &builder) {
+    Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
         Rewriter rewriter{theory, builder.to_c()};
-        clingo_parse_program(str, Rewriter::rewrite_, &rewriter, nullptr, nullptr, 0);
+        clingo_ast_parse_string(str, Rewriter::rewrite_, &rewriter, nullptr, nullptr, 0);
     });
 }
 
@@ -219,6 +219,19 @@ TEST_CASE("solving", "[clingo]") {
             auto result = solve(theory, ctl);
             REQUIRE(result == (ResultVec{{{},{a}}}));
             REQUIRE(ctl.statistics()["solving"]["solvers"]["choices"] == 0);
+        }
+        SECTION("symbols") {
+            REQUIRE(clingodl_register(theory, ctl.to_c()));
+
+            parse_program(theory, ctl,
+                "#program base.\n"
+                "&diff{ (\"foo\\\\\\nbar\\\"foo\",123) - 0 } <= 17.\n"
+                );
+            ctl.ground({{"base", {}}});
+            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
+
+            auto result = solve(theory, ctl);
+            REQUIRE(result == (ResultVec{{{{Function("",{String("foo\\\nbar\"foo"), Number(123)}), 0}},{}}}));
         }
         clingodl_destroy(theory);
     }

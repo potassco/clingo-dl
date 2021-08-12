@@ -28,11 +28,11 @@
 //! Major version number.
 #define CLINGODL_VERSION_MAJOR 1
 //! Minor version number.
-#define CLINGODL_VERSION_MINOR 1
+#define CLINGODL_VERSION_MINOR 2
 //! Revision number.
 #define CLINGODL_VERSION_REVISION 1
 //! String representation of version.
-#define CLINGODL_VERSION "1.1.1"
+#define CLINGODL_VERSION "1.2.1"
 
 #ifdef __cplusplus
 extern "C" {
@@ -73,7 +73,7 @@ enum clingodl_value_type {
 typedef int clingodl_value_type_t;
 
 typedef struct clingodl_value {
-    clingodl_value_type type;
+    clingodl_value_type_t type;
     union {
         int int_number;
         double double_number;
@@ -81,8 +81,8 @@ typedef struct clingodl_value {
     };
 } clingodl_value_t;
 
-//! Callback to rewrite statements (see ::clingodl_rewrite_statement).
-typedef bool (*clingodl_rewrite_callback_t)(clingo_ast_statement_t const *statement, void *data);
+//! Callback to rewrite statements (see ::clingodl_rewrite_ast).
+typedef bool (*clingodl_ast_callback_t)(clingo_ast_t *ast, void *data);
 
 typedef struct clingodl_theory clingodl_theory_t;
 
@@ -92,8 +92,8 @@ CLINGODL_VISIBILITY_DEFAULT bool clingodl_create(clingodl_theory_t **theory);
 //! registers the theory with the control
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_register(clingodl_theory_t *theory, clingo_control_t* control);
 
-//! Rewrite statements before adding them via the given callback.
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_rewrite_statement(clingodl_theory_t *theory, clingo_ast_statement_t const *stm, clingodl_rewrite_callback_t add, void *data);
+//! Rewrite asts before adding them via the given callback.
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_rewrite_ast(clingodl_theory_t *theory, clingo_ast_t *ast, clingodl_ast_callback_t add, void *data);
 
 //! prepare the theory between grounding and solving
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_prepare(clingodl_theory_t *theory, clingo_control_t* control);

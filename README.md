@@ -14,7 +14,6 @@ Please consult the following resources for further information:
   - [**Installation and software requirements**](INSTALL.md)
   - [Changes between releases](CHANGES.md)
   - [Potassco clingo-dl page](https://potassco.org/labs/clingodl/)
-  - [tefoli](https://github.com/potassco/tefoli) to use clingo[DL] in combination with the python API
 
 Clingo-dl is distributed under the [MIT License](LICENSE.md).
 
@@ -30,4 +29,4 @@ numbers.
 
     clingo-dl -c n=132 --propagate=full examples/taskassignment/encoding-dl.lp examples/taskassignment/tai4_4_1.lp
 
-For an example of how to use the clingoDL library, see [here](https://github.com/potassco/tefoli)
+For an example of how to use the clingoDL library, see [here](https://github.com/potassco/clingo-dl/blob/master/examples/pyclingo-dl.py)

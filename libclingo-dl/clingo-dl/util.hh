@@ -361,7 +361,38 @@ Float safe_pow(Float a, Float b) {
 	return std::pow(a,b); 
 }
 
-
-
+//! Expects quoted string with protected characters and
+//! removes quotes and protection
+inline std::string unquote(char const* str) {
+    std::string res;
+    bool slash = false;
+    for (char const *it = *str == '"' ? str + 1 : str; *it != '\0'; ++it) {
+        if (slash) {
+            switch (*it) {
+                case 'n': {
+                    res.push_back('\n');
+                    break;
+                }
+                case '\\': {
+                    res.push_back('\\');
+                    break;
+                }
+                case '"': {
+                    res.push_back('"');
+                    break;
+                }
+                default: {
+                    assert(false);
+                    break;
+                }
+            }
+            slash = false;
+        }
+        else if (*it == '"' && *(it + 1) == '\0') { break; }
+        else if (*it == '\\') { slash = true; }
+        else { res.push_back(*it); }
+    }
+    return res;
+}
 
 #endif // CLINGODL_UTIL_HH

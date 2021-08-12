@@ -30,15 +30,15 @@
 namespace ClingoDL {
 
 #define CLINGODL_TRY try
-#define CLINGODL_CATCH catch (...){ Clingo::Detail::handle_cxx_error(); return false; } return true
+#define CLINGODL_CATCH catch (...){ Clingo::Detail::handle_cxx_error(); return false; } return true // NOLINT
 
-#define CLINGO_CALL(x) Clingo::Detail::handle_error(x)
+using Clingo::Detail::handle_error;
 
 template <typename T>
 bool init(clingo_propagate_init_t* i, void* data)
 {
     CLINGODL_TRY {
-        PropagateInit in(i);
+        Clingo::PropagateInit in(i);
         static_cast<DifferenceLogicPropagator<T>*>(data)->init(in);
     }
     CLINGODL_CATCH;
@@ -48,7 +48,7 @@ template <typename T>
 bool propagate(clingo_propagate_control_t* i, const clingo_literal_t *changes, size_t size, void* data)
 {
     CLINGODL_TRY {
-        PropagateControl in(i);
+        Clingo::PropagateControl in(i);
         static_cast<DifferenceLogicPropagator<T>*>(data)->propagate(in, {changes, size});
     }
     CLINGODL_CATCH;
@@ -58,7 +58,7 @@ bool propagate(clingo_propagate_control_t* i, const clingo_literal_t *changes, s
 template <typename T>
 void undo(clingo_propagate_control_t const* i, const clingo_literal_t *changes, size_t size, void* data)
 {
-    PropagateControl in(const_cast<clingo_propagate_control_t *>(i));
+    Clingo::PropagateControl in(const_cast<clingo_propagate_control_t *>(i));
     static_cast<DifferenceLogicPropagator<T>*>(data)->undo(in, {changes, size});
 }
 #else
@@ -66,7 +66,7 @@ template <typename T>
 bool undo(clingo_propagate_control_t const* i, const clingo_literal_t *changes, size_t size, void* data)
 {
     CLINGODL_TRY {
-        PropagateControl in(const_cast<clingo_propagate_control_t *>(i));
+        Clingo::PropagateControl in(const_cast<clingo_propagate_control_t *>(i));
         static_cast<DifferenceLogicPropagator<T>*>(data)->undo(in, {changes, size});
     }
     CLINGODL_CATCH;
@@ -77,7 +77,7 @@ template <typename T>
 bool check(clingo_propagate_control_t* i, void* data)
 {
     CLINGODL_TRY {
-        PropagateControl in(i);
+        Clingo::PropagateControl in(i);
         static_cast<DifferenceLogicPropagator<T>*>(data)->check(in);
     }
     CLINGODL_CATCH;
@@ -91,8 +91,8 @@ public:
     virtual bool has_value(uint32_t thread_id, size_t index) = 0;
     virtual void get_value(uint32_t thread_id, size_t index, clingodl_value_t *value) = 0;
     virtual bool next(uint32_t thread_id, size_t *current) = 0;
-    virtual void extend_model(Model &m) = 0;
-    virtual void on_statistics(UserStatistics& step, UserStatistics &accu) = 0;
+    virtual void extend_model(Clingo::Model &m) = 0;
+    virtual void on_statistics(Clingo::UserStatistics& step, Clingo::UserStatistics &accu) = 0;
 };
 
 template<typename T>
@@ -115,7 +115,7 @@ class DLPropagatorFacade : public PropagatorFacade {
 public:
     DLPropagatorFacade(clingo_control_t *ctl, PropagatorConfig const &conf)
     : prop_{step_, conf} {
-        CLINGO_CALL(clingo_control_add(ctl,"base", nullptr, 0, R"(#theory dl {
+        handle_error(clingo_control_add(ctl,"base", nullptr, 0, R"(#theory dl {
 term {
   + : 1, binary, left;
   - : 1, binary, left;
@@ -134,7 +134,7 @@ term {
             check<T>,
             nullptr
         };
-        CLINGO_CALL(clingo_control_register_propagator(ctl, &prop, &prop_, false));
+        handle_error(clingo_control_register_propagator(ctl, &prop, &prop_, false));
     }
 
     bool lookup_symbol(clingo_symbol_t name, size_t *index) override {
@@ -162,42 +162,42 @@ term {
         }
         return false;
     }
-    void extend_model(Model &m) override {
+    void extend_model(Clingo::Model &m) override {
         prop_.extend_model(m);
     }
-    void on_statistics(UserStatistics& step, UserStatistics &accu) override {
+    void on_statistics(Clingo::UserStatistics& step, Clingo::UserStatistics &accu) override {
         accu_.accu(step_);
         add_statistics(step, step_);
         add_statistics(accu, accu_);
         step_.reset();
     }
 
-    void add_statistics(UserStatistics& root, Stats const &stats) {
-        UserStatistics diff = root.add_subkey("DifferenceLogic", StatisticsType::Map);
-        diff.add_subkey("Time init(s)", StatisticsType::Value).set_value(stats.time_init.count());
-        diff.add_subkey("CCs", StatisticsType::Value).set_value(stats.ccs);
-        diff.add_subkey("Mutexes", StatisticsType::Value).set_value(stats.mutexes);
-        diff.add_subkey("Edges", StatisticsType::Value).set_value(stats.edges);
-        diff.add_subkey("Variables", StatisticsType::Value).set_value(stats.variables);
-        UserStatistics threads = diff.add_subkey("Thread", StatisticsType::Array);
-        threads.ensure_size(stats.dl_stats.size(), StatisticsType::Map);
+    void add_statistics(Clingo::UserStatistics& root, Stats const &stats) {
+        Clingo::UserStatistics diff = root.add_subkey("DifferenceLogic", Clingo::StatisticsType::Map);
+        diff.add_subkey("Time init(s)", Clingo::StatisticsType::Value).set_value(stats.time_init.count());
+        diff.add_subkey("CCs", Clingo::StatisticsType::Value).set_value(stats.ccs);
+        diff.add_subkey("Mutexes", Clingo::StatisticsType::Value).set_value(stats.mutexes);
+        diff.add_subkey("Edges", Clingo::StatisticsType::Value).set_value(stats.edges);
+        diff.add_subkey("Variables", Clingo::StatisticsType::Value).set_value(stats.variables);
+        Clingo::UserStatistics threads = diff.add_subkey("Thread", Clingo::StatisticsType::Array);
+        threads.ensure_size(stats.dl_stats.size(), Clingo::StatisticsType::Map);
         auto it = threads.begin();
         for (DLStats const& stat : stats.dl_stats) {
             auto thread = *it++;
-            thread.add_subkey("Propagation(s)", StatisticsType::Value).set_value(stat.time_propagate.count());
-            thread.add_subkey("Dijkstra(s)", StatisticsType::Value).set_value(stat.time_dijkstra.count());
-            thread.add_subkey("Undo(s)", StatisticsType::Value).set_value(stat.time_undo.count());
-            thread.add_subkey("True edges", StatisticsType::Value).set_value(stat.true_edges);
-            thread.add_subkey("False edges", StatisticsType::Value).set_value(stat.false_edges);
-            thread.add_subkey("False edges (inverse)", StatisticsType::Value).set_value(stat.false_edges_trivial);
-            thread.add_subkey("False edges (partial)", StatisticsType::Value).set_value(stat.false_edges_weak);
-            thread.add_subkey("False edges (partial+)", StatisticsType::Value).set_value(stat.false_edges_weak_plus);
-            thread.add_subkey("Edges added", StatisticsType::Value).set_value(stat.edges_added);
-            thread.add_subkey("Edges skipped", StatisticsType::Value).set_value(stat.edges_skipped);
-            thread.add_subkey("Edges propagated", StatisticsType::Value).set_value(stat.edges_propagated);
-            thread.add_subkey("Cost consistency", StatisticsType::Value).set_value(stat.propagate_cost_add);
-            thread.add_subkey("Cost forward", StatisticsType::Value).set_value(stat.propagate_cost_from);
-            thread.add_subkey("Cost backward", StatisticsType::Value).set_value(stat.propagate_cost_to);
+            thread.add_subkey("Propagation(s)", Clingo::StatisticsType::Value).set_value(stat.time_propagate.count());
+            thread.add_subkey("Dijkstra(s)", Clingo::StatisticsType::Value).set_value(stat.time_dijkstra.count());
+            thread.add_subkey("Undo(s)", Clingo::StatisticsType::Value).set_value(stat.time_undo.count());
+            thread.add_subkey("True edges", Clingo::StatisticsType::Value).set_value(stat.true_edges);
+            thread.add_subkey("False edges", Clingo::StatisticsType::Value).set_value(stat.false_edges);
+            thread.add_subkey("False edges (inverse)", Clingo::StatisticsType::Value).set_value(stat.false_edges_trivial);
+            thread.add_subkey("False edges (partial)", Clingo::StatisticsType::Value).set_value(stat.false_edges_weak);
+            thread.add_subkey("False edges (partial+)", Clingo::StatisticsType::Value).set_value(stat.false_edges_weak_plus);
+            thread.add_subkey("Edges added", Clingo::StatisticsType::Value).set_value(stat.edges_added);
+            thread.add_subkey("Edges skipped", Clingo::StatisticsType::Value).set_value(stat.edges_skipped);
+            thread.add_subkey("Edges propagated", Clingo::StatisticsType::Value).set_value(stat.edges_propagated);
+            thread.add_subkey("Cost consistency", Clingo::StatisticsType::Value).set_value(stat.propagate_cost_add);
+            thread.add_subkey("Cost forward", Clingo::StatisticsType::Value).set_value(stat.propagate_cost_from);
+            thread.add_subkey("Cost backward", Clingo::StatisticsType::Value).set_value(stat.propagate_cost_to);
         }
     }
 
@@ -235,17 +235,13 @@ extern "C" bool clingodl_register(clingodl_theory_t *theory, clingo_control_t* c
     CLINGODL_CATCH;
 }
 
-extern "C" bool clingodl_rewrite_statement(clingodl_theory_t *theory, clingo_ast_statement_t const *stm, clingodl_rewrite_callback_t add, void *data) {
+extern "C" bool clingodl_rewrite_ast(clingodl_theory_t *theory, clingo_ast_t *ast, clingodl_ast_callback_t add, void *data) {
     CLINGODL_TRY {
-        Clingo::StatementCallback cb = [&](Clingo::AST::Statement &&stm) {
-            transform(std::move(stm), [add, data](Clingo::AST::Statement &&stm){
-                Clingo::AST::Detail::ASTToC visitor;
-                auto x = stm.data.accept(visitor);
-                x.location = stm.location;
-                CLINGO_CALL(add(&x, data));
-            }, theory->shift_constraints);
-        };
-        Clingo::AST::Detail::convStatement(stm, cb);
+        clingo_ast_acquire(ast);
+        Clingo::AST::Node ast_cpp{ast};
+        transform(ast_cpp, [add, data](Clingo::AST::Node &&ast_trans){
+            handle_error(add(ast_trans.to_c(), data));
+        }, theory->shift_constraints);
     }
     CLINGODL_CATCH;
 }
@@ -434,7 +430,7 @@ extern "C" bool clingodl_configure(clingodl_theory_t *theory, char const *key, c
 extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_options_t* options) {
     CLINGODL_TRY {
         char const * group = "Clingo.DL Options";
-        CLINGO_CALL(clingo_options_add(options, group, "propagate",
+        handle_error(clingo_options_add(options, group, "propagate",
             "Set propagation mode [no]\n"
             "      <mode>  : {no,inverse,partial,partial+,full}[,<thread>]\n"
             "        no      : No propagation; only detect conflicts\n"
@@ -444,26 +440,26 @@ extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_opti
             "        full    : Detect all conflicting constraints\n"
             "      <thread>: Restrict to thread",
             &parse_mode, &theory->config, true, "<mode>"));
-        CLINGO_CALL(clingo_options_add(options, group, "propagate-root",
+        handle_error(clingo_options_add(options, group, "propagate-root",
             "Enable full propagation below decision level [0]\n"
             "      <arg>   : <n>[,<thread>]\n"
             "      <n>     : Upper bound for decision level\n"
             "      <thread>: Restrict to thread",
             &parse_root, &theory->config, true, "<arg>"));
-        CLINGO_CALL(clingo_options_add(options, group, "propagate-budget",
+        handle_error(clingo_options_add(options, group, "propagate-budget",
             "Enable full propagation limiting to budget [0]\n"
             "      <arg>   : <n>[,<thread>]\n"
             "      <n>     : Budget roughly corresponding to cost of consistency checks\n"
             "                (if possible use with --propagate-root greater 0)\n"
             "      <thread>: Restrict to thread",
             &parse_budget, &theory->config, true, "<arg>"));
-        CLINGO_CALL(clingo_options_add(options, group, "add-mutexes",
+        handle_error(clingo_options_add(options, group, "add-mutexes",
             "Add mutexes in a preprocessing step [0]\n"
             "      <arg>   : <max>[,<cut>]\n"
             "      <max>   : Maximum size of mutexes to add\n"
             "      <cut>   : Limit costs to calculate mutexes",
             &parse_mutex, &theory->config, true, "<arg>"));
-        CLINGO_CALL(clingo_options_add(options, group, "sort-edges",
+        handle_error(clingo_options_add(options, group, "sort-edges",
             "Sort edges for propagation [weight]\n"
             "      <arg>   : {no, weight, weight-reversed, potential, potential-reversed}\n"
             "        no                 : No sorting\n"
@@ -472,7 +468,7 @@ extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_opti
             "        potential          : Sort by relative potential\n"
             "        potential-reversed : Sort by relative negative potential",
             &parse_sort, &theory->config, true, "<arg>"));
-        CLINGO_CALL(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers", &theory->rdl));
+        handle_error(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers", &theory->rdl));
     }
     CLINGODL_CATCH;
 }
@@ -483,7 +479,7 @@ extern "C" bool clingodl_validate_options(clingodl_theory_t *theory) {
 
 extern "C" bool clingodl_on_model(clingodl_theory_t *theory, clingo_model_t* model) {
     CLINGODL_TRY {
-        Model m(model);
+        Clingo::Model m(model);
         theory->clingodl->extend_model(m);
     }
     CLINGODL_CATCH;
@@ -517,10 +513,10 @@ extern "C" void clingodl_assignment_get_value(clingodl_theory_t *theory, uint32_
 extern "C" bool clingodl_on_statistics(clingodl_theory_t *theory, clingo_statistics_t* step, clingo_statistics_t* accu) {
     CLINGODL_TRY {
         uint64_t root_s, root_a;
-        CLINGO_CALL(clingo_statistics_root(step, &root_s));
-        CLINGO_CALL(clingo_statistics_root(accu, &root_a));
-        UserStatistics s(step, root_s);
-        UserStatistics a(accu, root_a);
+        handle_error(clingo_statistics_root(step, &root_s));
+        handle_error(clingo_statistics_root(accu, &root_a));
+        Clingo::UserStatistics s(step, root_s);
+        Clingo::UserStatistics a(accu, root_a);
         theory->clingodl->on_statistics(s, a);
     }
     CLINGODL_CATCH;
@@ -528,4 +524,3 @@ extern "C" bool clingodl_on_statistics(clingodl_theory_t *theory, clingo_statist
 
 #undef CLINGODL_TRY
 #undef CLINGODL_CATCH
-#undef CLINGO_CALL

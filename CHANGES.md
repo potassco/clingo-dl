@@ -1,5 +1,13 @@
 # Changes
 
+## clingo-dl 1.2.1
+
+## clingo-dl 1.2.0
+  * update to clingo 5.5.0
+  * more flexible syntax for &diff constraints
+  * add support for pip
+  * various bug fixes
+
 ## clingo-dl 1.1.0
   * add weaker but faster propagation modes
   * add option to add mutexes in a preprocessing step

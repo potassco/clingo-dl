@@ -30,7 +30,7 @@
 
 using namespace Clingo;
 
-#define CLINGO_CALL(x) Clingo::Detail::handle_error(x)
+using Clingo::Detail::handle_error;
 
 class Rewriter {
 public:
@@ -40,22 +40,22 @@ public:
     }
 
     void rewrite(StringSpan files) {
-        CLINGO_CALL(clingo_parse_files(files.begin(), files.size(), rewrite_, this, nullptr, nullptr, 0));
+        handle_error(clingo_ast_parse_files(files.begin(), files.size(), rewrite_, this, nullptr, nullptr, 0));
     }
 
     void rewrite(char const *str) {
-        CLINGO_CALL(clingo_parse_program(str, rewrite_, this, nullptr, nullptr, 0));
+        handle_error(clingo_ast_parse_string(str, rewrite_, this, nullptr, nullptr, 0));
     }
 
 private:
-    static bool add_(clingo_ast_statement_t const *stm, void *data) {
+    static bool add_(clingo_ast_t *stm, void *data) {
         auto *self = static_cast<Rewriter*>(data);
         return clingo_program_builder_add(self->builder_, stm);
     }
 
-    static bool rewrite_(clingo_ast_statement_t const *stm, void *data) {
+    static bool rewrite_(clingo_ast_t *stm, void *data) {
         auto *self = static_cast<Rewriter*>(data);
-        return clingodl_rewrite_statement(self->theory_, stm, add_, self);
+        return clingodl_rewrite_ast(self->theory_, stm, add_, self);
     }
 
     clingodl_theory_t *theory_;
@@ -66,13 +66,13 @@ private:
 class ClingoDLApp : public Clingo::Application, private SolveEventHandler {
 public:
     ClingoDLApp() {
-        CLINGO_CALL(clingodl_create(&theory_));
+        handle_error(clingodl_create(&theory_));
     }
     ~ClingoDLApp() { clingodl_destroy(theory_); }
     char const *program_name() const noexcept override { return "clingo-dl"; }
     char const *version() const noexcept override { return CLINGODL_VERSION; }
     bool on_model(Model &model) override {
-        CLINGO_CALL(clingodl_on_model(theory_, model.to_c()));
+        handle_error(clingodl_on_model(theory_, model.to_c()));
         return true;
     }
 
@@ -106,7 +106,7 @@ public:
     void on_statistics(UserStatistics step, UserStatistics accu) override {
         add_stats(step);
         add_stats(accu);
-        CLINGO_CALL(clingodl_on_statistics(theory_, step.to_c(), accu.to_c()));
+        handle_error(clingodl_on_statistics(theory_, step.to_c(), accu.to_c()));
     }
 
     void solve_satisfiability(Control& ctl) {
@@ -142,13 +142,13 @@ public:
         }
 
         void setup(Control& ctl, clingodl_theory_t* theory) {
-           ctl.with_builder([&](Clingo::ProgramBuilder &builder) {
-           Rewriter rewriter{theory, builder.to_c()};
-           rewriter.rewrite("#program __ub(s,b)."
-                            "#external __ub(b)."
-                            "&diff { s-0 } <= b :- __ub(b)."
-                            "#program __lb(s,b)."
-                            "&diff { 0-s } <= -b-1.");
+           Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
+               Rewriter rewriter{theory, builder.to_c()};
+               rewriter.rewrite("#program __ub(s,b)."
+                                "#external __ub(b)."
+                                "&diff { s-0 } <= b :- __ub(b)."
+                                "#program __lb(s,b)."
+                                "&diff { 0-s } <= -b-1.");
             });
         }
 
@@ -238,9 +238,9 @@ public:
     }
 
     void main(Control &ctl, StringSpan files) override {
-        CLINGO_CALL(clingodl_register(theory_, ctl.to_c()));
+        handle_error(clingodl_register(theory_, ctl.to_c()));
 
-        ctl.with_builder([&](Clingo::ProgramBuilder &builder) {
+        AST::with_builder(ctl, [&](AST::ProgramBuilder &builder) {
             Rewriter rewriter{theory_, builder.to_c()};
             rewriter.rewrite(files);
         });
@@ -251,6 +251,35 @@ public:
         }
         else {
             solve_optimal(ctl);
+            /*
+            // NOTE: with an API extension to implement a custom enumerator,
+            //       one could implement this more nicely
+            //       right now this implementation is restricted to the application
+            AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
+               Rewriter rewriter{theory_, builder.to_c()};
+               rewriter.rewrite("#program __bound(s,b)."
+                                "&diff { s-0 } <= b."
+                                "#program base.");
+            });
+            do
+            {
+                if (has_bound_) {
+                    ctl.ground({{"__bound", {bound_symbol, Number(bound_value_ - 1)}}});
+                }
+                has_bound_ = false;
+                auto h = ctl.solve(Clingo::SymbolicLiteralSpan{}, this, false, true);
+                for (auto &&m : h) {
+                    bound_value_ = get_bound(m);
+                    has_bound_ = true;
+                    found_bound_ = true;
+                    break;
+                }
+                if (h.get().is_interrupted()) {
+                    break;
+                }
+            }
+            while (has_bound_);
+            */
         }
 
     }
@@ -287,7 +316,7 @@ public:
     }
 
     void register_options(ClingoOptions &options) override {
-        CLINGO_CALL(clingodl_register_options(theory_, options.to_c()));
+        handle_error(clingodl_register_options(theory_, options.to_c()));
         char const * group = "Clingo.DL Options";
         options.add(group, "minimize-variable",
             "Minimize the given variable\n"
@@ -303,7 +332,7 @@ public:
     }
 
     void validate_options() override {
-        CLINGO_CALL(clingodl_validate_options(theory_));
+        handle_error(clingodl_validate_options(theory_));
     }
 
 private:
@@ -319,6 +348,3 @@ int main(int argc, char *argv[]) {
     ClingoDLApp app;
     return Clingo::clingo_main(app, {argv + 1, static_cast<size_t>(argc - 1)});
 }
-
-
-#undef CLINGO_CALL
