@@ -455,18 +455,18 @@ extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_opti
             &parse_budget, &theory->config, true, "<arg>"));
         handle_error(clingo_options_add(options, group, "add-mutexes",
             "Add mutexes in a preprocessing step [0]\n"
-            "      <arg>   : <max>[,<cut>]\n"
-            "      <max>   : Maximum size of mutexes to add\n"
-            "      <cut>   : Limit costs to calculate mutexes",
+            "      <arg>: <max>[,<cut>]\n"
+            "      <max>: Maximum size of mutexes to add\n"
+            "      <cut>: Limit costs to calculate mutexes",
             &parse_mutex, &theory->config, true, "<arg>"));
         handle_error(clingo_options_add(options, group, "sort-edges",
             "Sort edges for propagation [weight]\n"
-            "      <arg>   : {no, weight, weight-reversed, potential, potential-reversed}\n"
-            "        no                 : No sorting\n"
-            "        weight             : Sort by edge weight\n"
-            "        weight-reversed    : Sort by negative edge weight\n"
-            "        potential          : Sort by relative potential\n"
-            "        potential-reversed : Sort by relative negative potential",
+            "      <arg>: {no, weight, weight-reversed, potential, potential-reversed}\n"
+            "        no                : No sorting\n"
+            "        weight            : Sort by edge weight\n"
+            "        weight-reversed   : Sort by negative edge weight\n"
+            "        potential         : Sort by relative potential\n"
+            "        potential-reversed: Sort by relative negative potential",
             &parse_sort, &theory->config, true, "<arg>"));
         handle_error(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers", &theory->rdl));
     }

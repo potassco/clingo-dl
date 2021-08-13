@@ -101,14 +101,14 @@ public:
         char const * group = "Clingo.DL Options";
         options.add(group, "minimize-variable",
             "Minimize the given variable\n"
-            "      <arg>   : <variable>[,<initial>]\n"
+            "      <arg>     : <variable>[,<initial>]\n"
             "      <variable>: the variable to minimize\n"
             "      <initial> : upper bound for the variable",
             [this](char const *value) { return parse_bound(value); });
         options.add(group, "minimize-factor",
-            "Factor to adjust optimization \n"
-            "      <factor>   : {multiplication factor, 1=linear (default)}\n",
-            [this](char const *value) { return parse_factor(value); });
+            "Factor to adjust minimization step size [1]",
+            [this](char const *value) { return parse_factor(value); },
+            false, "<factor>");
     }
 
     void validate_options() override {
