@@ -129,7 +129,7 @@ public:
         if (opt_cfg_.has_initial) {
             upper_bound_ = opt_cfg_.initial;
         }
-        for (int i = 0; i < 100; ++i) {
+        for (;;) {
             prepare_(ctl);
             auto ret = ctl.solve(Clingo::SymbolicLiteralSpan{}, this, false, false).get();
             if (ret.is_interrupted()) {
