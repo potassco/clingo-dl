@@ -66,7 +66,7 @@ public:
     int operator *() const {
         return value_;
     }
-    operator bool() const {
+    explicit operator bool() const {
         return has_value_;
     }
     Bound &operator=(int value) {
