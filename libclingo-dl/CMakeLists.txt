@@ -4,6 +4,7 @@ set(header-group
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl.h")
 source_group("${ide_header_group}" FILES ${header-group})
 set(header-group-clingo-dl
+    "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/app.hh"
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/propagator.hh"
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/util.hh")
 source_group("${ide_header_group}\\clingo-dl" FILES ${header-group-clingo-dl})

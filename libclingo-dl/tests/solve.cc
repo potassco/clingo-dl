@@ -1,6 +1,7 @@
 #include <clingo.hh>
 #include <clingo-dl.h>
 #include <clingo-dl/propagator.hh>
+#include <clingo-dl/app.hh>
 #include "catch.hpp"
 
 class Handler : public Clingo::SolveEventHandler {
@@ -12,27 +13,6 @@ public:
 
 private:
     clingodl_theory_t *theory_;
-};
-
-class Rewriter {
-public:
-    Rewriter(clingodl_theory_t *theory, clingo_program_builder_t *builder)
-    : theory_{theory}
-    , builder_{builder} {
-    }
-
-    static bool add_(clingo_ast_t *stm, void *data) {
-        auto *self = static_cast<Rewriter*>(data);
-        return clingo_program_builder_add(self->builder_, stm);
-    }
-
-    static bool rewrite_(clingo_ast_t *stm, void *data) {
-        auto *self = static_cast<Rewriter*>(data);
-        return clingodl_rewrite_ast(self->theory_, stm, add_, self);
-    }
-
-    clingodl_theory_t *theory_;
-    clingo_program_builder_t *builder_;
 };
 
 using ResultVec = std::vector<std::pair<std::vector<std::pair<Clingo::Symbol, double>>,std::vector<Clingo::Symbol>>>;
@@ -72,7 +52,7 @@ ResultVec solve(clingodl_theory_t *theory, Clingo::Control &ctl) {
 void parse_program(clingodl_theory_t *theory, Clingo::Control &ctl, const char *str) {
     Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
         Rewriter rewriter{theory, builder.to_c()};
-        clingo_ast_parse_string(str, Rewriter::rewrite_, &rewriter, nullptr, nullptr, 0);
+        rewriter.rewrite(str);
     });
 }
 
