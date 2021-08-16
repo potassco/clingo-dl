@@ -184,13 +184,4 @@ void transform(Clingo::AST::Node const &ast, NodeCallback const &cb, bool shift)
     }
 }
 
-bool match(Clingo::TheoryTerm const &term, char const *name, size_t arity) {
-    return (term.type() == Clingo::TheoryTermType::Symbol &&
-        std::strcmp(term.name(), name) == 0 &&
-        arity == 0) ||
-        (term.type() == Clingo::TheoryTermType::Function &&
-        std::strcmp(term.name(), name) == 0 &&
-        term.arguments().size() == arity);
-}
-
 } // namespace ClingoDL
