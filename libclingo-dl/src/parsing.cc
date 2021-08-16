@@ -32,16 +32,17 @@ namespace {
 //! Epsilon value for floating point arithmetics.
 constexpr double DOUBLE_EPSILON = 0.00001;
 
+//! Index that represents an invalid variable.
 constexpr int INVALID_VAR{std::numeric_limits<int>::max()};
 
 //! Test whether a variable is valid.
-inline bool is_valid_var(int var) {
+[[nodiscard]] inline bool is_valid_var(int var) {
     return var < INVALID_VAR;
 }
 
 //! Convert a symbol to a double or integer.
 template <class T>
-T to_number(Clingo::Symbol const &a) {
+[[nodiscard]] T to_number(Clingo::Symbol const &a) {
     if (a.type() == Clingo::SymbolType::Number) {
         return static_cast<T>(a.number());
     }
@@ -53,11 +54,11 @@ T to_number(Clingo::Symbol const &a) {
 
 //! Evaluate a theory term to a number (represented by a symbol).
 template <class N>
-Clingo::Symbol evaluate(Clingo::TheoryTerm const &term);
+[[nodiscard]] Clingo::Symbol evaluate(Clingo::TheoryTerm const &term);
 
 //! Evaluate two theory terms involved involved in a binary operation to an integral number.
 template <class N, class F, typename std::enable_if<std::is_integral_v<N>, bool>::type = true>
-Clingo::Symbol evaluate_binary(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F &&f) {
+[[nodiscard]] Clingo::Symbol evaluate_binary(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F &&f) {
     auto ea = evaluate<N>(a);
     check_syntax(ea.type() == Clingo::SymbolType::Number);
     auto eb = evaluate<N>(b);
@@ -67,7 +68,7 @@ Clingo::Symbol evaluate_binary(Clingo::TheoryTerm const &a, Clingo::TheoryTerm c
 
 //! Evaluate two theory terms involved involved in a binary operation to a floating point number.
 template <class N, class F, typename std::enable_if<std::is_floating_point_v<N>, bool>::type = true>
-Clingo::Symbol evaluate_binary(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F &&f) {
+[[nodiscard]] Clingo::Symbol evaluate_binary(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F &&f) {
     auto ea = evaluate<N>(a);
     auto eb = evaluate<N>(b);
     return Clingo::String(std::to_string(f(to_number<N>(ea), to_number<N>(eb))).c_str());
@@ -75,19 +76,19 @@ Clingo::Symbol evaluate_binary(Clingo::TheoryTerm const &a, Clingo::TheoryTerm c
 
 //! Epsilon value for integral numbers.
 template <class N, typename std::enable_if<std::is_integral_v<N>, bool>::type = true>
-N epsilon_() {
+[[nodiscard]] N epsilon_() {
     return 1;
 }
 
 //! Epsilon value for floating point numbers.
 template <class N, typename std::enable_if<std::is_floating_point_v<N>, bool>::type = true>
-N epsilon_() {
+[[nodiscard]] N epsilon_() {
     return DOUBLE_EPSILON;
 }
 
 //! Parse a string to a number.
 template <class N>
-std::optional<N> parse_number(char const *name) {
+[[nodiscard]] std::optional<N> parse_number(char const *name) {
     static const std::string chars = "\"";
     auto len = std::strlen(name);
     if (len < 2 || name[0] != '"' || name[len - 1] != '"') { // NOLINT
@@ -230,15 +231,14 @@ void parse_elem(Clingo::TheoryTerm const &term, std::function<int (Clingo::Symbo
 
 //! Simplify the given vector of terms.
 template <class N>
-N simplify(CoVarVec<N> &vec) {
+[[nodiscard]] N simplify(CoVarVec<N> &vec) {
     static thread_local std::unordered_map<int, typename CoVarVec<N>::iterator> seen;
     N rhs = 0;
     seen.clear();
 
     auto jt = vec.begin();
     for (auto it = jt, ie = vec.end(); it != ie; ++it) {
-        auto &co = it->first;
-        auto &var = it->second;
+        auto &[co, var] = *it;
         if (co == 0) {
             continue;
         }
@@ -295,8 +295,8 @@ EdgeAtom<N> parse(Clingo::TheoryAtom const &atom, std::function<int (Clingo::Sym
     }
     CoVarVec<N> covec;
     parse_elem(atom.guard().second, map_vert, covec);
-    for (auto it = covec.begin(), ie = covec.end(); it != ie; ++it) {
-        it->first = safe_inv<N>(it->first);
+    for (auto &[co, var] : covec) {
+        co = safe_inv<N>(co);
     }
     auto const *rel = atom.guard().first;
 
