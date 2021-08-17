@@ -31,70 +31,84 @@
 
 namespace ClingoDL {
 
+//! Enumeration to configure propagation strength.
 enum class PropagationMode {
-    Check = 0,
-    Trivial = 1,
-    Weak = 2,
-    WeakPlus = 3,
-    Strong = 4
+    Check    = 0, //!< Only check for conflicting assignments.
+    Trivial  = 1, //!< Check inverse constraits.
+    Weak     = 2, //!< Perform weak propagation.
+    WeakPlus = 3, //!< Perform weak propagation with some extra effort.
+    Strong   = 4  //!< Perform full propagation.
 };
 
+//! Enumeration to configure sorting of edges before propagation.
 enum class SortMode {
-    No = 0,
-    Weight = 1,
-    WeightRev = 2,
-    Potential = 3,
-    PotentialRev = 4
+    No           = 0, //! Do not sort edges.
+    Weight       = 1, //! Sort edges by weight in ascending order.
+    WeightRev    = 2, //! Sort edges by weight in descending order.
+    Potential    = 3, //! Sort edges by potential in ascending order.
+    PotentialRev = 4  //! Sort edges by potential in descending order.
 };
 
+//! Default value for PropagatorConfig::sort_mode.
 static constexpr SortMode SORT_EDGES{SortMode::Weight};
+//! Default value for PropagatorConfig::mutex_size.
 static constexpr uint64_t MUTEX_SIZE{0};
+//! Default value for PropagatorConfig::mutex_cutoff.
 static constexpr uint64_t MUTEX_CUTOFF{10};
+//! Default value for PropagatorConfig::sort_mode.
 static constexpr uint64_t PROPAGATE_ROOT{0};
+//! Default value for PropagatorConfig::propagate_budget.
 static constexpr uint64_t PROPAGATE_BUDGET{0};
+//! Default value for PropagatorConfig::propagate_mode.
 static constexpr PropagationMode PROPAGATE_MODE{PropagationMode::Check};
 
+//! Struct to configure per thread options.
 struct ThreadConfig {
+    //! See PropagatorConfig::propagate_root.
     std::optional<uint64_t> propagate_root;
+    //! See PropagatorConfig::propagate_budget.
     std::optional<uint64_t> propagate_budget;
-    std::optional<PropagationMode> mode;
-    std::optional<SortMode> sort_edges;
+    //! See PropagatorConfig::propagate_mode.
+    std::optional<PropagationMode> propagate_mode;
+    //! See PropagatorConfig::sort_mode.
+    std::optional<SortMode> sort_mode;
 };
 
+//! Struct to configure a propagator.
 struct PropagatorConfig {
-    SortMode sort_edges{SORT_EDGES};
+    //! Configure sorting of edges before propagation.
+    SortMode sort_mode{SORT_EDGES};
+    //! Maximum size of mutexes to add during preprocessing.
     uint64_t mutex_size{MUTEX_SIZE};
+    //! Maximum budget to calculate a mutex.
     uint64_t mutex_cutoff{MUTEX_CUTOFF};
+    //! Enable full propagation below this level.
     uint64_t propagate_root{PROPAGATE_ROOT};
+    //! Maximum budget to spend before disabling propagation.
     uint64_t propagate_budget{PROPAGATE_BUDGET};
-    PropagationMode mode{PROPAGATE_MODE};
+    //! Configure propagation strength.
+    PropagationMode propagate_mode{PROPAGATE_MODE};
+    //! Per thread configuration.
     std::vector<ThreadConfig> thread_config;
 
-    uint64_t get_propagate_root(Clingo::id_t thread_id) {
-        if (thread_id < thread_config.size()) {
-            return thread_config[thread_id].propagate_root.value_or(propagate_root);
-        }
-        return propagate_root;
+    //! Get per thread propagate_root if present or global value.
+    [[nodiscard]] uint64_t get_propagate_root(Clingo::id_t thread_id) const {
+        return get_prop(thread_id, propagate_root, &ThreadConfig::propagate_root);
     }
-    uint64_t get_propagate_budget(Clingo::id_t thread_id) {
-        if (thread_id < thread_config.size()) {
-            return thread_config[thread_id].propagate_budget.value_or(propagate_budget);
-        }
-        return propagate_budget;
+    //! Get per thread propagate_budget if present or global value.
+    [[nodiscard]] uint64_t get_propagate_budget(Clingo::id_t thread_id) const {
+        return get_prop(thread_id, propagate_budget, &ThreadConfig::propagate_budget);
     }
-    PropagationMode get_propagate_mode(Clingo::id_t thread_id) {
-        if (thread_id < thread_config.size()) {
-            return thread_config[thread_id].mode.value_or(mode);
-        }
-        return mode;
+    //! Get per thread propagate_mode if present or global value.
+    [[nodiscard]] PropagationMode get_propagate_mode(Clingo::id_t thread_id) const {
+        return get_prop(thread_id, propagate_mode, &ThreadConfig::propagate_mode);
     }
-    SortMode get_sort_mode(Clingo::id_t thread_id) {
-        if (thread_id < thread_config.size()) {
-            return thread_config[thread_id].sort_edges.value_or(sort_edges);
-        }
-        return sort_edges;
+    //! Get per thread sort_mode if present or global value.
+    [[nodiscard]] SortMode get_sort_mode(Clingo::id_t thread_id) const {
+        return get_prop(thread_id, sort_mode, &ThreadConfig::sort_mode);
     }
-
+    //! Return the thread config for the given thread or return a default
+    //! constructed object if absent.
     ThreadConfig &ensure(Clingo::id_t thread_id) {
         if (thread_config.size() < thread_id + 1) {
             thread_config.resize(thread_id + 1);
@@ -103,15 +117,14 @@ struct PropagatorConfig {
     }
 
 private:
-    /*
-    template <typename T>
-    std::optional<T> get(Clingo::id_t thread_id) {
-        if (thread_id < thread_config.size()) {
-            return thread_config[thread_id];
+    //! Helper to access per thread or global properties.
+    template <class T, class P>
+    [[nodiscard]] T get_prop(Clingo::id_t thread_id, T &&def, P &&prop) const {
+        if (thread_id < thread_config.size() && thread_config[thread_id].*prop) {
+            return *(thread_config[thread_id].*prop);
         }
-        return std::nullopt;
+        return def;
     }
-    */
 };
 
 } // namespace ClingoDL

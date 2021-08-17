@@ -351,8 +351,8 @@ static bool parse_mode(const char *value, void *data) {
         mode = PropagationMode::Strong;
     }
     return rem && set_config(rem, data,
-        [mode](PropagatorConfig &config) { config.mode = mode; },
-        [mode](ThreadConfig &config) { config.mode = mode; });
+        [mode](PropagatorConfig &config) { config.propagate_mode = mode; },
+        [mode](ThreadConfig &config) { config.propagate_mode = mode; });
 }
 static bool parse_sort(const char *value, void *data) {
     SortMode sort = SortMode::Weight;
@@ -373,8 +373,8 @@ static bool parse_sort(const char *value, void *data) {
         sort = SortMode::Potential;
     }
     return rem && set_config(rem, data,
-        [sort](PropagatorConfig &config) { config.sort_edges = sort; },
-        [sort](ThreadConfig &config) { config.sort_edges = sort; });
+        [sort](PropagatorConfig &config) { config.sort_mode = sort; },
+        [sort](ThreadConfig &config) { config.sort_mode = sort; });
 }
 
 static bool parse_bool(const char *value, void *data) {
