@@ -22,34 +22,34 @@
 //
 // // }}}
 
-#ifndef CLINGODL_PARSING_HH
-#define CLINGODL_PARSING_HH
+#ifndef CLINGODL_THEORY_HH
+#define CLINGODL_THEORY_HH
 
 #include <clingo.hh>
-#include <clingo-dl/theory.hh>
 
 namespace ClingoDL {
 
-//! Throw a syntax error with the given message.
-template <typename T=void>
-inline T throw_syntax_error(char const *message = "Invalid Syntax") {
-    throw std::runtime_error(message);
-}
+//! Type for vertices/variables in the theory.
+using vertex_t = int;
 
-//! The a syntax error if the given condition is false.
-inline void check_syntax(bool condition, char const *message = "Invalid Syntax") {
-    if (!condition) {
-        throw_syntax_error(message);
-    }
-}
-
-//! Return true if the given theory term matches the given signature.
-[[nodiscard]] bool match(Clingo::TheoryTerm const &term, char const *name, size_t arity);
-
-//! Parse a theory atom for a difference constraint.
+//! Vector of coefficients and variables.
 template <class N>
-[[nodiscard]] EdgeAtom<N> parse(Clingo::TheoryAtom const &atom, std::function<int (Clingo::Symbol)> const &map_vert);
+using CoVarVec = std::vector<std::pair<N, vertex_t>>;
 
-} // namespace ClingoDL
+//! An edge in the difference logic graph.
+template <typename N>
+struct EdgeAtom {
+    CoVarVec<N> lhs;
+    char const *rel;
+    N rhs;
+    Clingo::literal_t literal;
+    bool strict;
+};
+
+//! Epsilon value depending on number type.
+template <class N>
+[[nodiscard]] N epsilon();
+
+} // namespace
 
 #endif

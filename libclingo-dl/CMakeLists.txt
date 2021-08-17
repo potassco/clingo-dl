@@ -5,8 +5,10 @@ set(header-group
 source_group("${ide_header_group}" FILES ${header-group})
 set(header-group-clingo-dl
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/app.hh"
+    "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/graph.hh"
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/parsing.hh"
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/propagator.hh"
+    "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/theory.hh"
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/util.hh")
 source_group("${ide_header_group}\\clingo-dl" FILES ${header-group-clingo-dl})
 set(header
@@ -17,8 +19,10 @@ set(header
 set(ide_source_group "Source Files")
 set(source-group
     "${CMAKE_CURRENT_SOURCE_DIR}/src/clingo-dl.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/graph.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/parsing.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/propagator.cc")
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/propagator.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/theory.cc")
 source_group("${ide_source_group}" FILES ${source-group})
 set(source
     ${source-group})

@@ -29,9 +29,6 @@ namespace ClingoDL {
 
 namespace {
 
-//! Epsilon value for floating point arithmetics.
-constexpr double DOUBLE_EPSILON = 0.00001;
-
 //! Index that represents an invalid variable.
 constexpr int INVALID_VAR{std::numeric_limits<int>::max()};
 
@@ -72,18 +69,6 @@ template <class N, class F, typename std::enable_if<std::is_floating_point_v<N>,
     auto ea = evaluate<N>(a);
     auto eb = evaluate<N>(b);
     return Clingo::String(std::to_string(f(to_number<N>(ea), to_number<N>(eb))).c_str());
-}
-
-//! Epsilon value for integral numbers.
-template <class N, typename std::enable_if<std::is_integral_v<N>, bool>::type = true>
-[[nodiscard]] N epsilon_() {
-    return 1;
-}
-
-//! Epsilon value for floating point numbers.
-template <class N, typename std::enable_if<std::is_floating_point_v<N>, bool>::type = true>
-[[nodiscard]] N epsilon_() {
-    return DOUBLE_EPSILON;
 }
 
 //! Parse a string to a number.
@@ -268,11 +253,6 @@ template <class N>
 
 } // namespace
 
-template <class N>
-N epsilon() {
-    return epsilon_<N>();
-}
-
 bool match(Clingo::TheoryTerm const &term, char const *name, size_t arity) {
     return (term.type() == Clingo::TheoryTermType::Symbol &&
         std::strcmp(term.name(), name) == 0 &&
@@ -313,9 +293,6 @@ EdgeAtom<N> parse(Clingo::TheoryAtom const &atom, std::function<int (Clingo::Sym
     auto rhs = simplify(covec);
     return {std::move(covec), rel, rhs, atom.literal(), strict};
 }
-
-template int epsilon<int>();
-template double epsilon<double>();
 
 template EdgeAtom<int> parse<int>(Clingo::TheoryAtom const &, std::function<int (Clingo::Symbol)> const &);
 template EdgeAtom<double> parse<double>(Clingo::TheoryAtom const &, std::function<int (Clingo::Symbol)> const &);
