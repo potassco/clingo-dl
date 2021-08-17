@@ -48,48 +48,6 @@ using NodeCallback = std::function<void(Clingo::AST::Node &&ast)>;
 //! constraints if possible.
 void transform(Clingo::AST::Node const &ast, NodeCallback const &cb, bool shift);
 
-struct PropagatorConfig {
-    SortMode sort_edges{SortMode::Weight};
-    uint64_t mutex_size{0};
-    uint64_t mutex_cutoff{10};
-    uint64_t propagate_root{0};
-    uint64_t propagate_budget{0};
-    PropagationMode mode{PropagationMode::Check};
-    std::vector<ThreadConfig> thread_config;
-
-    uint64_t get_propagate_root(Clingo::id_t thread_id) {
-        if (thread_id < thread_config.size() && thread_config[thread_id].propagate_root.first) {
-            return thread_config[thread_id].propagate_root.second;
-        }
-        return propagate_root;
-    }
-    uint64_t get_propagate_budget(Clingo::id_t thread_id) {
-        if (thread_id < thread_config.size() && thread_config[thread_id].propagate_budget.first) {
-            return thread_config[thread_id].propagate_budget.second;
-        }
-        return propagate_budget;
-    }
-    PropagationMode get_propagate_mode(Clingo::id_t thread_id) {
-        if (thread_id < thread_config.size() && thread_config[thread_id].mode.first) {
-            return thread_config[thread_id].mode.second;
-        }
-        return mode;
-    }
-    SortMode get_sort_mode(Clingo::id_t thread_id) {
-        if (thread_id < thread_config.size() && thread_config[thread_id].sort_edges.first) {
-            return thread_config[thread_id].sort_edges.second;
-        }
-        return sort_edges;
-    }
-
-    ThreadConfig &ensure(Clingo::id_t thread_id) {
-        if (thread_config.size() < thread_id + 1) {
-            thread_config.resize(thread_id + 1);
-        }
-        return thread_config[thread_id];
-    }
-};
-
 struct Stats {
     void reset() {
         time_init  = std::chrono::steady_clock::duration::zero();

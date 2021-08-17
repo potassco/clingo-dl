@@ -309,13 +309,13 @@ static bool parse_root(const char *value, void *data) {
     uint64_t x = 0;
     return (value = parse_uint64_pre(value, &x)) && set_config(value, data,
         [x](PropagatorConfig &config) { config.propagate_root = x; },
-        [x](ThreadConfig &config) { config.propagate_root = {true, x}; });
+        [x](ThreadConfig &config) { config.propagate_root = x; });
 }
 static bool parse_budget(const char *value, void *data) {
     uint64_t x = 0;
     return (value = parse_uint64_pre(value, &x)) && set_config(value, data,
         [x](PropagatorConfig &config) { config.propagate_budget = x; },
-        [x](ThreadConfig &config) { config.propagate_budget = {true, x}; });
+        [x](ThreadConfig &config) { config.propagate_budget = x; });
 }
 static bool parse_mutex(const char *value, void *data) {
     auto &pc = *static_cast<PropagatorConfig*>(data);
@@ -352,7 +352,7 @@ static bool parse_mode(const char *value, void *data) {
     }
     return rem && set_config(rem, data,
         [mode](PropagatorConfig &config) { config.mode = mode; },
-        [mode](ThreadConfig &config) { config.mode = {true, mode}; });
+        [mode](ThreadConfig &config) { config.mode = mode; });
 }
 static bool parse_sort(const char *value, void *data) {
     SortMode sort = SortMode::Weight;
@@ -374,7 +374,7 @@ static bool parse_sort(const char *value, void *data) {
     }
     return rem && set_config(rem, data,
         [sort](PropagatorConfig &config) { config.sort_edges = sort; },
-        [sort](ThreadConfig &config) { config.sort_edges = {true, sort}; });
+        [sort](ThreadConfig &config) { config.sort_edges = sort; });
 }
 
 static bool parse_bool(const char *value, void *data) {

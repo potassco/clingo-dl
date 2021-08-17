@@ -5,6 +5,7 @@ set(header-group
 source_group("${ide_header_group}" FILES ${header-group})
 set(header-group-clingo-dl
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/app.hh"
+    "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/config.hh"
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/graph.hh"
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/parsing.hh"
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/propagator.hh"

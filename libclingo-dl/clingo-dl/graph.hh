@@ -27,6 +27,7 @@
 
 #include <clingo.hh>
 #include <clingo-dl/theory.hh>
+#include <clingo-dl/config.hh>
 #include <clingo-dl/util.hh>
 
 namespace ClingoDL {
@@ -153,22 +154,12 @@ struct EdgeState {
     uint8_t active : 1;
 };
 
-enum class PropagationMode { Check = 0, Trivial = 1, Weak = 2, WeakPlus = 3, Strong = 4 };
-enum class SortMode { No = 0, Weight = 1, WeightRev = 2, Potential = 3 , PotentialRev = 4};
-
-struct ThreadConfig {
-    std::pair<bool,uint64_t> propagate_root{false,0};
-    std::pair<bool,uint64_t> propagate_budget{false,0};
-    std::pair<bool,PropagationMode> mode{false,PropagationMode::Check};
-    std::pair<bool,SortMode> sort_edges{false,SortMode::Weight};
-};
-
 template <typename T>
 class DifferenceLogicGraph : private HeapToM<T, DifferenceLogicGraph<T>>, private HeapFromM<T, DifferenceLogicGraph<T>> {
     using HTM = HeapToM<T, DifferenceLogicGraph<T>>;
     using HFM = HeapFromM<T, DifferenceLogicGraph<T>>;
-    friend struct HeapToM<T, DifferenceLogicGraph<T>>;
-    friend struct HeapFromM<T, DifferenceLogicGraph<T>>;
+    friend HTM;
+    friend HFM;
 
 public:
     DifferenceLogicGraph(DLStats &stats, const std::vector<Edge<T>> &edges, PropagationMode propagate);
