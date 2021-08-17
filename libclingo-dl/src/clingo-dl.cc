@@ -165,7 +165,7 @@ term {
         step_.reset();
     }
 
-    void add_statistics(Clingo::UserStatistics& root, Stats const &stats) {
+    void add_statistics(Clingo::UserStatistics& root, Statistics const &stats) {
         Clingo::UserStatistics diff = root.add_subkey("DifferenceLogic", Clingo::StatisticsType::Map);
         diff.add_subkey("Time init(s)", Clingo::StatisticsType::Value).set_value(stats.time_init.count());
         diff.add_subkey("CCs", Clingo::StatisticsType::Value).set_value(stats.ccs);
@@ -175,7 +175,7 @@ term {
         Clingo::UserStatistics threads = diff.add_subkey("Thread", Clingo::StatisticsType::Array);
         threads.ensure_size(stats.dl_stats.size(), Clingo::StatisticsType::Map);
         auto it = threads.begin();
-        for (DLStats const& stat : stats.dl_stats) {
+        for (auto const &stat : stats.dl_stats) {
             auto thread = *it++;
             thread.add_subkey("Propagation(s)", Clingo::StatisticsType::Value).set_value(stat.time_propagate.count());
             thread.add_subkey("Dijkstra(s)", Clingo::StatisticsType::Value).set_value(stat.time_dijkstra.count());
@@ -195,8 +195,8 @@ term {
     }
 
 private:
-    Stats step_;
-    Stats accu_;
+    Statistics step_;
+    Statistics accu_;
     DifferenceLogicPropagator<T> prop_;
 };
 

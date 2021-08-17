@@ -27,7 +27,7 @@
 namespace ClingoDL {
 
 template <typename T>
-DifferenceLogicGraph<T>::DifferenceLogicGraph(DLStats &stats, const std::vector<Edge<T>> &edges, PropagationMode propagate)
+Graph<T>::Graph(ThreadStatistics &stats, const std::vector<Edge<T>> &edges, PropagationMode propagate)
     : edges_(edges)
     , propagate_(propagate)
     , stats_(stats) {
@@ -39,41 +39,41 @@ DifferenceLogicGraph<T>::DifferenceLogicGraph(DLStats &stats, const std::vector<
 }
 
 template <typename T>
-bool DifferenceLogicGraph<T>::empty() const {
+bool Graph<T>::empty() const {
     return nodes_.empty();
 }
 
 template <typename T>
-bool DifferenceLogicGraph<T>::valid_node(int idx) const { return nodes_.size() > idx; }
+bool Graph<T>::valid_node(int idx) const { return nodes_.size() > idx; }
 
 template <typename T>
-int DifferenceLogicGraph<T>::node_value_defined(int idx) const { return nodes_[idx].defined(); }
+int Graph<T>::node_value_defined(int idx) const { return nodes_[idx].defined(); }
 
 template <typename T>
-bool DifferenceLogicGraph<T>::has_value(int idx) const { return valid_node(idx) && node_value_defined(idx); }
-
-
-template <typename T>
-T DifferenceLogicGraph<T>::node_value(int idx) const { return -nodes_[idx].potential(); }
+bool Graph<T>::has_value(int idx) const { return valid_node(idx) && node_value_defined(idx); }
 
 
 template <typename T>
-bool DifferenceLogicGraph<T>::edge_is_active(int edge_idx) const { return edge_states_[edge_idx].active; }
+T Graph<T>::node_value(int idx) const { return -nodes_[idx].potential(); }
 
 
 template <typename T>
-bool DifferenceLogicGraph<T>::can_propagate() const {
+bool Graph<T>::edge_is_active(int edge_idx) const { return edge_states_[edge_idx].active; }
+
+
+template <typename T>
+bool Graph<T>::can_propagate() const {
     return std::get<4>(changed_trail_.back());
 }
 
 
 template <typename T>
-void DifferenceLogicGraph<T>::disable_propagate() {
+void Graph<T>::disable_propagate() {
     std::get<4>(changed_trail_.back()) = false;
 }
 
 template <typename T>
-void DifferenceLogicGraph<T>::ensure_decision_level(int level, bool enable_propagate) {
+void Graph<T>::ensure_decision_level(int level, bool enable_propagate) {
     // initialize the trail
     if (changed_trail_.empty() || static_cast<int>(std::get<0>(changed_trail_.back())) < level) {
         bool can_propagate = (changed_trail_.empty() || std::get<4>(changed_trail_.back())) && enable_propagate;
@@ -85,7 +85,7 @@ void DifferenceLogicGraph<T>::ensure_decision_level(int level, bool enable_propa
 }
 
 template <typename T>
-bool DifferenceLogicGraph<T>::propagate(int xy_idx, Clingo::PropagateControl &ctl) {
+bool Graph<T>::propagate(int xy_idx, Clingo::PropagateControl &ctl) {
     ++stats_.edges_propagated;
     remove_candidate_edge(xy_idx);
     auto &xy = edges_[xy_idx];
@@ -162,7 +162,7 @@ bool DifferenceLogicGraph<T>::propagate(int xy_idx, Clingo::PropagateControl &ct
 }
 
 template <typename T>
-bool DifferenceLogicGraph<T>::add_edge(int uv_idx, std::function<bool(std::vector<int>)> f) {
+bool Graph<T>::add_edge(int uv_idx, std::function<bool(std::vector<int>)> f) {
 #ifdef CROSSCHECK
     for (auto &node : nodes_) {
         assert(!node.visited_from);
@@ -295,7 +295,7 @@ bool DifferenceLogicGraph<T>::add_edge(int uv_idx, std::function<bool(std::vecto
 
 template <typename T>
 template <class P, class F>
-bool DifferenceLogicGraph<T>::with_incoming(int s_idx, P p, F f) {
+bool Graph<T>::with_incoming(int s_idx, P p, F f) {
     auto &s = nodes_[s_idx];
     auto &in = s.candidate_incoming;
     auto jt = in.begin();
@@ -326,7 +326,7 @@ bool DifferenceLogicGraph<T>::with_incoming(int s_idx, P p, F f) {
 
 template <typename T>
 template <class F>
-[[nodiscard]] bool DifferenceLogicGraph<T>::cheap_propagate(int u_idx, int s_idx, F f) {
+[[nodiscard]] bool Graph<T>::cheap_propagate(int u_idx, int s_idx, F f) {
     // we check for the following case:
     // u ->* s -> * t
     //       ^-----/
@@ -367,7 +367,7 @@ template <class F>
 
 
 template <typename T>
-void DifferenceLogicGraph<T>::backtrack() {
+void Graph<T>::backtrack() {
     for (auto count = static_cast<int>(changed_nodes_.size()) - std::get<1>(changed_trail_.back()); count > 0; --count) {
         auto &node = nodes_[changed_nodes_.back()];
         node.potential_stack.pop_back();
@@ -388,7 +388,7 @@ void DifferenceLogicGraph<T>::backtrack() {
 }
 
 template <typename T>
-void DifferenceLogicGraph<T>::remove_candidate_edge(int uv_idx) {
+void Graph<T>::remove_candidate_edge(int uv_idx) {
     auto &uv = edges_[uv_idx];
     auto &u = nodes_[uv.from];
     auto &v = nodes_[uv.to];
@@ -400,12 +400,12 @@ void DifferenceLogicGraph<T>::remove_candidate_edge(int uv_idx) {
 }
 
 template <typename T>
-PropagationMode DifferenceLogicGraph<T>::mode() const {
+PropagationMode Graph<T>::mode() const {
     return propagate_;
 }
 
 template <typename T>
-void DifferenceLogicGraph<T>::add_candidate_edge(int uv_idx) {
+void Graph<T>::add_candidate_edge(int uv_idx) {
     auto &uv = edges_[uv_idx];
     auto &uv_state = edge_states_[uv_idx];
     auto &u = nodes_[uv.from];
@@ -425,7 +425,7 @@ void DifferenceLogicGraph<T>::add_candidate_edge(int uv_idx) {
 }
 
 template <typename T>
-bool DifferenceLogicGraph<T>::propagate_edge_true(int uv_idx, int xy_idx) {
+bool Graph<T>::propagate_edge_true(int uv_idx, int xy_idx) {
     auto &uv = edges_[uv_idx];
     auto &u = nodes_[uv.from];
     auto &v = nodes_[uv.to];
@@ -470,7 +470,7 @@ bool DifferenceLogicGraph<T>::propagate_edge_true(int uv_idx, int xy_idx) {
 }
 
 template <typename T>
-bool DifferenceLogicGraph<T>::propagate_edge_false(Clingo::PropagateControl &ctl, int uv_idx, int xy_idx, bool &ret) {
+bool Graph<T>::propagate_edge_false(Clingo::PropagateControl &ctl, int uv_idx, int xy_idx, bool &ret) {
     auto &uv = edges_[uv_idx];
     auto &u = nodes_[uv.from];
     auto &v = nodes_[uv.to];
@@ -541,7 +541,7 @@ bool DifferenceLogicGraph<T>::propagate_edge_false(Clingo::PropagateControl &ctl
 
 template <typename T>
 template <class M>
-bool DifferenceLogicGraph<T>::propagate_edges(M &m, Clingo::PropagateControl &ctl, int xy_idx, bool forward, bool backward) {
+bool Graph<T>::propagate_edges(M &m, Clingo::PropagateControl &ctl, int xy_idx, bool forward, bool backward) {
     if (!forward && !backward) {
         return true;
     }
@@ -589,7 +589,7 @@ bool DifferenceLogicGraph<T>::propagate_edges(M &m, Clingo::PropagateControl &ct
 
 template <typename T>
 template <class M>
-std::pair<int, int> DifferenceLogicGraph<T>::dijkstra(int source_idx, std::vector<int> &visited_set, M &m) {
+std::pair<int, int> Graph<T>::dijkstra(int source_idx, std::vector<int> &visited_set, M &m) {
     int relevant = 0;
     int relevant_degree_out = 0, relevant_degree_in = 0;
     assert(visited_set.empty() && costs_heap_.empty());
@@ -697,7 +697,7 @@ std::unordered_map<int, T> bellman_ford(std::vector<int> const &edges, int sourc
 #endif
 
 template <typename T>
-void DifferenceLogicGraph<T>::set_potential(DifferenceLogicNode<T> &node, int level, T potential) {
+void Graph<T>::set_potential(Vertex<T> &node, int level, T potential) {
     if (!node.defined() || node.potential_stack.back().first < level) {
         node.potential_stack.emplace_back(level, potential);
         changed_nodes_.emplace_back(numeric_cast<int>(&node - nodes_.data()));
@@ -708,12 +708,12 @@ void DifferenceLogicGraph<T>::set_potential(DifferenceLogicNode<T> &node, int le
 }
 
 template <typename T>
-int DifferenceLogicGraph<T>::current_decision_level_() {
+int Graph<T>::current_decision_level_() {
     assert(!changed_trail_.empty());
     return std::get<0>(changed_trail_.back());
 }
 
-template class DifferenceLogicGraph<int>;
-template class DifferenceLogicGraph<double>;
+template class Graph<int>;
+template class Graph<double>;
 
 } // namespace ClingoDL

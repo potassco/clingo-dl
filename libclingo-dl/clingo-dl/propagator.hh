@@ -48,7 +48,7 @@ using NodeCallback = std::function<void(Clingo::AST::Node &&ast)>;
 //! constraints if possible.
 void transform(Clingo::AST::Node const &ast, NodeCallback const &cb, bool shift);
 
-struct Stats {
+struct Statistics {
     void reset() {
         time_init  = std::chrono::steady_clock::duration::zero();
         ccs = 0;
@@ -59,7 +59,7 @@ struct Stats {
             i.reset();
         }
     }
-    void accu(Stats const &x) {
+    void accu(Statistics const &x) {
         time_init += x.time_init;
         ccs = x.ccs;
         mutexes += x.mutexes;
@@ -78,7 +78,7 @@ struct Stats {
     uint64_t mutexes{0};
     uint64_t edges{0};
     uint64_t variables{0};
-    std::vector<DLStats> dl_stats;
+    std::vector<ThreadStatistics> dl_stats;
 };
 
 struct FactState {
@@ -88,13 +88,13 @@ struct FactState {
 
 template <typename T>
 struct DLState {
-    DLState(DLStats &stats, const std::vector<Edge<T>> &edges, PropagationMode propagate, uint64_t propagate_root, uint64_t propagate_budget)
+    DLState(ThreadStatistics &stats, const std::vector<Edge<T>> &edges, PropagationMode propagate, uint64_t propagate_root, uint64_t propagate_budget)
         : stats(stats)
         , dl_graph(stats, edges, propagate)
         , propagate_root{propagate_root}
         , propagate_budget{propagate_budget} { }
-    DLStats &stats;
-    DifferenceLogicGraph<T> dl_graph;
+    ThreadStatistics &stats;
+    Graph<T> dl_graph;
     std::vector<Clingo::literal_t> false_lits;
     std::vector<int> todo_edges;
     uint64_t propagate_root;
@@ -146,7 +146,7 @@ private:
 
     using CoVarVec = std::vector<std::pair<T,int>>; // vector of coefficients and variables
 public:
-    DifferenceLogicPropagator(Stats &stats, PropagatorConfig const &conf)
+    DifferenceLogicPropagator(Statistics &stats, PropagatorConfig const &conf)
     : stats_(stats)
     , conf_{conf} {
         zero_nodes_.emplace_back(map_vert(Clingo::Number(0)));
@@ -598,15 +598,15 @@ public:
         }
     }
 
-    int get_potential_(DifferenceLogicGraph<T> const &graph, int idx) {
+    int get_potential_(Graph<T> const &graph, int idx) {
         return graph.node_value_defined(idx) ? -graph.node_value(idx) : 0;
     };
 
-    int cost_(DifferenceLogicGraph<T> const &graph, Edge<T> const &edge) {
+    int cost_(Graph<T> const &graph, Edge<T> const &edge) {
         return get_potential_(graph, edge.from) + edge.weight - get_potential_(graph, edge.to);
     };
 
-    int cost_(SortMode mode, DifferenceLogicGraph<T> const &graph, int i) {
+    int cost_(SortMode mode, Graph<T> const &graph, int i) {
         switch(mode) {
             case SortMode::Weight: {
                 return edges_[i].weight;
@@ -764,7 +764,7 @@ private:
     std::unordered_map<Clingo::Symbol, int> vert_map_inv_;
     std::vector<NodeInfo> node_info_;
     std::vector<int> zero_nodes_;
-    Stats &stats_;
+    Statistics &stats_;
     PropagatorConfig conf_;
 };
 

@@ -77,7 +77,7 @@ struct Edge {
 };
 
 template <typename T>
-struct DifferenceLogicNode {
+struct Vertex {
     [[nodiscard]] bool defined() const { return !potential_stack.empty(); }
     [[nodiscard]] T potential() const { return potential_stack.back().second; }
 
@@ -99,38 +99,38 @@ struct DifferenceLogicNode {
     bool visited_to = false;
 };
 
-struct DLStats {
+struct ThreadStatistics {
     void reset() {
-        time_propagate = std::chrono::steady_clock::duration::zero();
-        time_undo      = std::chrono::steady_clock::duration::zero();
-        time_dijkstra  = std::chrono::steady_clock::duration::zero();
+        time_propagate        = std::chrono::steady_clock::duration::zero();
+        time_undo             = std::chrono::steady_clock::duration::zero();
+        time_dijkstra         = std::chrono::steady_clock::duration::zero();
         true_edges            = 0;
         false_edges           = 0;
         false_edges_trivial   = 0;
         false_edges_weak      = 0;
         false_edges_weak_plus = 0;
-        propagate_cost_add  = 0;
-        propagate_cost_from = 0;
-        propagate_cost_to   = 0;
-        edges_added      = 0;
-        edges_skipped    = 0;
-        edges_propagated = 0;
+        propagate_cost_add    = 0;
+        propagate_cost_from   = 0;
+        propagate_cost_to     = 0;
+        edges_added           = 0;
+        edges_skipped         = 0;
+        edges_propagated      = 0;
     }
-    void accu(DLStats const &x) {
-        time_propagate+= x.time_propagate;
-        time_undo     += x.time_undo;
-        time_dijkstra += x.time_dijkstra;
-        true_edges    += x.true_edges;
-        false_edges   += x.false_edges;
-        false_edges_trivial  += x.false_edges_trivial;
-        false_edges_weak     += x.false_edges_weak;
-        false_edges_weak_plus+= x.false_edges_weak_plus;
-        propagate_cost_add += x.propagate_cost_add;
-        propagate_cost_from+= x.propagate_cost_from;
-        propagate_cost_to  += x.propagate_cost_to;
-        edges_added      += x.edges_added;
-        edges_skipped    += x.edges_skipped;
-        edges_propagated += x.edges_propagated;
+    void accu(ThreadStatistics const &x) {
+        time_propagate        += x.time_propagate;
+        time_undo             += x.time_undo;
+        time_dijkstra         += x.time_dijkstra;
+        true_edges            += x.true_edges;
+        false_edges           += x.false_edges;
+        false_edges_trivial   += x.false_edges_trivial;
+        false_edges_weak      += x.false_edges_weak;
+        false_edges_weak_plus += x.false_edges_weak_plus;
+        propagate_cost_add    += x.propagate_cost_add;
+        propagate_cost_from   += x.propagate_cost_from;
+        propagate_cost_to     += x.propagate_cost_to;
+        edges_added           += x.edges_added;
+        edges_skipped         += x.edges_skipped;
+        edges_propagated      += x.edges_propagated;
     }
     Duration time_propagate = Duration{0};
     Duration time_undo = Duration{0};
@@ -155,14 +155,14 @@ struct EdgeState {
 };
 
 template <typename T>
-class DifferenceLogicGraph : private HeapToM<T, DifferenceLogicGraph<T>>, private HeapFromM<T, DifferenceLogicGraph<T>> {
-    using HTM = HeapToM<T, DifferenceLogicGraph<T>>;
-    using HFM = HeapFromM<T, DifferenceLogicGraph<T>>;
+class Graph : private HeapToM<T, Graph<T>>, private HeapFromM<T, Graph<T>> {
+    using HTM = HeapToM<T, Graph<T>>;
+    using HFM = HeapFromM<T, Graph<T>>;
     friend HTM;
     friend HFM;
 
 public:
-    DifferenceLogicGraph(DLStats &stats, const std::vector<Edge<T>> &edges, PropagationMode propagate);
+    Graph(ThreadStatistics &stats, const std::vector<Edge<T>> &edges, PropagationMode propagate);
     [[nodiscard]] bool empty() const;
     [[nodiscard]] bool valid_node(int idx) const;
     [[nodiscard]] int node_value_defined(int idx) const;
@@ -195,21 +195,21 @@ private:
 #ifdef CROSSCHECK
     [[nodiscard]] std::unordered_map<int, T> bellman_ford(std::vector<int> const &edges, int source);
 #endif
-    void set_potential(DifferenceLogicNode<T> &node, int level, T potential);
+    void set_potential(Vertex<T> &node, int level, T potential);
     [[nodiscard]] int current_decision_level_();
 
     Heap<4> costs_heap_;
     std::vector<int> visited_from_;
     std::vector<int> visited_to_;
     std::vector<Edge<T>> const &edges_;
-    std::vector<DifferenceLogicNode<T>> nodes_;
+    std::vector<Vertex<T>> nodes_;
     std::vector<int> changed_nodes_;
     std::vector<int> changed_edges_;
     std::vector<std::tuple<int, int, int, int, bool>> changed_trail_;
     std::vector<int> inactive_edges_;
     std::vector<EdgeState> edge_states_;
     std::vector<int> neg_cycle_;
-    DLStats &stats_;
+    ThreadStatistics &stats_;
     PropagationMode propagate_;
 };
 
