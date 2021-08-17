@@ -29,7 +29,7 @@
 
 namespace ClingoDL {
 
-#define CLINGODL_TRY try
+#define CLINGODL_TRY try // NOLINT
 #define CLINGODL_CATCH catch (...){ Clingo::Detail::handle_cxx_error(); return false; } return true // NOLINT
 
 using Clingo::Detail::handle_error;
@@ -54,24 +54,12 @@ bool propagate(clingo_propagate_control_t* i, const clingo_literal_t *changes, s
     CLINGODL_CATCH;
 }
 
-#if CLINGO_VERSION_MAJOR*1000 + CLINGO_VERSION_MINOR >= 5005
 template <typename T>
 void undo(clingo_propagate_control_t const* i, const clingo_literal_t *changes, size_t size, void* data)
 {
-    Clingo::PropagateControl in(const_cast<clingo_propagate_control_t *>(i));
+    Clingo::PropagateControl in(const_cast<clingo_propagate_control_t *>(i)); // NOLINT
     static_cast<DifferenceLogicPropagator<T>*>(data)->undo(in, {changes, size});
 }
-#else
-template <typename T>
-bool undo(clingo_propagate_control_t const* i, const clingo_literal_t *changes, size_t size, void* data)
-{
-    CLINGODL_TRY {
-        Clingo::PropagateControl in(const_cast<clingo_propagate_control_t *>(i));
-        static_cast<DifferenceLogicPropagator<T>*>(data)->undo(in, {changes, size});
-    }
-    CLINGODL_CATCH;
-}
-#endif
 
 template <typename T>
 bool check(clingo_propagate_control_t* i, void* data)
@@ -83,9 +71,14 @@ bool check(clingo_propagate_control_t* i, void* data)
     CLINGODL_CATCH;
 }
 
-struct PropagatorFacade {
+class PropagatorFacade {
 public:
-    virtual ~PropagatorFacade() {};
+    PropagatorFacade() = default;
+    PropagatorFacade(PropagatorFacade const &other) = default;
+    PropagatorFacade(PropagatorFacade &&other) = default;
+    PropagatorFacade &operator=(PropagatorFacade const &other) = default;
+    PropagatorFacade &operator=(PropagatorFacade &&other) noexcept = default;
+    virtual ~PropagatorFacade() = default;
     virtual bool lookup_symbol(clingo_symbol_t name, size_t *index) = 0;
     virtual clingo_symbol_t get_symbol(size_t index) = 0;
     virtual bool has_value(uint32_t thread_id, size_t index) = 0;
@@ -101,13 +94,13 @@ void set_value(clingodl_value_t *variant, T value);
 template<>
 void set_value<int>(clingodl_value_t *variant, int value) {
     variant->type = clingodl_value_type_int;
-    variant->int_number = value;
+    variant->int_number = value; // NOLINT
 }
 
 template<>
 void set_value<double>(clingodl_value_t *variant, double value) {
     variant->type = clingodl_value_type_double;
-    variant->double_number = value;
+    variant->double_number = value; // NOLINT
 }
 
 template<typename T>
@@ -219,7 +212,7 @@ struct clingodl_theory {
 };
 
 extern "C" bool clingodl_create(clingodl_theory_t **theory) {
-    CLINGODL_TRY { *theory = new clingodl_theory{}; }
+    CLINGODL_TRY { *theory = new clingodl_theory{}; } // NOLINT
     CLINGODL_CATCH;
 }
 
@@ -246,34 +239,36 @@ extern "C" bool clingodl_rewrite_ast(clingodl_theory_t *theory, clingo_ast_t *as
     CLINGODL_CATCH;
 }
 
-extern "C" bool clingodl_prepare(clingodl_theory_t *, clingo_control_t *) {
+extern "C" bool clingodl_prepare(clingodl_theory_t *theory, clingo_control_t *ctl) {
+    static_cast<void>(theory);
+    static_cast<void>(ctl);
     return true;
 }
 
 extern "C" bool clingodl_destroy(clingodl_theory_t *theory) {
-    CLINGODL_TRY { delete theory; }
+    CLINGODL_TRY { delete theory; } // NOLINT
     CLINGODL_CATCH;
 }
 
 static char const *iequals_pre(char const *a, char const *b) {
-    for (; *a && *b; ++a, ++b) {
+    for (; *a && *b; ++a, ++b) { // NOLINT
         if (tolower(*a) != tolower(*b)) { return nullptr; }
     }
-    return *b ? nullptr : a;
+    return *b != '\0' ? nullptr : a;
 }
 static bool iequals(char const *a, char const *b) {
     a = iequals_pre(a, b);
-    return a && !*a;
+    return a != nullptr && *a == '\0';
 }
 static char const *parse_uint64_pre(const char *value, void *data) {
     auto &res = *static_cast<uint64_t*>(data);
     char const *it = value;
     res = 0;
 
-    for (; *it; ++it) {
+    for (; *it != '\0'; ++it) { // NOLINT
         if ('0' <= *it && *it <= '9') {
             auto tmp = res;
-            res *= 10;
+            res *= 10; // NOLINT
             res += *it - '0';
             if (res < tmp) { return nullptr; }
         }
@@ -284,7 +279,7 @@ static char const *parse_uint64_pre(const char *value, void *data) {
 }
 static bool parse_uint64(const char *value, void *data) {
     value = parse_uint64_pre(value, data);
-    return value && !*value;
+    return value != nullptr && *value == '\0';
 }
 
 template <typename F, typename G>
@@ -296,7 +291,7 @@ bool set_config(char const *value, void *data, F f, G g) {
             f(config);
             return true;
         }
-        else if (*value == ',' && parse_uint64(value + 1, &id) && id < 64) {
+        if (*value == ',' && parse_uint64(value + 1, &id) && id < 64) { // NOLINT
             g(config.ensure(id));
             return true;
         }
@@ -307,27 +302,27 @@ bool set_config(char const *value, void *data, F f, G g) {
 
 static bool parse_root(const char *value, void *data) {
     uint64_t x = 0;
-    return (value = parse_uint64_pre(value, &x)) && set_config(value, data,
+    return (value = parse_uint64_pre(value, &x)) != nullptr && set_config(value, data,
         [x](PropagatorConfig &config) { config.propagate_root = x; },
         [x](ThreadConfig &config) { config.propagate_root = x; });
 }
 static bool parse_budget(const char *value, void *data) {
     uint64_t x = 0;
-    return (value = parse_uint64_pre(value, &x)) && set_config(value, data,
+    return (value = parse_uint64_pre(value, &x)) != nullptr && set_config(value, data,
         [x](PropagatorConfig &config) { config.propagate_budget = x; },
         [x](ThreadConfig &config) { config.propagate_budget = x; });
 }
 static bool parse_mutex(const char *value, void *data) {
     auto &pc = *static_cast<PropagatorConfig*>(data);
     uint64_t x = 0;
-    if (!(value = parse_uint64_pre(value, &x))) { return false; }
+    if ((value = parse_uint64_pre(value, &x)) == nullptr) { return false; }
     pc.mutex_size = x;
     if (*value == '\0') {
-        pc.mutex_cutoff = 10 * x;
+        pc.mutex_cutoff = 10 * x; // NOLINT
         return true;
     }
     if (*value == ',') {
-        if (!parse_uint64(value+1, &x)) { return false; }
+        if (!parse_uint64(value + 1, &x)) { return false; } // NOLINT
         pc.mutex_cutoff = x;
     }
     return true;
@@ -335,44 +330,44 @@ static bool parse_mutex(const char *value, void *data) {
 static bool parse_mode(const char *value, void *data) {
     PropagationMode mode = PropagationMode::Check;
     char const *rem = nullptr;
-    if ((rem = iequals_pre(value, "no"))) {
+    if ((rem = iequals_pre(value, "no")) != nullptr) {
         mode = PropagationMode::Check;
     }
-    else if ((rem = iequals_pre(value, "inverse"))) {
+    else if ((rem = iequals_pre(value, "inverse")) != nullptr) {
         mode = PropagationMode::Trivial;
     }
-    else if ((rem = iequals_pre(value, "partial+"))) {
+    else if ((rem = iequals_pre(value, "partial+")) != nullptr) {
         mode = PropagationMode::WeakPlus;
     }
-    else if ((rem = iequals_pre(value, "partial"))) {
+    else if ((rem = iequals_pre(value, "partial")) != nullptr) {
         mode = PropagationMode::Weak;
     }
-    else if ((rem = iequals_pre(value, "full"))) {
+    else if ((rem = iequals_pre(value, "full")) != nullptr) {
         mode = PropagationMode::Strong;
     }
-    return rem && set_config(rem, data,
+    return rem != nullptr && set_config(rem, data,
         [mode](PropagatorConfig &config) { config.propagate_mode = mode; },
         [mode](ThreadConfig &config) { config.propagate_mode = mode; });
 }
 static bool parse_sort(const char *value, void *data) {
     SortMode sort = SortMode::Weight;
     char const *rem = nullptr;
-    if ((rem = iequals_pre(value, "no"))) {
+    if ((rem = iequals_pre(value, "no")) != nullptr) {
         sort = SortMode::No;
     }
-    else if ((rem = iequals_pre(value, "weight-reversed"))) {
+    else if ((rem = iequals_pre(value, "weight-reversed")) != nullptr) {
         sort = SortMode::WeightRev;
     }
-    else if ((rem = iequals_pre(value, "weight"))) {
+    else if ((rem = iequals_pre(value, "weight")) != nullptr) {
         sort = SortMode::Weight;
     }
-    else if ((rem = iequals_pre(value, "potential-reversed"))) {
+    else if ((rem = iequals_pre(value, "potential-reversed")) != nullptr) {
         sort = SortMode::PotentialRev;
     }
-    else if ((rem = iequals_pre(value, "potential"))) {
+    else if ((rem = iequals_pre(value, "potential")) != nullptr) {
         sort = SortMode::Potential;
     }
-    return rem && set_config(rem, data,
+    return rem != nullptr && set_config(rem, data,
         [sort](PropagatorConfig &config) { config.sort_mode = sort; },
         [sort](ThreadConfig &config) { config.sort_mode = sort; });
 }
@@ -493,8 +488,10 @@ extern "C" clingo_symbol_t clingodl_get_symbol(clingodl_theory_t *theory, size_t
     return theory->clingodl->get_symbol(index);
 }
 
-extern "C" void clingodl_assignment_begin(clingodl_theory_t *, uint32_t, size_t *current) {
+extern "C" void clingodl_assignment_begin(clingodl_theory_t *theory, uint32_t thread_id, size_t *current) {
     // Note: the first vertex is always 0 and can be skipped because its value is 0
+    static_cast<void>(theory);
+    static_cast<void>(thread_id);
     *current = 1;
 }
 
@@ -512,7 +509,8 @@ extern "C" void clingodl_assignment_get_value(clingodl_theory_t *theory, uint32_
 
 extern "C" bool clingodl_on_statistics(clingodl_theory_t *theory, clingo_statistics_t* step, clingo_statistics_t* accu) {
     CLINGODL_TRY {
-        uint64_t root_s, root_a;
+        uint64_t root_s{0};
+        uint64_t root_a{0};
         handle_error(clingo_statistics_root(step, &root_s));
         handle_error(clingo_statistics_root(accu, &root_a));
         Clingo::UserStatistics s(step, root_s);
