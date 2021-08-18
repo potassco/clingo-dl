@@ -31,6 +31,8 @@ namespace ClingoDL {
 
 //! Type for vertices/variables in the theory.
 using vertex_t = int;
+//! Type for edge indices in the theory.
+using edge_t = int;
 
 //! Vector of coefficients and variables.
 template <class N>

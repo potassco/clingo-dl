@@ -28,6 +28,8 @@
 
 namespace ClingoDL {
 
+namespace {
+
 template <typename T, typename std::enable_if<std::is_integral_v<T>, bool>::type = true>
 inline Clingo::Symbol to_symbol(T value) {
     return Clingo::Number(value);
@@ -37,6 +39,8 @@ template <typename T, typename std::enable_if<std::is_floating_point_v<T>, bool>
 inline Clingo::Symbol to_symbol(T value) {
     return Clingo::String(std::to_string(value).c_str());
 }
+
+} // namespace
 
 template <typename T>
 struct DLPropagator<T>::NodeInfo {
@@ -48,19 +52,20 @@ struct DLPropagator<T>::NodeInfo {
 
 template <typename T>
 struct DLPropagator<T>::ThreadState {
-    ThreadState(ThreadStatistics &stats, const std::vector<Edge<T>> &edges, PropagationMode propagate, uint64_t propagate_root, uint64_t propagate_budget)
+    ThreadState(ThreadStatistics &stats, const std::vector<Edge> &edges, PropagationMode propagate, uint64_t propagate_root, uint64_t propagate_budget)
         : stats(stats)
         , dl_graph(stats, edges, propagate)
         , propagate_root{propagate_root}
         , propagate_budget{propagate_budget} { }
     ThreadStatistics &stats;
-    Graph<T> dl_graph;
+    Graph dl_graph;
     std::vector<Clingo::literal_t> false_lits;
     std::vector<int> todo_edges;
     uint64_t propagate_root;
     uint64_t propagate_budget;
 };
 
+// Note:: it looks like this can go into the ThreadState
 template <typename T>
 struct DLPropagator<T>::FactState {
     std::vector<Clingo::literal_t> lits;
@@ -370,13 +375,12 @@ bool DLPropagator<T>::add_edges_(Clingo::PropagateInit& init, int literal, CoVar
     }
     auto u_id = map_vertex_(Clingo::Number(0));
     auto v_id = map_vertex_(Clingo::Number(0));
-    if (covec.size() == 0) {
+    if (covec.empty()) {
         if (rhs < 0) {
             return init.add_clause({-literal});
         }
         return !strict || init.add_clause({literal});
     }
-
     if (covec.size() == 1) {
         if (covec[0].first == 1) {
             u_id = covec[0].second;
@@ -451,14 +455,14 @@ void DLPropagator<T>::cc_reset_() {
 }
 
 template <typename T>
-bool DLPropagator<T>::cc_visited_(int node) const {
-    return node_info_[node].visited;
+bool DLPropagator<T>::cc_visited_(vertex_t vertex) const {
+    return node_info_[vertex].visited;
 }
 
 template <typename T>
-bool DLPropagator<T>::is_zero_(int node) const {
-    assert(node_info_[node].cc < zero_nodes_.size());
-    return zero_nodes_[node_info_[node].cc] == node;
+bool DLPropagator<T>::is_zero_(vertex_t vertex) const {
+    assert(node_info_[vertex].cc < zero_nodes_.size());
+    return zero_nodes_[node_info_[vertex].cc] == vertex;
 }
 
 template <typename T>
@@ -644,17 +648,17 @@ void DLPropagator<T>::disable_edge_by_lit(ThreadState &state, Clingo::literal_t 
 }
 
 template <typename T>
-int DLPropagator<T>::get_potential_(Graph<T> const &graph, int idx) {
-    return graph.node_value_defined(idx) ? -graph.node_value(idx) : 0;
+int DLPropagator<T>::get_potential_(Graph const &graph, vertex_t vertex) {
+    return graph.node_value_defined(vertex) ? -graph.node_value(vertex) : 0;
 };
 
 template <typename T>
-int DLPropagator<T>::cost_(Graph<T> const &graph, Edge<T> const &edge) {
+int DLPropagator<T>::cost_(Graph const &graph, Edge const &edge) {
     return get_potential_(graph, edge.from) + edge.weight - get_potential_(graph, edge.to);
 };
 
 template <typename T>
-int DLPropagator<T>::cost_(SortMode mode, Graph<T> const &graph, int i) {
+int DLPropagator<T>::cost_(SortMode mode, Graph const &graph, int i) {
     switch(mode) {
         case SortMode::Weight: {
             return edges_[i].weight;
