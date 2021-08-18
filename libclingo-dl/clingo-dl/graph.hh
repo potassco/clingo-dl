@@ -68,35 +68,47 @@ struct HeapToM {
     uint64_t &propagation_cost() {return static_cast<P *>(this)->stats_.propagate_cost_to; }
 };
 
+//! Struct to represent an edge in the difference logic graph.
 template <typename T>
 struct Edge {
-    vertex_t from;
-    vertex_t to;
-    T weight;
-    Clingo::literal_t lit;
+    using value_t = T;
+    vertex_t from;         //!< Start vertex index of the edge.
+    vertex_t to;           //!< End vertex index of the edge.
+    value_t weight;        //!< Weight of the edge.
+    Clingo::literal_t lit; //!< Solver literal associated with the edge.
 };
 
 template <typename T>
 struct Vertex {
-    [[nodiscard]] bool defined() const { return !potential_stack.empty(); }
-    [[nodiscard]] T potential() const { return potential_stack.back().second; }
+    using value_t = T;
+    using PotentialStack = std::vector<std::pair<int, T>>;
+    using VertexTVec = std::vector<vertex_t>;
 
-    std::vector<int> outgoing;
-    std::vector<int> incoming;
-    std::vector<int> candidate_incoming;
-    std::vector<int> candidate_outgoing;
-    std::vector<std::pair<int, T>> potential_stack; // [(level,potential)]
-    T cost_from = 0;
-    T cost_to = 0;
-    int offset = 0;
-    int path_from = 0;
-    int path_to = 0;
-    int degree_out = 0;
-    int degree_in = 0;
-    int visited_from = 0;
-    bool relevant_from = false;
-    bool relevant_to = false;
-    bool visited_to = false;
+    //! Return true if the node has a value assigned.
+    [[nodiscard]] bool defined() const {
+        return !potential_stack.empty();
+    }
+    //! Return the current value associated with the vertex.
+    [[nodiscard]] value_t potential() const {
+        return potential_stack.back().second;
+    }
+
+    VertexTVec outgoing;            //!< Outgoing edges from this vertex that are true.
+    VertexTVec incoming;            //!< Incoming edges to this vertex that are true.
+    VertexTVec candidate_incoming;  //!< Edges that might become outgoing edges.
+    VertexTVec candidate_outgoing;  //!< Edges that might become incoming edges.
+    PotentialStack potential_stack; //!< Vector of pairs of level and potential.
+    value_t cost_from{0};
+    value_t cost_to{0};
+    int offset{0};
+    int path_from{0};
+    int path_to{0};
+    int degree_out{0};
+    int degree_in{0};
+    int visited_from{0};
+    bool relevant_from{false};
+    bool relevant_to{false};
+    bool visited_to{false};
 };
 
 struct ThreadStatistics {
@@ -156,18 +168,23 @@ struct EdgeState {
 
 template <typename T>
 class Graph : private HeapToM<T, Graph<T>>, private HeapFromM<T, Graph<T>> {
-    using HTM = HeapToM<T, Graph<T>>;
-    using HFM = HeapFromM<T, Graph<T>>;
+    using value_t = T;
+    using Edge = ClingoDL::Edge<value_t>;
+    using EdgeVec = std::vector<Edge>;
+    using Vertex = ClingoDL::Vertex<value_t>;
+    using VertexVec = std::vector<Vertex>;
+    using HTM = HeapToM<value_t, Graph<value_t>>;
+    using HFM = HeapFromM<value_t, Graph<value_t>>;
     friend HTM;
     friend HFM;
 
 public:
-    Graph(ThreadStatistics &stats, const std::vector<Edge<T>> &edges, PropagationMode propagate);
+    Graph(ThreadStatistics &stats, EdgeVec const &edges, PropagationMode propagate);
     [[nodiscard]] bool empty() const;
     [[nodiscard]] bool valid_node(int idx) const;
     [[nodiscard]] int node_value_defined(int idx) const;
     [[nodiscard]] bool has_value(int idx) const;
-    [[nodiscard]] T node_value(int idx) const;
+    [[nodiscard]] value_t node_value(int idx) const;
     [[nodiscard]] bool edge_is_active(int edge_idx) const;
     [[nodiscard]] bool can_propagate() const;
     void disable_propagate();
@@ -180,29 +197,27 @@ public:
 
 private:
     template <class P, class F>
-    [[nodiscard]] bool with_incoming(int s_idx, P p, F f);
-
+    [[nodiscard]] bool with_incoming_(int s_idx, P p, F f);
     template <class F>
-    [[nodiscard]] bool cheap_propagate(int u_idx, int s_idx, F f);
-
-    void add_candidate_edge(int uv_idx);
-    [[nodiscard]] bool propagate_edge_true(int uv_idx, int xy_idx);
-    [[nodiscard]] bool propagate_edge_false(Clingo::PropagateControl &ctl, int uv_idx, int xy_idx, bool &ret);
+    [[nodiscard]] bool cheap_propagate_(int u_idx, int s_idx, F f);
+    void add_candidate_edge_(int uv_idx);
+    [[nodiscard]] bool propagate_edge_true_(int uv_idx, int xy_idx);
+    [[nodiscard]] bool propagate_edge_false_(Clingo::PropagateControl &ctl, int uv_idx, int xy_idx, bool &ret);
     template <class M>
-    [[nodiscard]] bool propagate_edges(M &m, Clingo::PropagateControl &ctl, int xy_idx, bool forward, bool backward);
+    [[nodiscard]] bool propagate_edges_(M &m, Clingo::PropagateControl &ctl, int xy_idx, bool forward, bool backward);
     template <class M>
-    [[nodiscard]] std::pair<int, int> dijkstra(int source_idx, std::vector<int> &visited_set, M &m);
+    [[nodiscard]] std::pair<int, int> dijkstra_(int source_idx, std::vector<int> &visited_set, M &m);
 #ifdef CLINGODL_CROSSCHECK
-    std::unordered_map<int, T> bellman_ford(std::vector<int> const &edges, int source);
+    std::unordered_map<int, value_t> bellman_ford_(std::vector<int> const &edges, int source);
 #endif
-    void set_potential(Vertex<T> &node, int level, T potential);
+    void set_potential_(Vertex &node, int level, value_t potential);
     [[nodiscard]] int current_decision_level_();
 
     Heap<4> costs_heap_;
     std::vector<int> visited_from_;
     std::vector<int> visited_to_;
-    std::vector<Edge<T>> const &edges_;
-    std::vector<Vertex<T>> nodes_;
+    EdgeVec const &edges_;
+    VertexVec nodes_;
     std::vector<int> changed_nodes_;
     std::vector<int> changed_edges_;
     std::vector<std::tuple<int, int, int, int, bool>> changed_trail_;
