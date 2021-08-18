@@ -32,8 +32,7 @@
 
 #include <unordered_map>
 
-//#define CROSSCHECK
-#define CHECKSOLUTION
+#define CLINGODL_CHECKSOLUTION
 
 namespace ClingoDL {
 
@@ -238,7 +237,7 @@ public:
             do_propagate(ctl, {facts.lits.data(), facts.lits.data() + facts.limit}); // NOLINT
             facts.limit = 0;
         }
-#if defined(CHECKSOLUTION) || defined(CROSSCHECK)
+#if defined(CLINGODL_CHECKSOLUTION) || defined(CLINGODL_CROSSCHECK)
         if (ctl.assignment().is_total()) {
             for (auto &x : edges_) {
                 if (ctl.assignment().is_true(x.lit)) {

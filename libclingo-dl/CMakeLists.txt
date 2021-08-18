@@ -52,6 +52,9 @@ add_library(libclingo-dl ${clingodl_lib_type})
 target_sources(libclingo-dl ${clingodl_private_scope_} ${header} ${source})
 target_include_directories(libclingo-dl ${clingodl_public_scope_} "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
 target_compile_definitions(libclingo-dl ${clingodl_private_scope_} CLINGODL_BUILD_LIBRARY)
+if (CLINGODL_CROSSCHECK)
+    target_compile_definitions(libclingo-dl PUBLIC "CLINGODL_CROSSCHECK")
+endif()
 
 if (NOT CLINGODL_BUILD_STATIC AND CLINGODL_BUILD_SHARED AND NOT clingodl_build_interface)
     set_target_properties(libclingo-dl PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -97,6 +100,7 @@ if (CLINGODL_BUILD_TESTS)
     target_include_directories(libclingo-dl_t PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
     target_compile_definitions(libclingo-dl_t PUBLIC CLINGODL_NO_VISIBILITY)
     target_link_libraries(libclingo-dl_t PUBLIC libclingo)
+    target_compile_definitions(libclingo-dl_t PUBLIC "CLINGODL_CROSSCHECK")
     set_target_properties(libclingo-dl_t PROPERTIES
         OUTPUT_NAME clingo-dl_t
         LIBRARY_OUTPUT_NAME clingo-dl_t

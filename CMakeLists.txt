@@ -24,6 +24,7 @@ include(CMakeDependentOption)
 option(CLINGODL_MANAGE_RPATH "set rpath if not installed into system directory" ON)
 option(CLINGODL_BUILD_TESTS "build tests" OFF)
 option(CLINGODL_BUILD_SHARED "build clingo-dl library shared" ON)
+option(CLINGODL_CROSSCHECK "enable additional state checking" OFF)
 set(PYCLINGODL_ENABLE "auto" CACHE STRING "build with python support: OFF, auto, require, pip
 auto: enable python support if python is available
 require: enable python support and fails if python is not available
@@ -38,6 +39,7 @@ set(PYCLINGODL_INSTALL_DIR "" CACHE STRING "path where to install python module"
 
 mark_as_advanced(CLINGODL_BUILD_STATIC)
 mark_as_advanced(CLINGODL_BUILD_SHARED)
+mark_as_advanced(CLINGODL_CROSSCHECK)
 mark_as_advanced(PYCLINGODL_PIP_PATH)
 mark_as_advanced(PYCLINGODL_SUFFIX)
 mark_as_advanced(PYCLINGODL_INSTALL_DIR)

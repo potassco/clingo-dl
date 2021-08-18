@@ -30,6 +30,7 @@
 
 namespace ClingoDL {
 
+//! The difference logic theory necessary to parse difference constraints.
 static constexpr char const *THEORY = R"(#theory dl {
 term {
   + : 1, binary, left;
@@ -42,7 +43,6 @@ term {
 &__diff_b/0 : term, {<=,>=,<,>,=,!=}, term, body;
 &show_assignment/0 : term, directive
 }.)";
-
 
 //! Throw a syntax error with the given message.
 template <typename T=void>

@@ -192,8 +192,8 @@ private:
     [[nodiscard]] bool propagate_edges(M &m, Clingo::PropagateControl &ctl, int xy_idx, bool forward, bool backward);
     template <class M>
     [[nodiscard]] std::pair<int, int> dijkstra(int source_idx, std::vector<int> &visited_set, M &m);
-#ifdef CROSSCHECK
-    [[nodiscard]] std::unordered_map<int, T> bellman_ford(std::vector<int> const &edges, int source);
+#ifdef CLINGODL_CROSSCHECK
+    std::unordered_map<int, T> bellman_ford(std::vector<int> const &edges, int source);
 #endif
     void set_potential(Vertex<T> &node, int level, T potential);
     [[nodiscard]] int current_decision_level_();

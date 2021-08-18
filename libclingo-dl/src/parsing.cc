@@ -73,6 +73,7 @@ bool match_constant(Clingo::AST::Node const &ast, char const *name) {
     return false;
 }
 
+//! Shift difference constraints in integrity constraints to the head.
 Clingo::AST::Node shift_rule(Clingo::AST::Node ast) {
     using namespace Clingo::AST;
     if (ast.type() != Type::Rule) {
@@ -122,6 +123,7 @@ Clingo::AST::Node shift_rule(Clingo::AST::Node ast) {
     return ast;
 }
 
+//! Tag terms depending on whether they occur in heads or bodies.
 Clingo::AST::Node tag_terms(Clingo::AST::Node &ast, char const *tag) {
     using namespace Clingo::AST;
     if (ast.type() == Type::SymbolicTerm) {
@@ -145,7 +147,7 @@ Clingo::AST::Node tag_terms(Clingo::AST::Node &ast, char const *tag) {
     return throw_syntax_error<Node>();
 }
 
-// Mark head/body theory atoms.
+//! Tag head/body theory atoms.
 struct TheoryRewriter {
     Clingo::AST::Node operator()(Clingo::AST::Node const &ast) {
         using namespace Clingo::AST;
@@ -419,6 +421,7 @@ void transform(Clingo::AST::Node const &ast, NodeCallback const &cb, bool shift)
         cb(unpooled.transform_ast(TheoryRewriter{}));
     }
 }
+
 template <class N>
 EdgeAtom<N> parse(Clingo::TheoryAtom const &atom, std::function<int (Clingo::Symbol)> const &map_vert) {
     char const *msg = "parsing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";

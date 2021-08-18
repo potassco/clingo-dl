@@ -106,7 +106,7 @@ bool Graph<T>::propagate(int xy_idx, Clingo::PropagateControl &ctl) {
         std::tie(num_relevant_out_from, num_relevant_in_from) = dijkstra(xy.from, visited_from_, *static_cast<HFM *>(this));
         std::tie(num_relevant_out_to, num_relevant_in_to) = dijkstra(xy.to, visited_to_, *static_cast<HTM *>(this));
     }
-#ifdef CROSSCHECK
+#ifdef CLINGODL_CROSSCHECK
     int check_relevant_out_from = 0, check_relevant_in_from = 0;
     for (auto &node : visited_from_) {
         if (nodes_[node].relevant_from) {
@@ -163,7 +163,7 @@ bool Graph<T>::propagate(int xy_idx, Clingo::PropagateControl &ctl) {
 
 template <typename T>
 bool Graph<T>::add_edge(int uv_idx, std::function<bool(std::vector<int>)> f) {
-#ifdef CROSSCHECK
+#ifdef CLINGODL_CROSSCHECK
     for (auto &node : nodes_) {
         assert(!node.visited_from);
     }
@@ -233,7 +233,7 @@ bool Graph<T>::add_edge(int uv_idx, std::function<bool(std::vector<int>)> f) {
         u.outgoing.emplace_back(uv_idx);
         v.incoming.emplace_back(uv_idx);
         changed_edges_.emplace_back(uv_idx);
-#ifdef CROSSCHECK
+#ifdef CLINGODL_CROSSCHECK
         // NOTE: just a check that will throw if there is a cycle
         bellman_ford(changed_edges_, uv.from);
 #endif
@@ -248,7 +248,7 @@ bool Graph<T>::add_edge(int uv_idx, std::function<bool(std::vector<int>)> f) {
             neg_cycle_.push_back(next.path_from);
             next_idx = edges_[next.path_from].from;
         }
-#ifdef CROSSCHECK
+#ifdef CLINGODL_CROSSCHECK
         T weight = 0;
         for (auto &edge_idx : neg_cycle_) {
             weight += edges_[edge_idx].weight;
@@ -439,7 +439,7 @@ bool Graph<T>::propagate_edge_true(int uv_idx, int xy_idx) {
         auto a = u.cost_to + y.potential() - u.potential();
         auto b = v.cost_from + v.potential() - x.potential();
         auto d = a + b - xy.weight;
-#ifdef CROSSCHECK
+#ifdef CLINGODL_CROSSCHECK
         auto bf_costs_from_u = bellman_ford(changed_edges_, uv.from);
         auto bf_costs_from_x = bellman_ford(changed_edges_, xy.from);
         auto aa = bf_costs_from_u.find(xy.to);
@@ -451,7 +451,7 @@ bool Graph<T>::propagate_edge_true(int uv_idx, int xy_idx) {
 #endif
         if (d <= uv.weight) {
             ++stats_.true_edges;
-#ifdef CROSSCHECK
+#ifdef CLINGODL_CROSSCHECK
             auto edges = changed_edges_;
             edges.emplace_back(uv_idx);
             // NOTE: throws if there is a cycle
@@ -487,7 +487,7 @@ bool Graph<T>::propagate_edge_false(Clingo::PropagateControl &ctl, int uv_idx, i
         if (d < -uv.weight) {
             ++stats_.false_edges;
             if (!ctl.assignment().is_false(uv.lit)) {
-#ifdef CROSSCHECK
+#ifdef CLINGODL_CROSSCHECK
                 T sum = uv.weight - xy.weight;
 #endif
                 std::vector<Clingo::literal_t> clause;
@@ -497,7 +497,7 @@ bool Graph<T>::propagate_edge_false(Clingo::PropagateControl &ctl, int uv_idx, i
                     auto &next_edge = edges_[next_edge_idx];
                     auto &next_node = nodes_[next_edge.from];
                     clause.push_back(-next_edge.lit);
-#ifdef CROSSCHECK
+#ifdef CLINGODL_CROSSCHECK
                     sum += next_edge.weight;
 #endif
                     next_edge_idx = next_node.path_from;
@@ -507,12 +507,12 @@ bool Graph<T>::propagate_edge_false(Clingo::PropagateControl &ctl, int uv_idx, i
                     auto &next_edge = edges_[next_edge_idx];
                     auto &next_node = nodes_[next_edge.to];
                     clause.push_back(-next_edge.lit);
-#ifdef CROSSCHECK
+#ifdef CLINGODL_CROSSCHECK
                     sum += next_edge.weight;
 #endif
                     next_edge_idx = next_node.path_to;
                 }
-#ifdef CROSSCHECK
+#ifdef CLINGODL_CROSSCHECK
                 assert(sum < 0);
 #endif
                 if (!(ret = ctl.add_clause(clause) && ctl.propagate())) {
@@ -522,7 +522,7 @@ bool Graph<T>::propagate_edge_false(Clingo::PropagateControl &ctl, int uv_idx, i
             remove_candidate_edge(uv_idx);
             return true;
         }
-#ifdef CROSSCHECK
+#ifdef CLINGODL_CROSSCHECK
         else {
             auto edges = changed_edges_;
             edges.emplace_back(uv_idx);
@@ -654,9 +654,9 @@ std::pair<int, int> Graph<T>::dijkstra(int source_idx, std::vector<int> &visited
     return {relevant_degree_out, relevant_degree_in};
 }
 
-#ifdef CROSSCHECK
+#ifdef CLINGODL_CROSSCHECK
 template <typename T>
-std::unordered_map<int, T> bellman_ford(std::vector<int> const &edges, int source) {
+std::unordered_map<int, T> Graph<T>::bellman_ford(std::vector<int> const &edges, int source) {
     std::unordered_map<int, T> costs;
     costs[source] = 0;
     int nodes = 0;
