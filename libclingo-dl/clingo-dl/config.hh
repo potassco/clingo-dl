@@ -27,6 +27,7 @@
 
 #include <clingo.hh>
 #include <utility>
+#include <optional>
 #include <vector>
 
 namespace ClingoDL {
