@@ -49,6 +49,7 @@ V parse(char const *prg) {
     }
     return ret;
 }
+
 } // namespace
 
 TEST_CASE("parsing", "[parsing]") {

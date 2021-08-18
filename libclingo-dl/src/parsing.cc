@@ -24,6 +24,7 @@
 
 #include "clingo-dl/parsing.hh"
 #include "clingo-dl/util.hh"
+#include <optional>
 
 namespace ClingoDL {
 
