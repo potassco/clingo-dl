@@ -57,6 +57,16 @@ inline void check_syntax(bool condition, char const *message = "Invalid Syntax")
     }
 }
 
+//! Callback function to retrieve AST nodes.
+using NodeCallback = std::function<void(Clingo::AST::Node &&ast)>;
+
+//! Transform the given statement with dl constraints and pass it on to the
+//! given callback.
+//!
+//! Optionally shifts constraints from rule bodies into heads of integrity
+//! constraints if possible.
+void transform(Clingo::AST::Node const &ast, NodeCallback const &cb, bool shift);
+
 //! Return true if the given theory term matches the given signature.
 [[nodiscard]] bool match(Clingo::TheoryTerm const &term, char const *name, size_t arity);
 

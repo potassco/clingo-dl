@@ -1,6 +1,5 @@
 #include <clingo.hh>
 #include <clingo-dl/parsing.hh>
-#include <clingo-dl/propagator.hh>
 #include "catch.hpp"
 #include <sstream>
 #include <map>
