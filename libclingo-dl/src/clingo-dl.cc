@@ -39,7 +39,7 @@ bool init(clingo_propagate_init_t* i, void* data)
 {
     CLINGODL_TRY {
         Clingo::PropagateInit in(i);
-        static_cast<DifferenceLogicPropagator<T>*>(data)->init(in);
+        static_cast<DLPropagator<T>*>(data)->init(in);
     }
     CLINGODL_CATCH;
 }
@@ -49,7 +49,7 @@ bool propagate(clingo_propagate_control_t* i, const clingo_literal_t *changes, s
 {
     CLINGODL_TRY {
         Clingo::PropagateControl in(i);
-        static_cast<DifferenceLogicPropagator<T>*>(data)->propagate(in, {changes, size});
+        static_cast<DLPropagator<T>*>(data)->propagate(in, {changes, size});
     }
     CLINGODL_CATCH;
 }
@@ -58,7 +58,7 @@ template <typename T>
 void undo(clingo_propagate_control_t const* i, const clingo_literal_t *changes, size_t size, void* data)
 {
     Clingo::PropagateControl in(const_cast<clingo_propagate_control_t *>(i)); // NOLINT
-    static_cast<DifferenceLogicPropagator<T>*>(data)->undo(in, {changes, size});
+    static_cast<DLPropagator<T>*>(data)->undo(in, {changes, size});
 }
 
 template <typename T>
@@ -66,7 +66,7 @@ bool check(clingo_propagate_control_t* i, void* data)
 {
     CLINGODL_TRY {
         Clingo::PropagateControl in(i);
-        static_cast<DifferenceLogicPropagator<T>*>(data)->check(in);
+        static_cast<DLPropagator<T>*>(data)->check(in);
     }
     CLINGODL_CATCH;
 }
@@ -186,7 +186,7 @@ public:
 private:
     Statistics step_;
     Statistics accu_;
-    DifferenceLogicPropagator<T> prop_;
+    DLPropagator<T> prop_;
 };
 
 } // namespace ClingoDL
