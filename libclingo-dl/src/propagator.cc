@@ -75,8 +75,25 @@ DLPropagator<T>::DLPropagator(Statistics &stats, PropagatorConfig conf)
     cc_reset_();
 }
 
+#if defined(_MSC_VER) && _MSC_VER < 1920
+template <typename T>
+DLPropagator<T>::DLPropagator(DLPropagator &&other) noexcept
+: states_{std::move(other.states_)}
+, facts_{std::move(other.facts_)}
+, lit_to_edges_{std::move(other.lit_to_edges_)}
+, false_lit_to_edges_{std::move(other.false_lit_to_edges_)}
+, edges_{std::move(other.edges_)}
+, vert_map_{std::move(other.vert_map_)}
+, vert_map_inv_{std::move(other.vert_map_inv_)}
+, node_info_{std::move(other.node_info_)}
+, zero_nodes_{std::move(other.zero_nodes_)}
+, stats_{other.stats_}
+, conf_{std::move(other.conf_)} {
+}
+#else
 template <typename T>
 DLPropagator<T>::DLPropagator(DLPropagator &&other) noexcept = default;
+#endif
 
 template <typename T>
 DLPropagator<T>::~DLPropagator() = default;
