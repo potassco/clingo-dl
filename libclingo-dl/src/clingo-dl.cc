@@ -108,18 +108,7 @@ class DLPropagatorFacade : public PropagatorFacade {
 public:
     DLPropagatorFacade(clingo_control_t *ctl, PropagatorConfig const &conf)
     : prop_{step_, conf} {
-        handle_error(clingo_control_add(ctl,"base", nullptr, 0, R"(#theory dl {
-term {
-  + : 1, binary, left;
-  - : 1, binary, left;
-  * : 2, binary, left;
-  / : 2, binary, left;
-  - : 3, unary
-};
-&__diff_h/0 : term, {<=,>=,<,>,=,!=}, term, head;
-&__diff_b/0 : term, {<=,>=,<,>,=,!=}, term, body;
-&show_assignment/0 : term, directive
-}.)"));
+        handle_error(clingo_control_add(ctl,"base", nullptr, 0, THEORY));
         static clingo_propagator_t prop = {
             init<T>,
             propagate<T>,

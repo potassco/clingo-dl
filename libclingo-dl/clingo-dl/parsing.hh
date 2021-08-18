@@ -30,6 +30,20 @@
 
 namespace ClingoDL {
 
+static constexpr char const *THEORY = R"(#theory dl {
+term {
+  + : 1, binary, left;
+  - : 1, binary, left;
+  * : 2, binary, left;
+  / : 2, binary, left;
+  - : 3, unary
+};
+&__diff_h/0 : term, {<=,>=,<,>,=,!=}, term, head;
+&__diff_b/0 : term, {<=,>=,<,>,=,!=}, term, body;
+&show_assignment/0 : term, directive
+}.)";
+
+
 //! Throw a syntax error with the given message.
 template <typename T=void>
 inline T throw_syntax_error(char const *message = "Invalid Syntax") {

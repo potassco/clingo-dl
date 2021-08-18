@@ -55,7 +55,9 @@ if (POLICY CMP0063 AND CLINGODL_BUILD_SHARED)
     set(CMAKE_C_VISIBILITY_PRESET hidden)
 endif()
 
-enable_testing()
+if (CLINGODL_BUILD_TESTS)
+    enable_testing()
+endif()
 
 if (CLINGODL_MANAGE_RPATH)
     set(CMAKE_SKIP_BUILD_RPATH FALSE)

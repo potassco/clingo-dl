@@ -4,6 +4,7 @@ set(source-group
     "${CMAKE_CURRENT_SOURCE_DIR}/catch.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/main.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/optimize.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/parsing.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/solve.cc")
 source_group("${ide_source_group}" FILES ${source-group})
 set(source
@@ -11,7 +12,7 @@ set(source
 # ]]]
 
 add_executable(test_clingo-dl ${source})
-target_link_libraries(test_clingo-dl PRIVATE libclingo libclingo-dl)
+target_link_libraries(test_clingo-dl PRIVATE libclingo libclingo-dl_t)
 target_include_directories(test_clingo-dl PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
 )
