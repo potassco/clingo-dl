@@ -42,6 +42,31 @@ inline Clingo::Symbol to_symbol(T value) {
 
 } // namespace
 
+void Statistics::reset() {
+    time_init  = std::chrono::steady_clock::duration::zero();
+    ccs = 0;
+    mutexes = 0;
+    edges = 0;
+    variables = 0;
+    for (auto& i : thread_statistics) {
+        i.reset();
+    }
+}
+void Statistics::accu(Statistics const &x) {
+    time_init += x.time_init;
+    ccs = x.ccs;
+    mutexes += x.mutexes;
+    edges = x.edges;
+    variables = x.variables;
+    if (thread_statistics.size() < x.thread_statistics.size()) {
+        thread_statistics.resize(x.thread_statistics.size());
+    }
+    auto it = x.thread_statistics.begin();
+    for (auto &y : thread_statistics) {
+        y.accu(*it++);
+    }
+}
+
 template <typename T>
 struct DLPropagator<T>::VertexInfo {
     VertexInfo(Clingo::Symbol symbol)
@@ -616,13 +641,13 @@ void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, edge_t edg
 
 template <typename T>
 void DLPropagator<T>::initialize_states_(Clingo::PropagateInit &init) {
-    stats_.dl_stats.resize(init.number_of_threads());
     states_.clear();
+    stats_.thread_statistics.resize(init.number_of_threads());
     if (facts_.size() < numeric_cast<size_t>(init.number_of_threads())) {
         facts_.resize(init.number_of_threads());
     }
     for (Clingo::id_t i = 0; i < numeric_cast<Clingo::id_t>(init.number_of_threads()); ++i) {
-        states_.emplace_back(stats_.dl_stats[i], edges_, conf_.get_propagate_mode(i), conf_.get_propagate_root(i), conf_.get_propagate_budget(i));
+        states_.emplace_back(stats_.thread_statistics[i], edges_, conf_.get_propagate_mode(i), conf_.get_propagate_root(i), conf_.get_propagate_budget(i));
         facts_[i].limit = facts_[i].lits.size();
     }
 }

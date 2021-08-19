@@ -158,9 +158,9 @@ public:
         diff.add_subkey("Edges", Clingo::StatisticsType::Value).set_value(stats.edges);
         diff.add_subkey("Variables", Clingo::StatisticsType::Value).set_value(stats.variables);
         Clingo::UserStatistics threads = diff.add_subkey("Thread", Clingo::StatisticsType::Array);
-        threads.ensure_size(stats.dl_stats.size(), Clingo::StatisticsType::Map);
+        threads.ensure_size(stats.thread_statistics.size(), Clingo::StatisticsType::Map);
         auto it = threads.begin();
-        for (auto const &stat : stats.dl_stats) {
+        for (auto const &stat : stats.thread_statistics) {
             auto thread = *it++;
             thread.add_subkey("Propagation(s)", Clingo::StatisticsType::Value).set_value(stat.time_propagate.count());
             thread.add_subkey("Dijkstra(s)", Clingo::StatisticsType::Value).set_value(stat.time_dijkstra.count());

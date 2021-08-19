@@ -36,37 +36,25 @@
 
 namespace ClingoDL {
 
+//! Struct with statistics for the DLPropagator.
 struct Statistics {
-    void reset() {
-        time_init  = std::chrono::steady_clock::duration::zero();
-        ccs = 0;
-        mutexes = 0;
-        edges = 0;
-        variables = 0;
-        for (auto& i : dl_stats) {
-            i.reset();
-        }
-    }
-    void accu(Statistics const &x) {
-        time_init += x.time_init;
-        ccs = x.ccs;
-        mutexes += x.mutexes;
-        edges = x.edges;
-        variables = x.variables;
-        if (dl_stats.size() < x.dl_stats.size()) {
-            dl_stats.resize(x.dl_stats.size());
-        }
-        auto it = x.dl_stats.begin();
-        for (auto &y : dl_stats) {
-            y.accu(*it++);
-        }
-    }
+    //! Reset the statistics object.
+    void reset();
+    //! Accumulate values from another statistics object.
+    void accu(Statistics const &x);
+
+    //! The duration of the initialization step.
     Duration time_init = Duration{0};
+    //! The number of connected componenets in the difference logic graph.
     uint64_t ccs{0};
+    //! The number of mutexes found during initialisation.
     uint64_t mutexes{0};
+    //! The number of edges in the difference logic graph.
     uint64_t edges{0};
+    //! The number of distinct variables appearing in the difference constraints.
     uint64_t variables{0};
-    std::vector<ThreadStatistics> dl_stats;
+    //! Per thread statistics.
+    std::vector<ThreadStatistics> thread_statistics;
 };
 
 //! A propagator for difference constraints.
@@ -75,6 +63,7 @@ class DLPropagator : public Clingo::Propagator {
 public:
     using value_t = T;
 
+    // construction
     DLPropagator(Statistics &stats, PropagatorConfig conf);
     DLPropagator(DLPropagator const &other) = delete;
     DLPropagator(DLPropagator &&other) = delete;
@@ -118,6 +107,7 @@ private:
     using SymVertexMap = std::unordered_map<Clingo::Symbol, vertex_t>;
     using VertexInfoVec = std::vector<VertexInfo>;
     using ThreadStateVec = std::vector<ThreadState>;
+    using FactStateVec = std::vector<FactState>;
     using AdjacencyMap = std::unordered_multimap<vertex_t, vertex_t>;
 
     // initialization functions
@@ -161,7 +151,7 @@ private:
     void do_propagate(Clingo::PropagateControl &ctl, Clingo::LiteralSpan changes);
 
     ThreadStateVec states_;        //!< Thread specific state.
-    std::vector<FactState> facts_; //!< Thread specific state for fact propagation. (can go into thread state)
+    FactStateVec facts_;           //!< Thread specific state for fact propagation.
     LitEdgeMap lit_to_edges_;      //!< Map from literals to edges.
     std::vector<Edge> edges_;      //!< Vector holding all edges.
     SymVertexMap vert_map_inv_;    //!< Mapping from symbols to vertex indices.
