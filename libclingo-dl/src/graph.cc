@@ -168,6 +168,7 @@ template <typename T>
 bool Graph<T>::add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> f) {
 #ifdef CLINGODL_CROSSCHECK
     for (auto &node : nodes_) {
+        static_cast<void>(node);
         assert(!node.visited_from);
     }
 #endif
@@ -445,9 +446,11 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
         auto bf_costs_from_u = bellman_ford_(changed_edges_, uv.from);
         auto bf_costs_from_x = bellman_ford_(changed_edges_, xy.from);
         auto aa = bf_costs_from_u.find(xy.to);
+        static_cast<void>(aa);
         assert(aa != bf_costs_from_u.end());
         assert(aa->second == a);
         auto bb = bf_costs_from_x.find(uv.to);
+        static_cast<void>(bb);
         assert(bb != bf_costs_from_u.end());
         assert(bb->second == b);
 #endif
