@@ -367,8 +367,6 @@ template <class F>
     });
 }
 
-
-
 template <typename T>
 void Graph<T>::backtrack() {
     for (auto count = static_cast<int>(changed_nodes_.size()) - std::get<1>(changed_trail_.back()); count > 0; --count) {
