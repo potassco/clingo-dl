@@ -30,9 +30,15 @@
 namespace ClingoDL {
 
 //! Type for vertices/variables in the theory.
-using vertex_t = int;
+using vertex_t = uint32_t;
+//! Vector for vertex indices.
+using VertexIndexVec = std::vector<vertex_t>;
 //! Type for edge indices in the theory.
-using edge_t = int;
+using edge_t = uint32_t;
+//! Import literal_t from Clingo namespace.
+using Clingo::literal_t;
+//! Type for decision levels.
+using level_t = uint32_t;
 
 //! Vector of coefficients and variables.
 template <class N>

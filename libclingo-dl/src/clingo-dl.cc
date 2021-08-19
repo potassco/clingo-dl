@@ -35,8 +35,7 @@ namespace ClingoDL {
 using Clingo::Detail::handle_error;
 
 template <typename T>
-bool init(clingo_propagate_init_t* i, void* data)
-{
+bool init(clingo_propagate_init_t* i, void* data) {
     CLINGODL_TRY {
         Clingo::PropagateInit in(i);
         static_cast<DLPropagator<T>*>(data)->init(in);
@@ -45,8 +44,7 @@ bool init(clingo_propagate_init_t* i, void* data)
 }
 
 template <typename T>
-bool propagate(clingo_propagate_control_t* i, const clingo_literal_t *changes, size_t size, void* data)
-{
+bool propagate(clingo_propagate_control_t* i, const clingo_literal_t *changes, size_t size, void* data) {
     CLINGODL_TRY {
         Clingo::PropagateControl in(i);
         static_cast<DLPropagator<T>*>(data)->propagate(in, {changes, size});
@@ -55,15 +53,13 @@ bool propagate(clingo_propagate_control_t* i, const clingo_literal_t *changes, s
 }
 
 template <typename T>
-void undo(clingo_propagate_control_t const* i, const clingo_literal_t *changes, size_t size, void* data)
-{
+void undo(clingo_propagate_control_t const* i, const clingo_literal_t *changes, size_t size, void* data) {
     Clingo::PropagateControl in(const_cast<clingo_propagate_control_t *>(i)); // NOLINT
     static_cast<DLPropagator<T>*>(data)->undo(in, {changes, size});
 }
 
 template <typename T>
-bool check(clingo_propagate_control_t* i, void* data)
-{
+bool check(clingo_propagate_control_t* i, void* data) {
     CLINGODL_TRY {
         Clingo::PropagateControl in(i);
         static_cast<DLPropagator<T>*>(data)->check(in);
@@ -106,9 +102,9 @@ void set_value<double>(clingodl_value_t *variant, double value) {
 template<typename T>
 class DLPropagatorFacade : public PropagatorFacade {
 public:
-    DLPropagatorFacade(clingo_control_t *ctl, PropagatorConfig const &conf)
+    DLPropagatorFacade(clingo_control_t *control, PropagatorConfig const &conf)
     : prop_{step_, conf} {
-        handle_error(clingo_control_add(ctl,"base", nullptr, 0, THEORY));
+        handle_error(clingo_control_add(control,"base", nullptr, 0, THEORY));
         static clingo_propagator_t prop = {
             init<T>,
             propagate<T>,
@@ -116,11 +112,11 @@ public:
             check<T>,
             nullptr
         };
-        handle_error(clingo_control_register_propagator(ctl, &prop, &prop_, false));
+        handle_error(clingo_control_register_propagator(control, &prop, &prop_, false));
     }
 
     bool lookup_symbol(clingo_symbol_t name, size_t *index) override {
-        *index = prop_.lookup(name) + 1;
+        *index = prop_.lookup(Clingo::Symbol{name}) + 1;
         return *index <= prop_.num_vertices();
     }
 
@@ -205,13 +201,13 @@ extern "C" bool clingodl_create(clingodl_theory_t **theory) {
     CLINGODL_CATCH;
 }
 
-extern "C" bool clingodl_register(clingodl_theory_t *theory, clingo_control_t* ctl) {
+extern "C" bool clingodl_register(clingodl_theory_t *theory, clingo_control_t* control) {
     CLINGODL_TRY {
         if (!theory->rdl) {
-            theory->clingodl = std::make_unique<DLPropagatorFacade<int>>(ctl, theory->config);
+            theory->clingodl = std::make_unique<DLPropagatorFacade<int>>(control, theory->config);
         }
         else {
-            theory->clingodl = std::make_unique<DLPropagatorFacade<double>>(ctl, theory->config);
+            theory->clingodl = std::make_unique<DLPropagatorFacade<double>>(control, theory->config);
         }
     }
     CLINGODL_CATCH;
@@ -228,9 +224,9 @@ extern "C" bool clingodl_rewrite_ast(clingodl_theory_t *theory, clingo_ast_t *as
     CLINGODL_CATCH;
 }
 
-extern "C" bool clingodl_prepare(clingodl_theory_t *theory, clingo_control_t *ctl) {
+extern "C" bool clingodl_prepare(clingodl_theory_t *theory, clingo_control_t *control) {
     static_cast<void>(theory);
-    static_cast<void>(ctl);
+    static_cast<void>(control);
     return true;
 }
 
@@ -458,6 +454,7 @@ extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_opti
 }
 
 extern "C" bool clingodl_validate_options(clingodl_theory_t *theory) {
+    static_cast<void>(theory);
     return true;
 }
 
@@ -477,11 +474,11 @@ extern "C" clingo_symbol_t clingodl_get_symbol(clingodl_theory_t *theory, size_t
     return theory->clingodl->get_symbol(index);
 }
 
-extern "C" void clingodl_assignment_begin(clingodl_theory_t *theory, uint32_t thread_id, size_t *current) {
+extern "C" void clingodl_assignment_begin(clingodl_theory_t *theory, uint32_t thread_id, size_t *index) {
     // Note: the first vertex is always 0 and can be skipped because its value is 0
     static_cast<void>(theory);
     static_cast<void>(thread_id);
-    *current = 1;
+    *index = 1;
 }
 
 extern "C" bool clingodl_assignment_next(clingodl_theory_t *theory, uint32_t thread_id, size_t *index) {

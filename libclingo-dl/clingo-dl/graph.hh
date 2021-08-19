@@ -34,38 +34,42 @@ namespace ClingoDL {
 
 template <class T, class P>
 struct HeapFromM {
-    int &offset(int idx) { return static_cast<P *>(this)->nodes_[idx].offset; }
-    T &cost(int idx) { return static_cast<P *>(this)->nodes_[idx].cost_from; }
-    int to(int idx) { return static_cast<P *>(this)->edges_[idx].to; }
-    int from(int idx) { return static_cast<P *>(this)->edges_[idx].from; }
-    std::vector<int> &out(int idx) { return static_cast<P *>(this)->nodes_[idx].outgoing; }
-    int &path(int idx) { return static_cast<P *>(this)->nodes_[idx].path_from; }
-    int &visited(int idx) { return static_cast<P *>(this)->nodes_[idx].visited_from; }
-    bool &relevant(int idx) { return static_cast<P *>(this)->nodes_[idx].relevant_from; }
-    std::vector<int> &visited_set() { return static_cast<P *>(this)->visited_from_; }
-    std::vector<int> &candidate_outgoing(int idx) { return static_cast<P *>(this)->nodes_[idx].candidate_outgoing; }
-    std::vector<int> &candidate_incoming(int idx) { return static_cast<P *>(this)->nodes_[idx].candidate_incoming; }
-    void remove_incoming(int idx) { static_cast<P *>(this)->edge_states_[idx].removed_incoming = true; }
-    void remove_outgoing(int idx) { static_cast<P *>(this)->edge_states_[idx].removed_outgoing = true; }
-    uint64_t &propagation_cost() {return static_cast<P *>(this)->stats_.propagate_cost_from; }
+    using index_t = Heap<0>::index_type;
+    using value_t = T;
+    index_t &offset(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].offset; }
+    value_t &cost(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].cost_from; }
+    vertex_t to(edge_t idx) { return static_cast<P *>(this)->edges_[idx].to; }
+    vertex_t from(edge_t idx) { return static_cast<P *>(this)->edges_[idx].from; }
+    std::vector<vertex_t> &out(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].outgoing; }
+    edge_t &path(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].path_from; }
+    vertex_t &visited(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].visited_from; }
+    bool &relevant(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].relevant_from; }
+    std::vector<vertex_t> &visited_set() { return static_cast<P *>(this)->visited_from_; }
+    std::vector<vertex_t> &candidate_outgoing(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].candidate_outgoing; }
+    std::vector<vertex_t> &candidate_incoming(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].candidate_incoming; }
+    void remove_incoming(edge_t idx) { static_cast<P *>(this)->edge_states_[idx].removed_incoming = true; }
+    void remove_outgoing(edge_t idx) { static_cast<P *>(this)->edge_states_[idx].removed_outgoing = true; }
+    uint64_t &propagation_cost() { return static_cast<P *>(this)->stats_.propagate_cost_from; }
 };
 
 template <class T, class P>
 struct HeapToM {
-    int &offset(int idx) { return static_cast<P *>(this)->nodes_[idx].offset; }
-    T &cost(int idx) { return static_cast<P *>(this)->nodes_[idx].cost_to; }
-    int to(int idx) { return static_cast<P *>(this)->edges_[idx].from; }
-    int from(int idx) { return static_cast<P *>(this)->edges_[idx].to; }
-    std::vector<int> &out(int idx) { return static_cast<P *>(this)->nodes_[idx].incoming; }
-    int &path(int idx) { return static_cast<P *>(this)->nodes_[idx].path_to; }
-    bool &visited(int idx) { return static_cast<P *>(this)->nodes_[idx].visited_to; }
-    bool &relevant(int idx) { return static_cast<P *>(this)->nodes_[idx].relevant_to; }
-    std::vector<int> &visited_set() { return static_cast<P *>(this)->visited_to_; }
-    std::vector<int> &candidate_outgoing(int idx) { return static_cast<P *>(this)->nodes_[idx].candidate_incoming; }
-    std::vector<int> &candidate_incoming(int idx) { return static_cast<P *>(this)->nodes_[idx].candidate_outgoing; }
-    void remove_incoming(int idx) { static_cast<P *>(this)->edge_states_[idx].removed_outgoing = true; }
-    void remove_outgoing(int idx) { static_cast<P *>(this)->edge_states_[idx].removed_incoming = true; }
-    uint64_t &propagation_cost() {return static_cast<P *>(this)->stats_.propagate_cost_to; }
+    using index_t = Heap<0>::index_type;
+    using value_t = T;
+    index_t &offset(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].offset; }
+    value_t &cost(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].cost_to; }
+    vertex_t to(edge_t idx) { return static_cast<P *>(this)->edges_[idx].from; }
+    vertex_t from(edge_t idx) { return static_cast<P *>(this)->edges_[idx].to; }
+    std::vector<vertex_t> &out(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].incoming; }
+    edge_t &path(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].path_to; }
+    bool &visited(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].visited_to; }
+    bool &relevant(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].relevant_to; }
+    std::vector<vertex_t> &visited_set() { return static_cast<P *>(this)->visited_to_; }
+    std::vector<vertex_t> &candidate_outgoing(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].candidate_incoming; }
+    std::vector<vertex_t> &candidate_incoming(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].candidate_outgoing; }
+    void remove_incoming(edge_t idx) { static_cast<P *>(this)->edge_states_[idx].removed_outgoing = true; }
+    void remove_outgoing(edge_t idx) { static_cast<P *>(this)->edge_states_[idx].removed_incoming = true; }
+    uint64_t &propagation_cost() { return static_cast<P *>(this)->stats_.propagate_cost_to; }
 };
 
 //! Struct to represent an edge in the difference logic graph.
@@ -81,8 +85,7 @@ struct Edge {
 template <typename T>
 struct Vertex {
     using value_t = T;
-    using PotentialStack = std::vector<std::pair<int, T>>;
-    using VertexTVec = std::vector<vertex_t>;
+    using PotentialStack = std::vector<std::pair<vertex_t, value_t>>;
 
     //! Return true if the node has a value assigned.
     [[nodiscard]] bool defined() const {
@@ -93,19 +96,19 @@ struct Vertex {
         return potential_stack.back().second;
     }
 
-    VertexTVec outgoing;            //!< Outgoing edges from this vertex that are true.
-    VertexTVec incoming;            //!< Incoming edges to this vertex that are true.
-    VertexTVec candidate_incoming;  //!< Edges that might become outgoing edges.
-    VertexTVec candidate_outgoing;  //!< Edges that might become incoming edges.
+    VertexIndexVec outgoing;            //!< Outgoing edges from this vertex that are true.
+    VertexIndexVec incoming;            //!< Incoming edges to this vertex that are true.
+    VertexIndexVec candidate_incoming;  //!< Edges that might become outgoing edges.
+    VertexIndexVec candidate_outgoing;  //!< Edges that might become incoming edges.
     PotentialStack potential_stack; //!< Vector of pairs of level and potential.
     value_t cost_from{0};
     value_t cost_to{0};
-    int offset{0};
-    int path_from{0};
-    int path_to{0};
-    int degree_out{0};
-    int degree_in{0};
-    int visited_from{0};
+    uint32_t offset{0};
+    edge_t path_from{0};
+    edge_t path_to{0};
+    vertex_t degree_out{0};
+    vertex_t degree_in{0};
+    vertex_t visited_from{0};
     bool relevant_from{false};
     bool relevant_to{false};
     bool visited_to{false};
@@ -181,49 +184,49 @@ class Graph : private HeapToM<T, Graph<T>>, private HeapFromM<T, Graph<T>> {
 public:
     Graph(ThreadStatistics &stats, EdgeVec const &edges, PropagationMode propagate);
     [[nodiscard]] bool empty() const;
-    [[nodiscard]] bool valid_node(int idx) const;
-    [[nodiscard]] int node_value_defined(int idx) const;
-    [[nodiscard]] bool has_value(int idx) const;
-    [[nodiscard]] value_t node_value(int idx) const;
-    [[nodiscard]] bool edge_is_active(int edge_idx) const;
+    [[nodiscard]] bool valid_node(vertex_t idx) const;
+    [[nodiscard]] bool node_value_defined(vertex_t idx) const;
+    [[nodiscard]] bool has_value(vertex_t idx) const;
+    [[nodiscard]] value_t node_value(vertex_t idx) const;
+    [[nodiscard]] bool edge_is_active(edge_t edge_idx) const;
     [[nodiscard]] bool can_propagate() const;
     void disable_propagate();
-    void ensure_decision_level(int level, bool enable_propagate);
-    [[nodiscard]] bool add_edge(int uv_idx, std::function<bool(std::vector<int>)> f);
-    [[nodiscard]] bool propagate(int xy_idx, Clingo::PropagateControl &ctl);
+    void ensure_decision_level(level_t level, bool enable_propagate);
+    [[nodiscard]] bool add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> f);
+    [[nodiscard]] bool propagate(edge_t xy_idx, Clingo::PropagateControl &ctl);
     void backtrack();
-    void remove_candidate_edge(int uv_idx);
+    void remove_candidate_edge(edge_t uv_idx);
     [[nodiscard]] PropagationMode mode() const;
 
 private:
     template <class P, class F>
-    [[nodiscard]] bool with_incoming_(int s_idx, P p, F f);
+    [[nodiscard]] bool with_incoming_(vertex_t s_idx, P p, F f);
     template <class F>
-    [[nodiscard]] bool cheap_propagate_(int u_idx, int s_idx, F f);
-    void add_candidate_edge_(int uv_idx);
-    [[nodiscard]] bool propagate_edge_true_(int uv_idx, int xy_idx);
-    [[nodiscard]] bool propagate_edge_false_(Clingo::PropagateControl &ctl, int uv_idx, int xy_idx, bool &ret);
+    [[nodiscard]] bool cheap_propagate_(vertex_t u_idx, vertex_t s_idx, F f);
+    void add_candidate_edge_(edge_t uv_idx);
+    [[nodiscard]] bool propagate_edge_true_(edge_t uv_idx, edge_t xy_idx);
+    [[nodiscard]] bool propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret);
     template <class M>
-    [[nodiscard]] bool propagate_edges_(M &m, Clingo::PropagateControl &ctl, int xy_idx, bool forward, bool backward);
+    [[nodiscard]] bool propagate_edges_(M &m, Clingo::PropagateControl &ctl, edge_t xy_idx, bool forward, bool backward);
     template <class M>
-    [[nodiscard]] std::pair<int, int> dijkstra_(int source_idx, std::vector<int> &visited_set, M &m);
+    [[nodiscard]] std::pair<vertex_t, vertex_t> dijkstra_(vertex_t source_idx, std::vector<vertex_t> &visited_set, M &m);
 #ifdef CLINGODL_CROSSCHECK
-    std::unordered_map<int, value_t> bellman_ford_(std::vector<int> const &edges, int source);
+    std::unordered_map<int, value_t> bellman_ford_(std::vector<edge_t> const &edges, int source);
 #endif
-    void set_potential_(Vertex &node, int level, value_t potential);
-    [[nodiscard]] int current_decision_level_();
+    void set_potential_(Vertex &node, level_t level, value_t potential);
+    [[nodiscard]] level_t current_decision_level_();
 
     Heap<4> costs_heap_;
-    std::vector<int> visited_from_;
-    std::vector<int> visited_to_;
+    std::vector<vertex_t> visited_from_;
+    std::vector<vertex_t> visited_to_;
     EdgeVec const &edges_;
     VertexVec nodes_;
-    std::vector<int> changed_nodes_;
-    std::vector<int> changed_edges_;
-    std::vector<std::tuple<int, int, int, int, bool>> changed_trail_;
-    std::vector<int> inactive_edges_;
+    std::vector<vertex_t> changed_nodes_;
+    std::vector<edge_t> changed_edges_;
+    std::vector<std::tuple<level_t, uint32_t, uint32_t, uint32_t, bool>> changed_trail_;
+    std::vector<edge_t> inactive_edges_;
     std::vector<EdgeState> edge_states_;
-    std::vector<int> neg_cycle_;
+    std::vector<edge_t> neg_cycle_;
     ThreadStatistics &stats_;
     PropagationMode propagate_;
 };

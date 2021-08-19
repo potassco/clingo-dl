@@ -11,7 +11,7 @@ public:
     SolveHandler(clingodl_theory_t *theory)
     : theory_{theory} {
     }
-    Clingo::SymbolVector const &symbols() const {
+    [[nodiscard]] Clingo::SymbolVector const &symbols() const {
         return symbols_;
     }
 private:
@@ -58,7 +58,8 @@ Clingo::SymbolVector optimize(Clingo::Control &ctl, Clingo::Symbol bound, double
 } // namespace
 
 TEST_CASE("optimize", "[clingo-dl]") {
-    auto a = Clingo::Id("a"),  b = Clingo::Id("b");
+    auto a = Clingo::Id("a");
+    auto b = Clingo::Id("b");
     SECTION("sat") {
         for (auto factor : {1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0}) {
             Clingo::Control ctl{{"1"}};
@@ -73,7 +74,7 @@ TEST_CASE("optimize", "[clingo-dl]") {
     }
     SECTION("unsat") {
         Clingo::Control ctl{{"1"}};
-        REQUIRE(optimize(
+        REQUIRE(optimize( // NOLINT
             ctl, b, 1.0,
             "&diff { a - 0 } >=  100.\n"
             "&diff { b - 0 } >= -100.\n"

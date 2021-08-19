@@ -43,9 +43,16 @@ inline Clingo::Symbol to_symbol(T value) {
 } // namespace
 
 template <typename T>
-struct DLPropagator<T>::NodeInfo {
-    NodeInfo(uint32_t cc = 0, bool visited = false)
-    : cc(cc), visited(visited) {}
+struct DLPropagator<T>::VertexInfo {
+    VertexInfo(Clingo::Symbol symbol)
+    : symbol{symbol}
+    , cc(0)
+    , visited(false) { }
+    void set_visited(uint32_t cc, bool visited) {
+        this->cc = cc;
+        this->visited = visited;
+    }
+    Clingo::Symbol symbol;
     uint32_t cc : 31;
     uint32_t visited : 1;
 };
@@ -59,7 +66,7 @@ struct DLPropagator<T>::ThreadState {
         , propagate_budget{propagate_budget} { }
     ThreadStatistics &stats;
     Graph dl_graph;
-    std::vector<Clingo::literal_t> false_lits;
+    std::vector<literal_t> false_lits;
     std::vector<int> todo_edges;
     uint64_t propagate_root;
     uint64_t propagate_budget;
@@ -68,7 +75,7 @@ struct DLPropagator<T>::ThreadState {
 // Note:: it looks like this can go into the ThreadState
 template <typename T>
 struct DLPropagator<T>::FactState {
-    std::vector<Clingo::literal_t> lits;
+    std::vector<literal_t> lits;
     size_t limit{0};
 };
 
@@ -76,63 +83,43 @@ template <typename T>
 DLPropagator<T>::DLPropagator(Statistics &stats, PropagatorConfig conf)
 : stats_{stats}
 , conf_{std::move(conf)} {
-    zero_nodes_.emplace_back(map_vertex_(Clingo::Number(0)));
+    zero_vertices_.emplace_back(map_vertex_(Clingo::Number(0)));
     cc_reset_();
 }
-
-#if defined(_MSC_VER) && _MSC_VER < 1920
-template <typename T>
-DLPropagator<T>::DLPropagator(DLPropagator &&other) noexcept
-: states_{std::move(other.states_)}
-, facts_{std::move(other.facts_)}
-, lit_to_edges_{std::move(other.lit_to_edges_)}
-, false_lit_to_edges_{std::move(other.false_lit_to_edges_)}
-, edges_{std::move(other.edges_)}
-, vert_map_{std::move(other.vert_map_)}
-, vert_map_inv_{std::move(other.vert_map_inv_)}
-, node_info_{std::move(other.node_info_)}
-, zero_nodes_{std::move(other.zero_nodes_)}
-, stats_{other.stats_}
-, conf_{std::move(other.conf_)} {
-}
-#else
-template <typename T>
-DLPropagator<T>::DLPropagator(DLPropagator &&other) noexcept = default;
-#endif
 
 template <typename T>
 DLPropagator<T>::~DLPropagator() = default;
 
 template <typename T>
-size_t DLPropagator<T>::num_vertices() const {
-    return vert_map_.size();
+vertex_t DLPropagator<T>::num_vertices() const {
+    return vertex_info_.size();
 }
 
 template <typename T>
-Clingo::Symbol DLPropagator<T>::symbol(size_t index) const {
-    return vert_map_[index];
+Clingo::Symbol DLPropagator<T>::symbol(vertex_t index) const {
+    return vertex_info_[index].symbol;
 }
 
 template <typename T>
-uint32_t DLPropagator<T>::lookup(clingo_symbol_t symbol) {
-    auto it = vert_map_inv_.find(Clingo::Symbol(symbol));
+vertex_t DLPropagator<T>::lookup(Clingo::Symbol symbol) {
+    auto it = vert_map_inv_.find(symbol);
     return it != vert_map_inv_.end()
         ? it->second
         : num_vertices();
 }
 
 template <typename T>
-bool DLPropagator<T>::has_lower_bound(uint32_t thread_id, size_t index) const {
-    return index < vert_map_.size() && !is_zero_(index) && states_[thread_id].dl_graph.has_value(index);
+bool DLPropagator<T>::has_lower_bound(Clingo::id_t thread_id, vertex_t index) const {
+    return index < vertex_info_.size() && !is_zero_(index) && states_[thread_id].dl_graph.has_value(index);
 }
 
 template <typename T>
-T DLPropagator<T>::lower_bound(uint32_t thread_id, size_t index) const {
+auto DLPropagator<T>::lower_bound(Clingo::id_t thread_id, vertex_t index) const -> value_t {
     assert(has_lower_bound(thread_id, index));
     auto &state = states_[thread_id];
     T adjust = 0;
-    auto cc = node_info_[index].cc;
-    auto zero_node = zero_nodes_[cc];
+    auto cc = vertex_info_[index].cc;
+    auto zero_node = zero_vertices_[cc];
 
     if (state.dl_graph.has_value(zero_node)) {
         adjust = state.dl_graph.node_value(zero_node);
@@ -144,17 +131,17 @@ template <typename T>
 void DLPropagator<T>::extend_model(Clingo::Model &model) {
     auto &state = states_[model.thread_id()];
     std::vector<T> adjust;
-    adjust.reserve(zero_nodes_.size());
-    for (auto node : zero_nodes_) {
+    adjust.reserve(zero_vertices_.size());
+    for (auto node : zero_vertices_) {
         adjust.emplace_back(state.dl_graph.has_value(node) ? state.dl_graph.node_value(node) : 0);
     }
 
     Clingo::SymbolVector vec;
-    for (auto idx = 0; idx < vert_map_.size(); ++idx) {
+    for (vertex_t idx = 0; idx < numeric_cast<vertex_t>(vertex_info_.size()); ++idx) {
         if (!is_zero_(idx) && state.dl_graph.has_value(idx)) {
             Clingo::SymbolVector params;
-            params.emplace_back(vert_map_[idx]);
-            auto cc = node_info_[idx].cc;
+            params.emplace_back(vertex_info_[idx].symbol);
+            auto cc = vertex_info_[idx].cc;
             params.emplace_back(to_symbol<T>(state.dl_graph.node_value(idx) - adjust[cc]));
             vec.emplace_back(Function("dl", params));
         }
@@ -171,12 +158,14 @@ void DLPropagator<T>::init(Clingo::PropagateInit &init) {
     int edge_start = edges_.size();
 
     Timer t{stats_.time_init};
-    add_constraints_(init);
+    if (!add_constraints_(init)) {
+        return;
+    }
 
     // build adjacency list
-    std::unordered_multimap<int, int> outgoing;
-    std::unordered_multimap<int, int> incoming;
-    for (int edge_id = 0, size = edges_.size(); edge_id < size; ++edge_id) {
+    AdjacencyMap outgoing;
+    AdjacencyMap incoming;
+    for (edge_t edge_id = 0, size = numeric_cast<edge_t>(edges_.size()); edge_id < size; ++edge_id) {
         outgoing.emplace(std::make_pair(edges_[edge_id].from, edge_id));
         incoming.emplace(std::make_pair(edges_[edge_id].to, edge_id));
     }
@@ -232,24 +221,27 @@ void DLPropagator<T>::check(Clingo::PropagateControl &ctl) {
 }
 
 template <typename T>
-int DLPropagator<T>::map_vertex_(Clingo::Symbol v) {
-    auto ret = vert_map_inv_.emplace(v, static_cast<int>(vert_map_.size()));
-    if (ret.second) {
-        vert_map_.emplace_back(ret.first->first);
+vertex_t DLPropagator<T>::map_vertex_(Clingo::Symbol symbol) {
+    auto [it, ins] = vert_map_inv_.emplace(symbol, numeric_cast<vertex_t>(vertex_info_.size()));
+    if (ins) {
+        vertex_info_.emplace_back(it->first);
     }
-    return ret.first->second;
+    return it->second;
 }
 
 template <typename T>
-void DLPropagator<T>::add_constraints_(Clingo::PropagateInit &init) {
+bool DLPropagator<T>::add_constraints_(Clingo::PropagateInit &init) {
     for (auto atom : init.theory_atoms()) {
         auto term = atom.term();
         if (match(term, "__diff_h", 0) || match(term, "__diff_b", 0)) {
             auto edge = parse<T>(atom, [this](Clingo::Symbol const &sym) { return map_vertex_(sym); });
             int lit = init.solver_literal(atom.literal());
-            normalize_constraint_(init, lit, edge.lhs, edge.rel, edge.rhs, edge.strict);
+            if (!normalize_constraint_(init, lit, edge.lhs, edge.rel, edge.rhs, edge.strict)) {
+                return false;
+            }
         }
     }
+    return true;
 }
 
 template <typename T>
@@ -420,7 +412,7 @@ bool DLPropagator<T>::add_edges_(Clingo::PropagateInit& init, int literal, CoVar
 }
 
 template <typename T>
-void DLPropagator<T>::add_edges_(Clingo::PropagateInit& init, int u_id, int v_id, T weight, int lit, bool strict) {
+void DLPropagator<T>::add_edges_(Clingo::PropagateInit& init, vertex_t u_id, vertex_t v_id, value_t weight, literal_t lit, bool strict) {
     add_edge_(init, u_id, v_id, weight, lit);
     if (strict) {
         add_edge_(init, v_id, u_id, -weight-1, -lit);
@@ -428,55 +420,52 @@ void DLPropagator<T>::add_edges_(Clingo::PropagateInit& init, int u_id, int v_id
 }
 
 template <typename T>
-void DLPropagator<T>::add_edge_(Clingo::PropagateInit &init, int u_id, int v_id, T weight, int lit) {
+void DLPropagator<T>::add_edge_(Clingo::PropagateInit &init, vertex_t u_id, vertex_t v_id, value_t weight, literal_t lit) {
     auto id = numeric_cast<int>(edges_.size());
     edges_.push_back({u_id, v_id, weight, lit});
     lit_to_edges_.emplace(lit, id);
-    bool add = false;
     for (int i = 0; i < init.number_of_threads(); ++i) {
         init.add_watch(lit, i);
         if (conf_.get_propagate_mode(i) >= PropagationMode::Strong || conf_.get_propagate_root(i) > 0 || conf_.get_propagate_budget(i) > 0) {
-            add = true;
+            disable_edges_ = true;
             init.add_watch(-lit, i);
         }
-    }
-    if (add) {
-        false_lit_to_edges_.emplace(-lit, id);
     }
 }
 
 template <typename T>
 void DLPropagator<T>::cc_reset_() {
-    node_info_.clear();
-    node_info_.resize(vert_map_.size());
-    for (unsigned int i = 0; i < zero_nodes_.size(); ++i) {
-        node_info_[zero_nodes_[i]] = NodeInfo(i, true);
+    for (auto &info : vertex_info_) {
+        info.set_visited(0, false);
+    }
+    for (unsigned int i = 0; i < zero_vertices_.size(); ++i) {
+        vertex_info_[zero_vertices_[i]].set_visited(i, true);
     }
 }
 
 template <typename T>
-bool DLPropagator<T>::cc_visited_(vertex_t vertex) const {
-    return node_info_[vertex].visited;
+bool DLPropagator<T>::cc_visited_(vertex_t index) const {
+    return vertex_info_[index].visited;
 }
 
 template <typename T>
-bool DLPropagator<T>::is_zero_(vertex_t vertex) const {
-    assert(node_info_[vertex].cc < zero_nodes_.size());
-    return zero_nodes_[node_info_[vertex].cc] == vertex;
+bool DLPropagator<T>::is_zero_(vertex_t index) const {
+    assert(vertex_info_[index].cc < zero_vertices_.size());
+    return zero_vertices_[vertex_info_[index].cc] == index;
 }
 
 template <typename T>
-void DLPropagator<T>::cc_calculate_(std::unordered_multimap<int, int> &outgoing, std::unordered_multimap<int, int> &incoming) {
+void DLPropagator<T>::cc_calculate_(AdjacencyMap &outgoing, AdjacencyMap &incoming) {
     uint32_t cc = 0;
     // Note that this marks zero nodes as visited.
     cc_reset_();
 
     std::vector<int> node_stack;
-    for (int node = 0; node < vert_map_.size(); ++node) {
+    for (vertex_t node = 0; node < numeric_cast<vertex_t>(vertex_info_.size()); ++node) {
         if (cc_visited_(node)) {
             continue;
         }
-        node_info_[node] = NodeInfo(cc, true);
+        vertex_info_[node].set_visited(cc, true);
         node_stack.emplace_back(node);
         while (!node_stack.empty()) {
             auto node = node_stack.back();
@@ -485,7 +474,7 @@ void DLPropagator<T>::cc_calculate_(std::unordered_multimap<int, int> &outgoing,
             for (auto edge = edges.first; edge != edges.second; ++edge) {
                 auto add_node = edges_[edge->second].to;
                 if (!cc_visited_(add_node)) {
-                    node_info_[add_node] = NodeInfo(cc, true);
+                    vertex_info_[add_node].set_visited(cc, true);
                     node_stack.emplace_back(add_node);
                 }
             }
@@ -493,7 +482,7 @@ void DLPropagator<T>::cc_calculate_(std::unordered_multimap<int, int> &outgoing,
             for (auto edge = edges.first; edge != edges.second; ++edge) {
                 auto add_node = edges_[edge->second].from;
                 if (!cc_visited_(add_node)) {
-                    node_info_[add_node] = NodeInfo(cc, true);
+                    vertex_info_[add_node].set_visited(cc, true);
                     node_stack.emplace_back(add_node);
                 }
             }
@@ -502,31 +491,30 @@ void DLPropagator<T>::cc_calculate_(std::unordered_multimap<int, int> &outgoing,
     }
     stats_.ccs = cc;
 
-    zero_nodes_.reserve(cc);
-    for (int i = zero_nodes_.size(); i < cc; ++i) {
+    zero_vertices_.reserve(cc);
+    for (auto i = numeric_cast<uint32_t>(zero_vertices_.size()); i < cc; ++i) {
         auto node = map_vertex_(Clingo::Function("__null", {Clingo::Number(i)}));
-        zero_nodes_.emplace_back(node);
-        node_info_.resize(std::max(node_info_.size(), static_cast<size_t>(node + 1)));
-        node_info_[node] = NodeInfo(i, true);
+        zero_vertices_.emplace_back(node);
+        vertex_info_[node].set_visited(i, true);
     }
 
-    std::vector<std::pair<int, int>> outgoing_change;
-    std::vector<std::pair<int, int>> incoming_change;
-    for (auto zero_node : zero_nodes_) {
+    std::vector<std::pair<vertex_t, vertex_t>> outgoing_change;
+    std::vector<std::pair<vertex_t, vertex_t>> incoming_change;
+    for (auto zero_node : zero_vertices_) {
         auto range = outgoing.equal_range(zero_node);
         for (auto edge = range.first; edge != range.second; ++edge) {
             auto &e = edges_[edge->second];
-            auto cc = node_info_[e.to].cc;
-            e.from = zero_nodes_[cc];
-            outgoing_change.emplace_back(zero_nodes_[cc], edge->second);
+            auto cc = vertex_info_[e.to].cc;
+            e.from = zero_vertices_[cc];
+            outgoing_change.emplace_back(zero_vertices_[cc], edge->second);
         }
         outgoing.erase(range.first, range.second);
         range = incoming.equal_range(zero_node);
         for (auto edge = range.first; edge != range.second; ++edge) {
             auto &e = edges_[edge->second];
-            auto cc = node_info_[e.from].cc;
-            e.to = zero_nodes_[cc];
-            incoming_change.emplace_back(zero_nodes_[cc], edge->second);
+            auto cc = vertex_info_[e.from].cc;
+            e.to = zero_vertices_[cc];
+            incoming_change.emplace_back(zero_vertices_[cc], edge->second);
         }
         incoming.erase(range.first, range.second);
     }
@@ -535,7 +523,7 @@ void DLPropagator<T>::cc_calculate_(std::unordered_multimap<int, int> &outgoing,
 }
 
 template <typename T>
-void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, int edge_start, std::unordered_multimap<int, int> &outgoing) {
+void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, edge_t edge_start, AdjacencyMap &outgoing) {
     // let r and s be edge literals and T be the true literal:
     //
     //            r     T
@@ -549,18 +537,19 @@ void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, int edge_s
     // if the above graph gives rise to a negative cycle, then r and s are mutually exclusive
     // the algorithm below adds clauses excluding such mutexes
     struct State {
-        T weight;
-        int id;
-        int n;
-        int previous;
+        value_t weight;
+        edge_t id;
+        uint32_t n;
+        uint32_t previous;
     };
+    static constexpr auto invalid = std::numeric_limits<uint32_t>::max();
     std::vector<State> queue;
-    std::vector<Clingo::literal_t> clause;
+    std::vector<literal_t> clause;
 
     auto ass = init.assignment();
 
     // traverse graph starting from each edge
-    for (int start_id = edge_start, size = edges_.size(); start_id < size; ++start_id) {
+    for (edge_t start_id = edge_start, size = numeric_cast<edge_t>(edges_.size()); start_id < size; ++start_id) {
         auto &start = edges_[start_id];
         // skipping over true literals forgoes some mutexes in the incremental case
         // but makes the algorithm much faster when there are many static edges
@@ -569,8 +558,8 @@ void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, int edge_s
             continue;
         }
 
-        queue.emplace_back(State{start.weight, start_id, 1, -1});
-        for (int queue_offset = 0; queue_offset < queue.size(); ++queue_offset) {
+        queue.emplace_back(State{start.weight, start_id, 1, invalid});
+        for (uint32_t queue_offset = 0; queue_offset < numeric_cast<uint32_t>(queue.size()); ++queue_offset) {
             auto rs_state = queue[queue_offset];
             auto rs = edges_[rs_state.id];
             auto out = outgoing.equal_range(rs.to);
@@ -585,7 +574,7 @@ void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, int edge_s
                 auto n = rs_state.n;
                 auto c = queue_offset;
                 int found = 0;
-                while (c != -1) {
+                while (c != invalid) {
                     auto &cc = edges_[queue[c].id];
                     if (cc.lit == -st.lit || queue[c].id == st_id) {
                         found = 2;
@@ -606,7 +595,7 @@ void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, int edge_s
                     ++stats_.mutexes;
                     clause.emplace_back(-st.lit);
                     auto c = queue_offset;
-                    while (c != -1) {
+                    while (c != invalid) {
                         auto &cc = edges_[queue[c].id];
                         clause.emplace_back(-cc.lit);
                         c = queue[c].previous;
@@ -629,48 +618,50 @@ template <typename T>
 void DLPropagator<T>::initialize_states_(Clingo::PropagateInit &init) {
     stats_.dl_stats.resize(init.number_of_threads());
     states_.clear();
-    if (facts_.size() < init.number_of_threads()) {
+    if (facts_.size() < numeric_cast<size_t>(init.number_of_threads())) {
         facts_.resize(init.number_of_threads());
     }
-    for (int i = 0; i < init.number_of_threads(); ++i) {
+    for (Clingo::id_t i = 0; i < numeric_cast<Clingo::id_t>(init.number_of_threads()); ++i) {
         states_.emplace_back(stats_.dl_stats[i], edges_, conf_.get_propagate_mode(i), conf_.get_propagate_root(i), conf_.get_propagate_budget(i));
         facts_[i].limit = facts_[i].lits.size();
     }
 }
 
 template <typename T>
-void DLPropagator<T>::disable_edge_by_lit(ThreadState &state, Clingo::literal_t lit) {
-    for (auto it = false_lit_to_edges_.find(lit), ie = false_lit_to_edges_.end(); it != ie && it->first == lit; ++it) {
-        if (state.dl_graph.edge_is_active(it->second)) {
-            state.dl_graph.remove_candidate_edge(it->second);
+void DLPropagator<T>::disable_edge_by_lit(ThreadState &state, literal_t lit) {
+    if (disable_edges_) {
+        for (auto it = lit_to_edges_.find(-lit), ie = lit_to_edges_.end(); it != ie && it->first == -lit; ++it) {
+            if (state.dl_graph.edge_is_active(it->second)) {
+                state.dl_graph.remove_candidate_edge(it->second);
+            }
         }
     }
 }
 
 template <typename T>
-int DLPropagator<T>::get_potential_(Graph const &graph, vertex_t vertex) {
-    return graph.node_value_defined(vertex) ? -graph.node_value(vertex) : 0;
-};
+auto DLPropagator<T>::get_potential_(Graph const &graph, vertex_t index) const -> value_t {
+    return graph.node_value_defined(index) ? -graph.node_value(index) : 0;
+}
 
 template <typename T>
-int DLPropagator<T>::cost_(Graph const &graph, Edge const &edge) {
+auto DLPropagator<T>::cost_(Graph const &graph, Edge const &edge) const -> value_t {
     return get_potential_(graph, edge.from) + edge.weight - get_potential_(graph, edge.to);
-};
+}
 
 template <typename T>
-int DLPropagator<T>::cost_(SortMode mode, Graph const &graph, int i) {
+auto DLPropagator<T>::cost_(SortMode mode, Graph const &graph, vertex_t index) const -> value_t {
     switch(mode) {
         case SortMode::Weight: {
-            return edges_[i].weight;
+            return edges_[index].weight;
         }
         case SortMode::WeightRev: {
-            return -edges_[i].weight;
+            return -edges_[index].weight;
         }
         case SortMode::Potential: {
-            return cost_(graph, edges_[i]);
+            return cost_(graph, edges_[index]);
         }
         case SortMode::PotentialRev: {
-            return -cost_(graph, edges_[i]);
+            return -cost_(graph, edges_[index]);
         }
         case SortMode::No: {
             break;
@@ -719,8 +710,8 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
     sort_edges(conf_.get_sort_mode(thread_id), state);
     for (auto edge : state.todo_edges) {
         if (state.dl_graph.edge_is_active(edge)) {
-            auto ret = state.dl_graph.add_edge(edge, [&](std::vector<int> const &neg_cycle) {
-                std::vector<Clingo::literal_t> clause;
+            auto ret = state.dl_graph.add_edge(edge, [&](std::vector<edge_t> const &neg_cycle) {
+                std::vector<literal_t> clause;
                 for (auto eid : neg_cycle) {
                     auto lit = -edges_[eid].lit;
                     if (ctl.assignment().is_true(lit)) { return true; }

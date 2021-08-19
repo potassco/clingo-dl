@@ -25,7 +25,7 @@ ResultVec solve(clingodl_theory_t *theory, Clingo::Control &ctl) {
         auto &sol = result.back().first;
         auto &sol_bool = result.back().second;
         auto id = m.thread_id();
-        size_t index;
+        size_t index{0};
         for (clingodl_assignment_begin(theory, id, &index); clingodl_assignment_next(theory, id, &index); ) {
             clingodl_value_t value;
             clingodl_assignment_get_value(theory, id, index, &value);
@@ -59,9 +59,11 @@ void parse_program(clingodl_theory_t *theory, Clingo::Control &ctl, const char *
 TEST_CASE("solving", "[clingo]") {
     SECTION("with control") {
         using namespace Clingo;
-        auto a = Id("a"),  b = Id("b"), c = Id("c");
+        auto a = Id("a");
+        auto b = Id("b");
+        auto c = Id("c");
         Control ctl{{"0"}};
-        clingodl_theory_t *theory;
+        clingodl_theory_t *theory{nullptr};
         REQUIRE(clingodl_create(&theory));
         SECTION("solve") {
             REQUIRE(clingodl_register(theory, ctl.to_c()));
@@ -149,7 +151,7 @@ TEST_CASE("solving", "[clingo]") {
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
 
             auto result = solve(theory, ctl);
-            REQUIRE(result == (ResultVec{{{{a, 1.5}},{}}}));
+            REQUIRE(result == (ResultVec{{{{a, 1.5}},{}}})); // NOLINT
         }
 
         SECTION("parse") {
@@ -163,7 +165,8 @@ TEST_CASE("solving", "[clingo]") {
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
 
             auto result = solve(theory, ctl);
-            auto p = Clingo::parse_term("p(3)"),  q = Clingo::parse_term("q(5)");
+            auto p = Clingo::parse_term("p(3)");
+            auto q = Clingo::parse_term("q(5)");
             REQUIRE(result == (ResultVec{{{{p, 0}, {q, 6}},{}}}));
         }
         SECTION("normalize") {
@@ -181,8 +184,12 @@ TEST_CASE("solving", "[clingo]") {
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
 
             auto result = solve(theory, ctl);
-            auto b = Id("b"),  c = Id("c"), d = Id("d"),  e = Id("e"), f = Function("",{Id("f"),Id("f")});
-            REQUIRE(result == (ResultVec{{{{a, 2},{b, 2},{c, 1},{d, 0},{e, 0}, {f, 1}},{}},{{{a, 2},{b, 2},{c, 1},{d, 0},{e, 1}, {f, 0}},{}}}));
+            auto b = Id("b");
+            auto c = Id("c");
+            auto d = Id("d");
+            auto e = Id("e");
+            auto f = Function("", {Id("f"), Id("f")});
+            REQUIRE(result == (ResultVec{{{{a, 2}, {b, 2}, {c, 1}, {d, 0}, {e, 0}, {f, 1}}, {}}, {{{a, 2}, {b, 2},{c, 1},{d, 0}, {e, 1}, {f, 0}}, {}}}));
         }
         SECTION("empty constraints") {
             REQUIRE(clingodl_register(theory, ctl.to_c()));

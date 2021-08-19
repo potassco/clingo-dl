@@ -36,9 +36,19 @@ public:
     ClingoDLApp() {
         handle_error(clingodl_create(&theory_));
     }
-    ~ClingoDLApp() { clingodl_destroy(theory_); }
-    char const *program_name() const noexcept override { return "clingo-dl"; }
-    char const *version() const noexcept override { return CLINGODL_VERSION; }
+    ClingoDLApp(ClingoDLApp const &) = default;
+    ClingoDLApp(ClingoDLApp &&) = default;
+    ClingoDLApp &operator=(ClingoDLApp const &) = default;
+    ClingoDLApp &operator=(ClingoDLApp &&) = default;
+    ~ClingoDLApp() override {
+        clingodl_destroy(theory_);
+    }
+    char const *program_name() const noexcept override {
+        return "clingo-dl";
+    }
+    char const *version() const noexcept override {
+        return CLINGODL_VERSION;
+    }
     bool on_model(Clingo::Model &model) override {
         handle_error(clingodl_on_model(theory_, model.to_c()));
         return true;
@@ -48,7 +58,7 @@ public:
         handle_error(clingodl_on_statistics(theory_, step.to_c(), accu.to_c()));
     }
 
-    void main(Clingo::Control &ctl, Clingo::StringSpan files) override {
+    void main(Clingo::Control &ctl, Clingo::StringSpan files) override { // NOLINT
         handle_error(clingodl_register(theory_, ctl.to_c()));
 
         Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
@@ -116,7 +126,7 @@ public:
     }
 
 private:
-    clingodl_theory_t *theory_;
+    clingodl_theory_t *theory_{nullptr};
     OptimizerConfig opt_cfg_;
 };
 

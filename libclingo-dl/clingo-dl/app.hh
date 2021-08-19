@@ -136,7 +136,11 @@ public:
                 break;
             }
             if (ret.is_unsatisfiable()) {
-                on_unsat(ctl);
+                if (search_bound_) {
+                    lower_bound_ = *search_bound_ + 1;
+                }
+                search_bound_ = upper_bound_;
+                adjust_ = 1;
                 if (!lower_bound_ || *lower_bound_ > *upper_bound_) {
                     break;
                 }
@@ -183,14 +187,6 @@ private:
         // pass model to theory
         handler_.on_model(model);
         return false;
-    }
-
-    void on_unsat(Clingo::Control& ctl) {
-        if (search_bound_) {
-            lower_bound_ = *search_bound_ + 1;
-        }
-        search_bound_ = upper_bound_;
-        adjust_ = 1;
     }
 
     int get_bound(Clingo::Model &model) {

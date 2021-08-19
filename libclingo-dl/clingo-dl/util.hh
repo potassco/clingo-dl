@@ -31,13 +31,14 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include <cassert>
 
 namespace std {
 
 template<>
 struct hash<std::pair<int, int>> {
     size_t operator()(std::pair<int, int> const &p) const {
-        return static_cast<size_t>(p.first) + (static_cast<size_t>(p.second) >> 32);
+        return static_cast<size_t>(p.first) + (static_cast<size_t>(p.second) >> 32); // NOLINT
     }
 };
 
@@ -48,19 +49,22 @@ namespace Detail {
 template <int X>
 using int_type = std::integral_constant<int, X>;
 template <class T, class S>
-inline void nc_check(S s, int_type<0>) { // same sign
-    (void)s;
+inline void nc_check(S s, int_type<0> t) { // same sign
+    static_cast<void>(s);
+    static_cast<void>(t);
     assert((std::is_same<T, S>::value) || (s >= std::numeric_limits<T>::min() && s <= std::numeric_limits<T>::max()));
 }
 template <class T, class S>
-inline void nc_check(S s, int_type<-1>) { // Signed -> Unsigned
-    (void)s;
+inline void nc_check(S s, int_type<-1> t) { // Signed -> Unsigned
+    static_cast<void>(s);
+    static_cast<void>(t);
     assert(s >= 0 && static_cast<S>(static_cast<T>(s)) == s);
 }
 template <class T, class S>
-inline void nc_check(S s, int_type<1>) { // Unsigned -> Signed
-    (void)s;
-    assert(!(s > std::numeric_limits<T>::max()));
+inline void nc_check(S s, int_type<1> t) { // Unsigned -> Signed
+    static_cast<void>(s);
+    static_cast<void>(t);
+    assert(!(s > static_cast<std::make_unsigned_t<T>>(std::numeric_limits<T>::max())));
 }
 
 } // namespace Detail
@@ -119,6 +123,10 @@ public:
     Timer(Duration &elapsed)
         : elapsed_(elapsed)
         , start_(std::chrono::steady_clock::now()) {}
+    Timer(Timer const &other) = delete;
+    Timer(Timer &&other) = delete;
+    Timer &operator=(Timer const &other) = delete;
+    Timer &operator=(Timer &&other) = delete;
     ~Timer() { elapsed_ += std::chrono::steady_clock::now() - start_; }
 
 private:
@@ -129,17 +137,19 @@ private:
 template <int N>
 class Heap {
 public:
+    using index_type = uint32_t;
+    using size_type = uint32_t;
     template <class M>
-    void push(M &m, int item) {
-        auto i = m.offset(item) = static_cast<int>(heap_.size());
+    void push(M &m, index_type item) {
+        auto i = m.offset(item) = size();
         heap_.push_back(item);
         decrease(m, i);
     }
     template <class M>
-    int pop(M &m) {
+    index_type pop(M &m) {
         assert(!heap_.empty());
         auto ret = heap_[0];
-        if (heap_.size() > 1) {
+        if (size() > 1) {
             heap_[0] = heap_.back();
             m.offset(heap_[0]) = 0;
             heap_.pop_back();
@@ -152,9 +162,9 @@ public:
     }
 
     template <class M>
-    void decrease(M &m, int i) {
+    void decrease(M &m, index_type i) {
         while (i > 0) {
-            int p = parent_(i);
+            index_type p = parent_(i);
             if (m.cost(heap_[p]) > m.cost(heap_[i])) {
                 swap_(m, i, p);
                 i = p;
@@ -165,10 +175,10 @@ public:
         }
     }
     template <class M>
-    void increase(M &m, int i) {
-        for (int p = i, j = children_(p), s = numeric_cast<int>(heap_.size()); j < s; j = children_(p)) {
-            int min = j;
-            for (int k = j + 1; k < j + N; ++k) {
+    void increase(M &m, index_type i) {
+        for (index_type p = i, j = children_(p), s = size(); j < s; j = children_(p)) {
+            index_type min = j;
+            for (index_type k = j + 1; k < j + N; ++k) {
                 if (k < s && less_(m, k, min)) {
                     min = k;
                 }
@@ -182,28 +192,28 @@ public:
             }
         }
     }
-    int size() { return heap_.size(); }
+    size_type size() { return numeric_cast<size_type>(heap_.size()); }
     bool empty() { return heap_.empty(); }
     void clear() { heap_.clear(); }
 
 private:
     template <class M>
-    void swap_(M &m, int i, int j) {
+    void swap_(M &m, index_type i, index_type j) {
         m.offset(heap_[j]) = i;
         m.offset(heap_[i]) = j;
         std::swap(heap_[i], heap_[j]);
     }
-    int parent_(int offset) { return (offset - 1) / N; }
-    int children_(int offset) { return N * offset + 1; }
+    index_type parent_(index_type offset) { return (offset - 1) / N; }
+    index_type children_(index_type offset) { return N * offset + 1; }
     template <class M>
-    bool less_(M &m, int a, int b) {
+    bool less_(M &m, index_type a, index_type b) {
         a = heap_[a], b = heap_[b];
-        auto ca = m.cost(a), cb = m.cost(b);
+        auto ca = m.cost(a);
+        auto cb = m.cost(b);
         return ca < cb || (ca == cb && m.relevant(a) < m.relevant(b));
     }
 
-private:
-    std::vector<int> heap_;
+    std::vector<index_type> heap_;
 };
 
 
@@ -213,7 +223,7 @@ private:
 // - https://wiki.sei.cmu.edu/confluence/display/c/INT32-C.+Ensure+that+operations+on+signed+integers+do+not+result+in+overflow
 
 //! Safely add a and b throwing an exception in case of overflow/underflow.
-template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0> 
+template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0>
 Int safe_add(Int a, Int b) {
     if (b > 0) {
         if (a > std::numeric_limits<Int>::max() - b) {
@@ -230,12 +240,12 @@ Int safe_add(Int a, Int b) {
 
 template <typename Float, typename std::enable_if<std::is_floating_point<Float>::value, int>::type = 0>
 Float safe_add(Float a, Float b) {
-	return a + b; 
+	return a + b;
 }
 
 //! Safely subtract a and b throwing an exception in case of
 //! overflow/underflow.
-template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0> 
+template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0>
 Int safe_sub(Int a, Int b) {
     if (b > 0) {
         if (a < std::numeric_limits<Int>::min() + b) {
@@ -252,12 +262,12 @@ Int safe_sub(Int a, Int b) {
 
 template <typename Float, typename std::enable_if<std::is_floating_point<Float>::value, int>::type = 0>
 Float safe_sub(Float a, Float b) {
-	return a - b; 
+	return a - b;
 }
 
 //! Safely multiply a and b throwing an exception in case of
 //! overflow/underflow.
-template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0> 
+template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0>
 Int safe_mul(Int a, Int b) {
     if (a > 0) {
         if (b > 0) {
@@ -282,11 +292,11 @@ Int safe_mul(Int a, Int b) {
 
 template <typename Float, typename std::enable_if<std::is_floating_point<Float>::value, int>::type = 0>
 Float safe_mul(Float a, Float b) {
-	return a * b; 
+	return a * b;
 }
 
 //! Safely divide a and b throwing an exception in case of overflow/underflow.
-template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0> 
+template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0>
 Int safe_div(Int a, Int b) {
     if (a == std::numeric_limits<Int>::min() && b == -1) {
         throw std::overflow_error("integer overflow");
@@ -302,13 +312,13 @@ Int safe_div(Int a, Int b) {
 
 template <typename Float, typename std::enable_if<std::is_floating_point<Float>::value, int>::type = 0>
 Float safe_div(Float a, Float b) {
-	return a / b; 
+	return a / b;
 }
 
 
 //! Safely calculate the modulo of a and b throwing an exception in case of
 //! overflow/underflow.
-template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0> 
+template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0>
 Int safe_mod(Int a, Int b) {
     if (a == std::numeric_limits<Int>::min() && b == -1) {
         throw std::overflow_error("integer overflow");
@@ -324,11 +334,11 @@ Int safe_mod(Int a, Int b) {
 
 template <typename Float, typename std::enable_if<std::is_floating_point<Float>::value, int>::type = 0>
 Float safe_mod(Float a, Float b) {
-	return fmod(a,b); 
+	return fmod(a,b);
 }
 
 //! Safely invert a throwing an exception in case of an underflow.
-template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0> 
+template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0>
 Int safe_inv(Int a) {
     if (a == std::numeric_limits<Int>::min()) {
         throw std::overflow_error("integer overflow");
@@ -338,10 +348,10 @@ Int safe_inv(Int a) {
 
 template <typename Float, typename std::enable_if<std::is_floating_point<Float>::value, int>::type = 0>
 Float safe_inv(Float a) {
-	return -a; 
+	return -a;
 }
 
-template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0> 
+template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0>
 Int safe_pow(Int a, Int b) {
     if (a == 0) {
         throw std::overflow_error("integer overflow");
@@ -358,7 +368,7 @@ Int safe_pow(Int a, Int b) {
 
 template <typename Float, typename std::enable_if<std::is_floating_point<Float>::value, int>::type = 0>
 Float safe_pow(Float a, Float b) {
-	return std::pow(a,b); 
+	return std::pow(a,b);
 }
 
 //! Expects quoted string with protected characters and
@@ -366,7 +376,7 @@ Float safe_pow(Float a, Float b) {
 inline std::string unquote(char const* str) {
     std::string res;
     bool slash = false;
-    for (char const *it = *str == '"' ? str + 1 : str; *it != '\0'; ++it) {
+    for (char const *it = *str == '"' ? str + 1 : str; *it != '\0'; ++it) { // NOLINT
         if (slash) {
             switch (*it) {
                 case 'n': {
@@ -388,7 +398,7 @@ inline std::string unquote(char const* str) {
             }
             slash = false;
         }
-        else if (*it == '"' && *(it + 1) == '\0') { break; }
+        else if (*it == '"' && *(it + 1) == '\0') { break; } // NOLINT
         else if (*it == '\\') { slash = true; }
         else { res.push_back(*it); }
     }
