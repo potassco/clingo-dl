@@ -26,6 +26,8 @@
 
 namespace ClingoDL {
 
+static constexpr auto invalid_edge_index = std::numeric_limits<vertex_t>::max();
+
 template <typename T>
 Graph<T>::Graph(ThreadStatistics &stats, EdgeVec const &edges, PropagationMode propagate)
 : edges_{edges}
@@ -493,7 +495,7 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
                 std::vector<Clingo::literal_t> clause;
                 clause.push_back(-uv.lit);
                 // forward
-                for (auto next_edge_idx = u.path_from; next_edge_idx >= 0;) {
+                for (auto next_edge_idx = u.path_from; next_edge_idx != invalid_edge_index;) {
                     auto &next_edge = edges_[next_edge_idx];
                     auto &next_node = nodes_[next_edge.from];
                     clause.push_back(-next_edge.lit);
@@ -503,7 +505,7 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
                     next_edge_idx = next_node.path_from;
                 }
                 // backward
-                for (auto next_edge_idx = v.path_to; next_edge_idx >= 0;) {
+                for (auto next_edge_idx = v.path_to; next_edge_idx != invalid_edge_index;) {
                     auto &next_edge = edges_[next_edge_idx];
                     auto &next_node = nodes_[next_edge.to];
                     clause.push_back(-next_edge.lit);
@@ -588,7 +590,6 @@ bool Graph<T>::propagate_edges_(M &m, Clingo::PropagateControl &ctl, edge_t xy_i
 template <typename T>
 template <class M>
 auto Graph<T>::dijkstra_(vertex_t source_idx, std::vector<vertex_t> &visited_set, M &m) -> std::pair<uint32_t, uint32_t> {
-    static constexpr auto invalid = std::numeric_limits<vertex_t>::max();
     uint32_t relevant = 0;
     uint32_t relevant_degree_out = 0;
     uint32_t relevant_degree_in = 0;
@@ -597,11 +598,11 @@ auto Graph<T>::dijkstra_(vertex_t source_idx, std::vector<vertex_t> &visited_set
     visited_set.push_back(source_idx);
     m.visited(source_idx) = true;
     m.cost(source_idx) = 0;
-    m.path(source_idx) = invalid;
+    m.path(source_idx) = invalid_edge_index;
     while (!costs_heap_.empty()) {
         auto u_idx = costs_heap_.pop(m);
         auto tu = m.path(u_idx);
-        if (tu != invalid && m.relevant(m.from(tu))) {
+        if (tu != invalid_edge_index && m.relevant(m.from(tu))) {
             m.relevant(u_idx) = true;
             --relevant; // just removed a relevant edge from the queue
         }

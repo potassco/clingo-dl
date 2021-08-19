@@ -4,6 +4,103 @@
 #include <clingo-dl/app.hh>
 #include "catch.hpp"
 
+using A = std::pair<Clingo::Symbol, double>;
+using AV = std::vector<A>;
+using SV = std::vector<Clingo::Symbol>;
+using SP = std::pair<AV, SV>;
+using RV = std::vector<SP>;
+
+constexpr char const *ENC = R"(
+task(T):-executionTime(T,_,_).
+machine(M):-executionTime(_,M,_).
+
+% decide which operation first
+{seq((T,ST1),(T,ST2),Time1)} :- assign(T,ST1,M1), assign(T,ST2,M2), ST1<ST2, executionTime(T,ST1,Time1), executionTime(T,ST2,Time2).
+seq((T,ST2),(T,ST1),Time2) :- assign(T,ST1,M1), assign(T,ST2,M2), ST1<ST2, executionTime(T,ST1,Time1), executionTime(T,ST2,Time2), not seq((T,ST1),(T,ST2),Time1).
+
+% decide which task first on machine
+{seq((T1,ST1),(T2,ST2),Time1)} :- assign(T1,ST1,M), assign(T2,ST2,M), T1<T2, executionTime(T1,ST1,Time1), executionTime(T2,ST2,Time2).
+seq((T2,ST2),(T1,ST1),Time2) :- assign(T1,ST1,M), assign(T2,ST2,M), T1<T2, executionTime(T1,ST1,Time1), executionTime(T2,ST2,Time2), not seq((T1,ST1),(T2,ST2),Time1).
+
+&diff{T1-T2}<= -Time:-seq(T1,T2,Time).
+
+&diff{0-(T,M)} <= 0 :- task(T), machine(M), bound(B).
+&diff{(T,M)-0} <= B :- task(T), machine(M), bound(B).
+
+#show seq/3.
+
+executionTime(1,1,54).
+executionTime(1,2,34).
+executionTime(1,3,61).
+executionTime(1,4,2).
+executionTime(2,1,9).
+executionTime(2,2,15).
+executionTime(2,3,89).
+executionTime(2,4,70).
+executionTime(3,1,38).
+executionTime(3,2,19).
+executionTime(3,3,28).
+executionTime(3,4,87).
+assign(1,1,3).
+assign(1,2,1).
+assign(1,3,4).
+assign(1,4,2).
+assign(2,1,4).
+assign(2,2,1).
+assign(2,3,2).
+assign(2,4,3).
+assign(3,1,1).
+assign(3,2,2).
+assign(3,3,3).
+assign(3,4,4).
+bound(104).
+)";
+
+Clingo::Symbol seq(int a, int b, int c, int d, int e) {
+    return Clingo::Function("seq", {
+        Clingo::Function("", {Clingo::Number(a), Clingo::Number(b)}),
+        Clingo::Function("", {Clingo::Number(c), Clingo::Number(d)}),
+        Clingo::Number(e)
+    });
+}
+
+A ass(int a, int b, int c) {
+    return A(Clingo::Function("", {Clingo::Number(a), Clingo::Number(b)}), c);
+}
+
+RV SOLS = {SP{{
+    ass(1, 1, 100), ass(1, 2, 0),  ass(1, 3, 34),  ass(1, 4, 95),  // NOLINT
+    ass(2, 1, 95),  ass(2, 2, 72), ass(2, 3, 104), ass(2, 4, 0),   // NOLINT
+    ass(3, 1, 34),  ass(3, 2, 0),  ass(3, 3, 72),  ass(3, 4, 104)  // NOLINT
+    }, {
+    seq(1, 2, 1, 1, 34), seq(1, 2, 1, 3, 34), seq(1, 2, 1, 4, 34), // NOLINT
+    seq(1, 2, 2, 2, 34), seq(1, 2, 3, 1, 34), seq(1, 3, 1, 1, 61), // NOLINT
+    seq(1, 3, 1, 4, 61), seq(1, 3, 2, 1, 61), seq(1, 3, 3, 4, 61), // NOLINT
+    seq(1, 4, 1, 1, 2),  seq(1, 4, 2, 3, 2),                       // NOLINT
+    seq(2, 1, 2, 3, 9),  seq(2, 1, 3, 4, 9),  seq(2, 2, 2, 1, 15), // NOLINT
+    seq(2, 2, 2, 3, 15), seq(2, 4, 1, 1, 70), seq(2, 4, 2, 1, 70), // NOLINT
+    seq(2, 4, 2, 2, 70), seq(2, 4, 2, 3, 70), seq(2, 4, 3, 3, 70), // NOLINT
+    seq(3, 1, 2, 2, 38), seq(3, 1, 3, 3, 38), seq(3, 1, 3, 4, 38), // NOLINT
+    seq(3, 2, 1, 4, 19), seq(3, 2, 2, 3, 19), seq(3, 2, 3, 1, 19), // NOLINT
+    seq(3, 2, 3, 3, 19), seq(3, 2, 3, 4, 19), seq(3, 3, 1, 1, 28), // NOLINT
+    seq(3, 3, 3, 4, 28),                                           // NOLINT
+    }}, SP{{
+    ass(1, 1, 104), ass(1, 2, 70), ass(1, 3, 9),  ass(1, 4, 0),    // NOLINT
+    ass(2, 1, 0),   ass(2, 2, 9),  ass(2, 3, 98), ass(2, 4, 28),   // NOLINT
+    ass(3, 1, 28),  ass(3, 2, 66), ass(3, 3, 0),  ass(3, 4, 85)    // NOLINT
+    }, {
+    seq(1, 2, 1, 1, 34), seq(1, 3, 1, 1, 61), seq(1, 3, 1, 2, 61), // NOLINT
+    seq(1, 3, 3, 4, 61), seq(1, 4, 1, 1, 2),  seq(1, 4, 1, 2, 2),  // NOLINT
+    seq(1, 4, 1, 3, 2),  seq(1, 4, 2, 3, 2),  seq(1, 4, 3, 2, 2),  // NOLINT
+    seq(2, 1, 1, 3, 9),  seq(2, 1, 2, 2, 9),  seq(2, 1, 2, 3, 9),  // NOLINT
+    seq(2, 1, 2, 4, 9),  seq(2, 1, 3, 4, 9),  seq(2, 2, 1, 2, 15), // NOLINT
+    seq(2, 2, 2, 3, 15), seq(2, 2, 2, 4, 15), seq(2, 2, 3, 1, 15), // NOLINT
+    seq(2, 4, 1, 1, 70), seq(2, 4, 2, 3, 70), seq(3, 1, 1, 2, 38), // NOLINT
+    seq(3, 1, 3, 2, 38), seq(3, 1, 3, 4, 38), seq(3, 2, 2, 3, 19), // NOLINT
+    seq(3, 2, 3, 4, 19), seq(3, 3, 1, 1, 28), seq(3, 3, 2, 4, 28), // NOLINT
+    seq(3, 3, 3, 1, 28), seq(3, 3, 3, 2, 28), seq(3, 3, 3, 4, 28), // NOLINT
+}}};
+
 class Handler : public Clingo::SolveEventHandler {
 public:
     Handler(clingodl_theory_t *theory) : theory_{theory} { }
@@ -15,11 +112,10 @@ private:
     clingodl_theory_t *theory_;
 };
 
-using ResultVec = std::vector<std::pair<std::vector<std::pair<Clingo::Symbol, double>>,std::vector<Clingo::Symbol>>>;
-ResultVec solve(clingodl_theory_t *theory, Clingo::Control &ctl) {
+RV solve(clingodl_theory_t *theory, Clingo::Control &ctl) {
     Handler h{theory};
     using namespace Clingo;
-    ResultVec result;
+    RV result;
     for (auto &&m : ctl.solve(LiteralSpan{}, &h)) {
         result.emplace_back();
         auto &sol = result.back().first;
@@ -76,7 +172,7 @@ TEST_CASE("solving", "[clingo]") {
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
             auto result = solve(theory, ctl);
-            REQUIRE(result == (ResultVec{{{{a, 0}, {b, 7}},{b}}, {{{a, 5}, {b, 2}},{a}}}));
+            REQUIRE(result == (RV{{{{a, 0}, {b, 7}},{b}}, {{{a, 5}, {b, 2}},{a}}}));
 
             parse_program(theory, ctl,
                 "#program ext.\n"
@@ -84,7 +180,7 @@ TEST_CASE("solving", "[clingo]") {
             ctl.ground({{"ext", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
             result = solve(theory, ctl);
-            REQUIRE(result == (ResultVec{{{{a, 0}, {b, 7}},{b}}}));
+            REQUIRE(result == (RV{{{{a, 0}, {b, 7}},{b}}}));
         }
         SECTION("unequal") {
             REQUIRE(clingodl_register(theory, ctl.to_c()));
@@ -95,7 +191,7 @@ TEST_CASE("solving", "[clingo]") {
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
             auto result = solve(theory, ctl);
-            REQUIRE(result == (ResultVec{{{},{a}}, {{{b, 0}},{}},{{{b, 6}},{}}}));
+            REQUIRE(result == (RV{{{},{a}}, {{{b, 0}},{}},{{{b, 6}},{}}}));
         }
 
         SECTION("cc") {
@@ -108,7 +204,7 @@ TEST_CASE("solving", "[clingo]") {
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
             auto result = solve(theory, ctl);
-            REQUIRE(result == (ResultVec{{{{a, 5}, {b, 10}},{}}}));
+            REQUIRE(result == (RV{{{{a, 5}, {b, 10}},{}}}));
             REQUIRE(ctl.statistics()["user_step"]["DifferenceLogic"]["CCs"] == 2);
 
             parse_program(theory, ctl,
@@ -117,7 +213,7 @@ TEST_CASE("solving", "[clingo]") {
             ctl.ground({{"ext", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
             result = solve(theory, ctl);
-            REQUIRE(result == (ResultVec{{{{a, 7}, {b, 10}},{}}}));
+            REQUIRE(result == (RV{{{{a, 7}, {b, 10}},{}}}));
             REQUIRE(ctl.statistics()["user_step"]["DifferenceLogic"]["CCs"] == 1);
         }
 
@@ -136,8 +232,7 @@ TEST_CASE("solving", "[clingo]") {
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
 
             auto result = solve(theory, ctl);
-            REQUIRE(result == (ResultVec{{{{a, -1}},{a, c}},{{{a, 0}},{a}}}));
-
+            REQUIRE(result == (RV{{{{a, -1}},{a, c}},{{{a, 0}},{a}}}));
         }
         SECTION("rdl") {
             REQUIRE(clingodl_configure(theory, "rdl", "yes"));
@@ -151,7 +246,7 @@ TEST_CASE("solving", "[clingo]") {
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
 
             auto result = solve(theory, ctl);
-            REQUIRE(result == (ResultVec{{{{a, 1.5}},{}}})); // NOLINT
+            REQUIRE(result == (RV{{{{a, 1.5}},{}}})); // NOLINT
         }
 
         SECTION("parse") {
@@ -167,7 +262,7 @@ TEST_CASE("solving", "[clingo]") {
             auto result = solve(theory, ctl);
             auto p = Clingo::parse_term("p(3)");
             auto q = Clingo::parse_term("q(5)");
-            REQUIRE(result == (ResultVec{{{{p, 0}, {q, 6}},{}}}));
+            REQUIRE(result == (RV{{{{p, 0}, {q, 6}},{}}}));
         }
         SECTION("normalize") {
             REQUIRE(clingodl_register(theory, ctl.to_c()));
@@ -189,7 +284,7 @@ TEST_CASE("solving", "[clingo]") {
             auto d = Id("d");
             auto e = Id("e");
             auto f = Function("", {Id("f"), Id("f")});
-            REQUIRE(result == (ResultVec{{{{a, 2}, {b, 2}, {c, 1}, {d, 0}, {e, 0}, {f, 1}}, {}}, {{{a, 2}, {b, 2},{c, 1},{d, 0}, {e, 1}, {f, 0}}, {}}}));
+            REQUIRE(result == (RV{{{{a, 2}, {b, 2}, {c, 1}, {d, 0}, {e, 0}, {f, 1}}, {}}, {{{a, 2}, {b, 2},{c, 1},{d, 0}, {e, 1}, {f, 0}}, {}}}));
         }
         SECTION("empty constraints") {
             REQUIRE(clingodl_register(theory, ctl.to_c()));
@@ -204,7 +299,7 @@ TEST_CASE("solving", "[clingo]") {
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
 
             auto result = solve(theory, ctl);
-            REQUIRE(result == (ResultVec{{{},{a}}}));
+            REQUIRE(result == (RV{{{},{a}}}));
             REQUIRE(ctl.statistics()["solving"]["solvers"]["choices"] == 0);
         }
         SECTION("symbols") {
@@ -218,8 +313,29 @@ TEST_CASE("solving", "[clingo]") {
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
 
             auto result = solve(theory, ctl);
-            REQUIRE(result == (ResultVec{{{{Function("",{String("foo\\\nbar\"foo"), Number(123)}), 0}},{}}}));
+            REQUIRE(result == (RV{{{{Function("",{String("foo\\\nbar\"foo"), Number(123)}), 0}},{}}}));
         }
-        clingodl_destroy(theory);
+    }
+    SECTION("task-assignment") {
+        for (char const *mode : {"no", "inverse", "partial", "partial+", "full"}) {
+            for (char const *mutex : {"0", "10,100"}) {
+                for (char const *sort_edges : {"no", "weight", "potential"}) {
+                    Clingo::Control ctl{{"0"}};
+                    clingodl_theory_t *theory{nullptr};
+                    REQUIRE(clingodl_create(&theory));
+                    REQUIRE(clingodl_configure(theory, "propagate", mode));
+                    REQUIRE(clingodl_configure(theory, "add-mutexes", mutex));
+                    REQUIRE(clingodl_configure(theory, "sort-edges", sort_edges));
+                    REQUIRE(clingodl_register(theory, ctl.to_c()));
+
+                    parse_program(theory, ctl, ENC);
+                    ctl.ground({{"base", {}}});
+                    REQUIRE(clingodl_prepare(theory, ctl.to_c()));
+
+                    REQUIRE(solve(theory, ctl) == SOLS);
+                    clingodl_destroy(theory);
+                }
+            }
+        }
     }
 }
