@@ -34,6 +34,7 @@ namespace ClingoDL {
 
 using Clingo::Detail::handle_error;
 
+//! C initialization callback for the DL propagator.
 template <typename T>
 bool init(clingo_propagate_init_t* i, void* data) {
     CLINGODL_TRY {
@@ -43,6 +44,7 @@ bool init(clingo_propagate_init_t* i, void* data) {
     CLINGODL_CATCH;
 }
 
+//! C propagation callback for the DL propagator.
 template <typename T>
 bool propagate(clingo_propagate_control_t* i, const clingo_literal_t *changes, size_t size, void* data) {
     CLINGODL_TRY {
@@ -52,12 +54,14 @@ bool propagate(clingo_propagate_control_t* i, const clingo_literal_t *changes, s
     CLINGODL_CATCH;
 }
 
+//! C undo callback for the DL propagator.
 template <typename T>
 void undo(clingo_propagate_control_t const* i, const clingo_literal_t *changes, size_t size, void* data) {
     Clingo::PropagateControl in(const_cast<clingo_propagate_control_t *>(i)); // NOLINT
     static_cast<DLPropagator<T>*>(data)->undo(in, {changes, size});
 }
 
+//! C check callback for the DL propagator.
 template <typename T>
 bool check(clingo_propagate_control_t* i, void* data) {
     CLINGODL_TRY {
@@ -67,6 +71,7 @@ bool check(clingo_propagate_control_t* i, void* data) {
     CLINGODL_CATCH;
 }
 
+//! High level interface to use the DL propagator hiding the value type.
 class PropagatorFacade {
 public:
     PropagatorFacade() = default;
@@ -75,36 +80,47 @@ public:
     PropagatorFacade &operator=(PropagatorFacade const &other) = default;
     PropagatorFacade &operator=(PropagatorFacade &&other) noexcept = default;
     virtual ~PropagatorFacade() = default;
+
+    //! Look up the index of a symbol.
+    //!
+    //! The function returns false if the symbol could not be found.
     virtual bool lookup_symbol(clingo_symbol_t name, size_t *index) = 0;
+    //! Get the symbol associated with an index.
     virtual clingo_symbol_t get_symbol(size_t index) = 0;
+    //! Check if a symbol has a value in a thread.
     virtual bool has_value(uint32_t thread_id, size_t index) = 0;
+    //! Get the value of a symbol in a thread.
     virtual void get_value(uint32_t thread_id, size_t index, clingodl_value_t *value) = 0;
+    //! Function to iterato over the thread specific assignment of symbols and values.
+    //!
+    //! Argument current should initially be set to 0. The function returns
+    //! false if no more values are available.
     virtual bool next(uint32_t thread_id, size_t *current) = 0;
+    //! Extend the given model with the assignment stored in the propagator.
     virtual void extend_model(Clingo::Model &m) = 0;
+    //! Add the propagator statistics to clingo's statistics.
     virtual void on_statistics(Clingo::UserStatistics& step, Clingo::UserStatistics &accu) = 0;
 };
 
-template<typename T>
-void set_value(clingodl_value_t *variant, T value);
-
-template<>
-void set_value<int>(clingodl_value_t *variant, int value) {
+//! Set variant to an integer value.
+void set_value(clingodl_value_t *variant, int value) {
     variant->type = clingodl_value_type_int;
     variant->int_number = value; // NOLINT
 }
 
-template<>
-void set_value<double>(clingodl_value_t *variant, double value) {
+//! Set variant to a double value.
+void set_value(clingodl_value_t *variant, double value) {
     variant->type = clingodl_value_type_double;
     variant->double_number = value; // NOLINT
 }
 
+//! High level interface to use the DL propagator.
 template<typename T>
 class DLPropagatorFacade : public PropagatorFacade {
 public:
     DLPropagatorFacade(clingo_control_t *control, PropagatorConfig const &conf)
     : prop_{step_, conf} {
-        handle_error(clingo_control_add(control,"base", nullptr, 0, THEORY));
+        handle_error(clingo_control_add(control, "base", nullptr, 0, THEORY));
         static clingo_propagator_t prop = {
             init<T>,
             propagate<T>,
@@ -121,36 +137,41 @@ public:
     }
 
     clingo_symbol_t get_symbol(size_t index) override {
-        return prop_.symbol(index - 1).to_c();
+        return prop_.symbol(numeric_cast<vertex_t>(index - 1)).to_c();
     }
 
     bool has_value(uint32_t thread_id, size_t index) override {
-        return prop_.has_lower_bound(thread_id, index - 1);
+        return prop_.has_lower_bound(thread_id, numeric_cast<vertex_t>(index - 1));
     }
+
     void get_value(uint32_t thread_id, size_t index, clingodl_value_t *value) override {
         assert(index > 0 && index <= prop_.num_vertices());
-        set_value(value, prop_.lower_bound(thread_id, index - 1));
+        set_value(value, prop_.lower_bound(thread_id, numeric_cast<vertex_t>(index - 1)));
     }
 
     bool next(uint32_t thread_id, size_t *current) override {
         for (++*current; *current <= prop_.num_vertices(); ++*current) {
-            if (prop_.has_lower_bound(thread_id, *current - 1)) {
+            if (prop_.has_lower_bound(thread_id, numeric_cast<vertex_t>(*current - 1))) {
                 return true;
             }
         }
         return false;
     }
+
     void extend_model(Clingo::Model &m) override {
         prop_.extend_model(m);
     }
+
     void on_statistics(Clingo::UserStatistics& step, Clingo::UserStatistics &accu) override {
         accu_.accu(step_);
-        add_statistics(step, step_);
-        add_statistics(accu, accu_);
+        add_statistics_(step, step_);
+        add_statistics_(accu, accu_);
         step_.reset();
     }
 
-    void add_statistics(Clingo::UserStatistics& root, Statistics const &stats) {
+private:
+    //!< Helper function to add the DL statistics to clingo's statistics.
+    void add_statistics_(Clingo::UserStatistics& root, Statistics const &stats) {
         Clingo::UserStatistics diff = root.add_subkey("DifferenceLogic", Clingo::StatisticsType::Map);
         diff.add_subkey("Time init(s)", Clingo::StatisticsType::Value).set_value(stats.time_init.count());
         diff.add_subkey("CCs", Clingo::StatisticsType::Value).set_value(stats.ccs);
@@ -179,10 +200,9 @@ public:
         }
     }
 
-private:
-    Statistics step_;
-    Statistics accu_;
-    DLPropagator<T> prop_;
+    Statistics step_;      //!< Per step statistics.
+    Statistics accu_;      //!< Accumulated statistics over all steps.
+    DLPropagator<T> prop_; //!< The underlying difference logic propagator.
 };
 
 } // namespace ClingoDL
