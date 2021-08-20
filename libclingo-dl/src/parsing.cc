@@ -58,19 +58,23 @@ using ClingoDL::match;
 //! Match if the given node represents a constant with the given name.
 bool match_constant(Clingo::AST::Node const &ast, char const *name) {
     using namespace Clingo::AST;
-    if (ast.type() == Type::SymbolicTerm) {
-        return ast.get<Clingo::Symbol>(Attribute::Term).match(name, 0);
-    }
-    if (ast.type() == Type::Function) {
-        if (ast.get<int>(Attribute::External) != 0) {
+    switch (ast.type()) {
+        case Type::SymbolicTerm: {
+            return ast.get<Clingo::Symbol>(Attribute::Term).match(name, 0);
+        }
+        case Type::Function: {
+            if (ast.get<int>(Attribute::External) != 0) {
+                return false;
+            }
+            if (!ast.get<NodeVector>(Attribute::Arguments).empty()) {
+                return false;
+            }
+            return std::strcmp(ast.get<char const *>(Attribute::Name), name) == 0;
+        }
+        default: {
             return false;
         }
-        if (!ast.get<NodeVector>(Attribute::Arguments).empty()) {
-            return false;
-        }
-        return std::strcmp(ast.get<char const *>(Attribute::Name), name) == 0;
     }
-    return false;
 }
 
 //! Shift difference constraints in integrity constraints to the head.
