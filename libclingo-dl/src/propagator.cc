@@ -26,6 +26,8 @@
 
 #include <unordered_set>
 
+#define CLINGODL_CHECKSOLUTION
+
 namespace ClingoDL {
 
 namespace {

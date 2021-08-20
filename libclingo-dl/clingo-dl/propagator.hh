@@ -32,8 +32,6 @@
 
 #include <unordered_map>
 
-#define CLINGODL_CHECKSOLUTION
-
 namespace ClingoDL {
 
 //! Struct with statistics for the DLPropagator.
