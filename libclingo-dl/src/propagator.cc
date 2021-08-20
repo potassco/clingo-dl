@@ -91,22 +91,27 @@ template <typename T>
 struct DLPropagator<T>::ThreadState {
     ThreadState(ThreadStatistics &stats, const std::vector<Edge> &edges, PropagationMode propagate, level_t propagate_root, uint64_t propagate_budget)
     : stats{stats}
-    , dl_graph{stats, edges, propagate}
+    , graph{stats, edges, propagate}
     , propagate_root{propagate_root}
     , propagate_budget{propagate_budget} { }
 
     ThreadStatistics &stats;               //!< Thread specific statistics.
-    Graph dl_graph;                        //!< The incremental graph associated with the thread.
+    Graph graph;                           //!< The incremental graph associated with the thread.
     std::vector<literal_t> removed_watchs; //!< Literals from which watches have been removed.
     std::vector<edge_t> todo_edges;        //!< Edges that have to be propagated.
     uint64_t propagate_root;               //!< Propagation is disabled above this level.
     uint64_t propagate_budget;             //!< The maximum budget invested into propagation.
 };
 
+//! Struct to store facts to repropagate.
+//!
+//! The solver never backtracks the top-level level. When solving a new step,
+//! we simply rebuild the per thread states and repropagate the facts stored
+//! here.
 template <typename T>
 struct DLPropagator<T>::FactState {
-    std::vector<literal_t> lits;
-    size_t limit{0};
+    std::vector<literal_t> lits; //!< Literals that are true on level 0.
+    size_t limit{0};             //!< Offset until which literals have to be repropagated.
 };
 
 template <typename T>
@@ -140,7 +145,7 @@ vertex_t DLPropagator<T>::lookup(Clingo::Symbol symbol) {
 
 template <typename T>
 bool DLPropagator<T>::has_lower_bound(Clingo::id_t thread_id, vertex_t index) const {
-    return index < vertex_info_.size() && !is_zero_(index) && states_[thread_id].dl_graph.has_value(index);
+    return index < vertex_info_.size() && !is_zero_(index) && states_[thread_id].graph.has_value(index);
 }
 
 template <typename T>
@@ -151,10 +156,10 @@ auto DLPropagator<T>::lower_bound(Clingo::id_t thread_id, vertex_t index) const 
     auto cc = vertex_info_[index].cc;
     auto zero_node = zero_vertices_[cc];
 
-    if (state.dl_graph.has_value(zero_node)) {
-        adjust = state.dl_graph.node_value(zero_node);
+    if (state.graph.has_value(zero_node)) {
+        adjust = state.graph.node_value(zero_node);
     }
-    return state.dl_graph.node_value(index) - adjust;
+    return state.graph.node_value(index) - adjust;
 }
 
 template <typename T>
@@ -163,16 +168,16 @@ void DLPropagator<T>::extend_model(Clingo::Model &model) {
     std::vector<T> adjust;
     adjust.reserve(zero_vertices_.size());
     for (auto node : zero_vertices_) {
-        adjust.emplace_back(state.dl_graph.has_value(node) ? state.dl_graph.node_value(node) : 0);
+        adjust.emplace_back(state.graph.has_value(node) ? state.graph.node_value(node) : 0);
     }
 
     Clingo::SymbolVector vec;
     for (vertex_t idx = 0; idx < numeric_cast<vertex_t>(vertex_info_.size()); ++idx) {
-        if (!is_zero_(idx) && state.dl_graph.has_value(idx)) {
+        if (!is_zero_(idx) && state.graph.has_value(idx)) {
             Clingo::SymbolVector params;
             params.emplace_back(vertex_info_[idx].symbol);
             auto cc = vertex_info_[idx].cc;
-            params.emplace_back(to_symbol<T>(state.dl_graph.node_value(idx) - adjust[cc]));
+            params.emplace_back(to_symbol<T>(state.graph.node_value(idx) - adjust[cc]));
             vec.emplace_back(Function("dl", params));
         }
     }
@@ -213,6 +218,7 @@ void DLPropagator<T>::init(Clingo::PropagateInit &init) {
 
 template <typename T>
 void DLPropagator<T>::propagate(Clingo::PropagateControl &ctl, Clingo::LiteralSpan changes) {
+    // add facts for propagation at the next step
     if (ctl.assignment().decision_level() == 0) {
         auto &facts = facts_[ctl.thread_id()];
         facts.lits.insert(facts.lits.end(), changes.begin(), changes.end());
@@ -225,7 +231,7 @@ void DLPropagator<T>::undo(Clingo::PropagateControl const &ctl, Clingo::LiteralS
     static_cast<void>(changes);
     auto &state = states_[ctl.thread_id()];
     Timer t{state.stats.time_undo};
-    state.dl_graph.backtrack();
+    state.graph.backtrack();
 }
 
 template <typename T>
@@ -233,6 +239,7 @@ void DLPropagator<T>::check(Clingo::PropagateControl &ctl) {
     ThreadState &state = states_[ctl.thread_id()];
     auto &facts = facts_[ctl.thread_id()];
     auto assignment = ctl.assignment();
+    // propagate facts from previous step
     if (assignment.decision_level() == 0 && facts.limit > 0) {
         do_propagate(ctl, {facts.lits.data(), facts.lits.data() + facts.limit}); // NOLINT
         facts.limit = 0;
@@ -241,7 +248,7 @@ void DLPropagator<T>::check(Clingo::PropagateControl &ctl) {
     if (ctl.assignment().is_total()) {
         for (auto &x : edges_) {
             if (ctl.assignment().is_true(x.lit)) {
-                if (!state.dl_graph.node_value_defined(x.from) || !state.dl_graph.node_value_defined(x.to) || !(state.dl_graph.node_value(x.from) - state.dl_graph.node_value(x.to) <= x.weight)) {
+                if (!state.graph.node_value_defined(x.from) || !state.graph.node_value_defined(x.to) || !(state.graph.node_value(x.from) - state.graph.node_value(x.to) <= x.weight)) {
                     throw std::logic_error("not a valid solution");
                 }
             }
@@ -295,15 +302,15 @@ bool DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, literal
         return normalize_constraint_(init, literal, copy, "<=", safe_inv<T>(rhs), strict);
     }
 
-    // hanle remainig '<=', '=', and '!='
+    // hanle remaining '<=', '=', and '!='
     if (std::strcmp(op, "<=") == 0) {
         if (!init.assignment().is_true(-literal) && !add_edges_(init, literal, elements, rhs, false)) {
             return false;
         }
     }
     else if (std::strcmp(op, "=") == 0) {
-        literal_t a{0};
-        literal_t b{0};
+        literal_t a = 0;
+        literal_t b = 0;
         if (strict) {
             if (init.assignment().is_true(literal)) {
                 a = b = 1;
@@ -661,8 +668,8 @@ template <typename T>
 void DLPropagator<T>::disable_edge_by_lit(ThreadState &state, literal_t lit) {
     if (disable_edges_) {
         for (auto it = lit_to_edges_.find(-lit), ie = lit_to_edges_.end(); it != ie && it->first == -lit; ++it) {
-            if (state.dl_graph.edge_is_active(it->second)) {
-                state.dl_graph.remove_candidate_edge(it->second);
+            if (state.graph.edge_is_active(it->second)) {
+                state.graph.remove_candidate_edge(it->second);
             }
         }
     }
@@ -703,7 +710,7 @@ auto DLPropagator<T>::cost_(SortMode mode, Graph const &graph, edge_t index) con
 template <typename T>
 void DLPropagator<T>::sort_edges(SortMode mode, ThreadState &state) {
     std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](edge_t l, edge_t r) {
-        return cost_(mode, state.dl_graph, l) < cost_(mode, state.dl_graph, r);
+        return cost_(mode, state.graph, l) < cost_(mode, state.graph, r);
     });
 }
 
@@ -714,9 +721,9 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
     ThreadState &state = states_[thread_id];
     Timer timer{state.stats.time_propagate};
     auto level = ass.decision_level();
-    bool enable_propagate = state.dl_graph.mode() >= PropagationMode::Strong || level < state.propagate_root || state.propagate_budget > 0;
-    state.dl_graph.ensure_decision_level(level, enable_propagate);
-    if (state.dl_graph.can_propagate()) {
+    bool enable_propagate = state.graph.mode() >= PropagationMode::Strong || level < state.propagate_root || state.propagate_budget > 0;
+    state.graph.ensure_decision_level(level, enable_propagate);
+    if (state.graph.can_propagate()) {
         // Note: If propagation is re-enabled, we re-add watches for literals
         // that have been removed. Since we removed the watches, some of them
         // might have become true unnoticed on earlier decision levels. We keep
@@ -744,21 +751,21 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
     for (auto lit : changes) {
         auto it = lit_to_edges_.find(lit);
         auto ie = lit_to_edges_.end();
-        if (state.dl_graph.can_propagate()) { disable_edge_by_lit(state, lit); }
+        if (state.graph.can_propagate()) { disable_edge_by_lit(state, lit); }
         else if (it == ie) {
             state.removed_watchs.emplace_back(lit);
             ctl.remove_watch(lit);
         }
         for (; it != ie && it->first == lit; ++it) {
-            if (state.dl_graph.edge_is_active(it->second)) {
+            if (state.graph.edge_is_active(it->second)) {
                 state.todo_edges.push_back(it->second);
             }
         }
     }
     sort_edges(conf_.get_sort_mode(thread_id), state);
     for (auto edge : state.todo_edges) {
-        if (state.dl_graph.edge_is_active(edge)) {
-            auto ret = state.dl_graph.add_edge(edge, [&](std::vector<edge_t> const &neg_cycle) {
+        if (state.graph.edge_is_active(edge)) {
+            auto ret = state.graph.add_edge(edge, [&](std::vector<edge_t> const &neg_cycle) {
                 std::vector<literal_t> clause;
                 for (auto eid : neg_cycle) {
                     auto lit = -edges_[eid].lit;
@@ -768,14 +775,14 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
                 return ctl.add_clause(clause) && ctl.propagate();
             });
             if (!ret) { return; }
-            bool propagate = (state.dl_graph.mode() >= PropagationMode::Strong) ||
+            bool propagate = (state.graph.mode() >= PropagationMode::Strong) ||
                 (level < state.propagate_root) || (
                     state.propagate_budget > 0 &&
-                    state.dl_graph.can_propagate() &&
+                    state.graph.can_propagate() &&
                     state.stats.propagate_cost_add + state.propagate_budget > state.stats.propagate_cost_from + state.stats.propagate_cost_to);
-            if (!propagate) { state.dl_graph.disable_propagate(); }
+            if (!propagate) { state.graph.disable_propagate(); }
             // if !propgate -> can no longer propagate!
-            if (propagate && !state.dl_graph.propagate(edge, ctl)) { return; }
+            if (propagate && !state.graph.propagate(edge, ctl)) { return; }
         }
     }
 }

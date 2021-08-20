@@ -315,6 +315,7 @@ TEST_CASE("solving", "[clingo]") {
             auto result = solve(theory, ctl);
             REQUIRE(result == (RV{{{{Function("",{String("foo\\\nbar\"foo"), Number(123)}), 0}},{}}}));
         }
+        clingodl_destroy(theory);
     }
     SECTION("task-assignment") {
         for (char const *mode : {"no", "inverse", "partial", "partial+", "full"}) {
