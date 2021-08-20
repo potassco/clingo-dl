@@ -718,6 +718,11 @@ void DLPropagator<T>::sort_edges(SortMode mode, ThreadState &state) {
 
 template <typename T>
 void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::LiteralSpan changes) {
+    // This function checks for conflicts and propagates edges if enabled. If
+    // propagation is enabled, the graph has to be propagated after each edge
+    // added. If limited propagation is enabled and the limit is reached,
+    // propagation will be disabled for all further calls below the current
+    // decision level.
     auto thread_id = ctl.thread_id();
     auto ass = ctl.assignment();
     ThreadState &state = states_[thread_id];
@@ -725,6 +730,8 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
     auto level = ass.decision_level();
     bool enable_propagate = state.graph.mode() >= PropagationMode::Strong || level < state.propagate_root || state.propagate_budget > 0;
     state.graph.ensure_decision_level(level, enable_propagate);
+
+    // re-enable removed watches
     if (state.graph.can_propagate()) {
         // Note: If propagation is re-enabled, we re-add watches for literals
         // that have been removed. Since we removed the watches, some of them
@@ -749,11 +756,15 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
         }
         state.removed_watchs.erase(it, ie);
     }
+
+    // fill the todo queue
     state.todo_edges.clear();
     for (auto lit : changes) {
         auto it = lit_to_edges_.find(lit);
         auto ie = lit_to_edges_.end();
-        if (state.graph.can_propagate()) { disable_edge_by_lit(state, lit); }
+        if (state.graph.can_propagate()) {
+            disable_edge_by_lit(state, lit);
+        }
         else if (it == ie) {
             state.removed_watchs.emplace_back(lit);
             ctl.remove_watch(lit);
@@ -764,27 +775,38 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
             }
         }
     }
+
+    // process edges in the todo queue
     sort_edges(conf_.get_sort_mode(thread_id), state);
     for (auto edge : state.todo_edges) {
         if (state.graph.edge_is_active(edge)) {
-            auto ret = state.graph.add_edge(edge, [&](std::vector<edge_t> const &neg_cycle) {
+            // check for conflicts
+            if (!state.graph.add_edge(edge, [&](std::vector<edge_t> const &neg_cycle) {
                 std::vector<literal_t> clause;
                 for (auto eid : neg_cycle) {
                     auto lit = -edges_[eid].lit;
-                    if (ass.is_true(lit)) { return true; }
+                    if (ass.is_true(lit)) {
+                        return true;
+                    }
                     clause.emplace_back(lit);
                 }
                 return ctl.add_clause(clause) && ctl.propagate();
-            });
-            if (!ret) { return; }
+            })) {
+                return;
+            }
+
+            // propagate edges
             bool propagate = (state.graph.mode() >= PropagationMode::Strong) ||
                 (level < state.propagate_root) || (
                     state.propagate_budget > 0 &&
                     state.graph.can_propagate() &&
                     state.stats.propagate_cost_add + state.propagate_budget > state.stats.propagate_cost_from + state.stats.propagate_cost_to);
-            if (!propagate) { state.graph.disable_propagate(); }
-            // if !propgate -> can no longer propagate!
-            if (propagate && !state.graph.propagate(edge, ctl)) { return; }
+            if (!propagate) {
+                state.graph.disable_propagate();
+            }
+            else if (!state.graph.propagate(edge, ctl)) {
+                return;
+            }
         }
     }
 }
