@@ -52,6 +52,7 @@ void Statistics::reset() {
         i.reset();
     }
 }
+
 void Statistics::accu(Statistics const &x) {
     time_init += x.time_init;
     ccs = x.ccs;
@@ -67,37 +68,41 @@ void Statistics::accu(Statistics const &x) {
     }
 }
 
+//! Struct to store vertex specific information.
 template <typename T>
 struct DLPropagator<T>::VertexInfo {
     VertexInfo(Clingo::Symbol symbol)
     : symbol{symbol}
-    , cc(0)
-    , visited(false) { }
+    , cc{0}
+    , visited{0} { }
+    //! Mark the vertex visited in the given connected component.
     void set_visited(index_t cc, bool visited) {
         this->cc = cc;
         this->visited = visited;
     }
-    Clingo::Symbol symbol;
-    index_t cc : 31;
-    index_t visited : 1;
+
+    Clingo::Symbol symbol;                //!< The symbol associated with the vertex.
+    index_t cc : sizeof(index_t) * 8 - 1; //!< The connected component the vertex is in.
+    index_t visited : 1;                  //!< Whether the vertex has been visited.
 };
 
+//! Struct to store thread specific state.
 template <typename T>
 struct DLPropagator<T>::ThreadState {
-    ThreadState(ThreadStatistics &stats, const std::vector<Edge> &edges, PropagationMode propagate, uint64_t propagate_root, uint64_t propagate_budget)
-        : stats(stats)
-        , dl_graph(stats, edges, propagate)
-        , propagate_root{propagate_root}
-        , propagate_budget{propagate_budget} { }
-    ThreadStatistics &stats;
-    Graph dl_graph;
-    std::vector<literal_t> false_lits;
-    std::vector<edge_t> todo_edges;
-    uint64_t propagate_root;
-    uint64_t propagate_budget;
+    ThreadState(ThreadStatistics &stats, const std::vector<Edge> &edges, PropagationMode propagate, level_t propagate_root, uint64_t propagate_budget)
+    : stats{stats}
+    , dl_graph{stats, edges, propagate}
+    , propagate_root{propagate_root}
+    , propagate_budget{propagate_budget} { }
+
+    ThreadStatistics &stats;               //!< Thread specific statistics.
+    Graph dl_graph;                        //!< The incremental graph associated with the thread.
+    std::vector<literal_t> removed_watchs; //!< Literals from which watches have been removed.
+    std::vector<edge_t> todo_edges;        //!< Edges that have to be propagated.
+    uint64_t propagate_root;               //!< Propagation is disabled above this level.
+    uint64_t propagate_budget;             //!< The maximum budget invested into propagation.
 };
 
-// Note:: it looks like this can go into the ThreadState
 template <typename T>
 struct DLPropagator<T>::FactState {
     std::vector<literal_t> lits;
@@ -705,17 +710,35 @@ void DLPropagator<T>::sort_edges(SortMode mode, ThreadState &state) {
 template <typename T>
 void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::LiteralSpan changes) {
     auto thread_id = ctl.thread_id();
+    auto ass = ctl.assignment();
     ThreadState &state = states_[thread_id];
-    Timer t{state.stats.time_propagate};
-    auto level = ctl.assignment().decision_level();
+    Timer timer{state.stats.time_propagate};
+    auto level = ass.decision_level();
     bool enable_propagate = state.dl_graph.mode() >= PropagationMode::Strong || level < state.propagate_root || state.propagate_budget > 0;
     state.dl_graph.ensure_decision_level(level, enable_propagate);
     if (state.dl_graph.can_propagate()) {
-        for (auto &lit : state.false_lits) {
-            if (ctl.assignment().is_true(lit)) { disable_edge_by_lit(state, lit); }
-            ctl.add_watch(lit);
+        // Note: If propagation is re-enabled, we re-add watches for literals
+        // that have been removed. Since we removed the watches, some of them
+        // might have become true unnoticed on earlier decision levels. We keep
+        // such edges in the vector and simply disable them again. It would be
+        // more efficient to re-add watches in the undo function.
+        // Unfortunately, this is not supported by the current API.
+        auto it = state.removed_watchs.begin();
+        auto ie = state.removed_watchs.end();
+        for (auto jt = it; jt != ie; ++jt) {
+            auto truth = ass.truth_value(*jt);
+            if (truth == Clingo::TruthValue::True) {
+                disable_edge_by_lit(state, *jt);
+            }
+            if (truth == Clingo::TruthValue::Free || ass.level(*jt) == level) {
+                ctl.add_watch(*jt);
+                if (it != jt) {
+                    *it = *jt;
+                }
+                ++it;
+            }
         }
-        state.false_lits.clear();
+        state.removed_watchs.erase(it, ie);
     }
     state.todo_edges.clear();
     for (auto lit : changes) {
@@ -723,7 +746,7 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
         auto ie = lit_to_edges_.end();
         if (state.dl_graph.can_propagate()) { disable_edge_by_lit(state, lit); }
         else if (it == ie) {
-            state.false_lits.emplace_back(lit);
+            state.removed_watchs.emplace_back(lit);
             ctl.remove_watch(lit);
         }
         for (; it != ie && it->first == lit; ++it) {
@@ -739,7 +762,7 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
                 std::vector<literal_t> clause;
                 for (auto eid : neg_cycle) {
                     auto lit = -edges_[eid].lit;
-                    if (ctl.assignment().is_true(lit)) { return true; }
+                    if (ass.is_true(lit)) { return true; }
                     clause.emplace_back(lit);
                 }
                 return ctl.add_clause(clause) && ctl.propagate();
