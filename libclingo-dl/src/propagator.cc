@@ -43,12 +43,12 @@ inline Clingo::Symbol to_symbol(T value) {
 } // namespace
 
 void Statistics::reset() {
-    time_init  = std::chrono::steady_clock::duration::zero();
+    time_init = std::chrono::steady_clock::duration::zero();
     ccs = 0;
     mutexes = 0;
     edges = 0;
     variables = 0;
-    for (auto& i : thread_statistics) {
+    for (auto &i : thread_statistics) {
         i.reset();
     }
 }
@@ -73,13 +73,13 @@ struct DLPropagator<T>::VertexInfo {
     : symbol{symbol}
     , cc(0)
     , visited(false) { }
-    void set_visited(uint32_t cc, bool visited) {
+    void set_visited(index_t cc, bool visited) {
         this->cc = cc;
         this->visited = visited;
     }
     Clingo::Symbol symbol;
-    uint32_t cc : 31;
-    uint32_t visited : 1;
+    index_t cc : 31;
+    index_t visited : 1;
 };
 
 template <typename T>
@@ -92,7 +92,7 @@ struct DLPropagator<T>::ThreadState {
     ThreadStatistics &stats;
     Graph dl_graph;
     std::vector<literal_t> false_lits;
-    std::vector<int> todo_edges;
+    std::vector<edge_t> todo_edges;
     uint64_t propagate_root;
     uint64_t propagate_budget;
 };
@@ -180,7 +180,7 @@ void DLPropagator<T>::init(Clingo::PropagateInit &init) {
         init.set_check_mode(Clingo::PropagatorCheckMode::Partial);
     }
 
-    int edge_start = edges_.size();
+    edge_t edge_start = edges_.size();
 
     Timer t{stats_.time_init};
     if (!add_constraints_(init)) {
@@ -260,7 +260,7 @@ bool DLPropagator<T>::add_constraints_(Clingo::PropagateInit &init) {
         auto term = atom.term();
         if (match(term, "__diff_h", 0) || match(term, "__diff_b", 0)) {
             auto edge = parse<T>(atom, [this](Clingo::Symbol const &sym) { return map_vertex_(sym); });
-            int lit = init.solver_literal(atom.literal());
+            literal_t lit = init.solver_literal(atom.literal());
             if (!normalize_constraint_(init, lit, edge.lhs, edge.rel, edge.rhs, edge.strict)) {
                 return false;
             }
@@ -270,7 +270,7 @@ bool DLPropagator<T>::add_constraints_(Clingo::PropagateInit &init) {
 }
 
 template <typename T>
-bool DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, int literal, CoVarVec const &elements, char const *op, T rhs, bool strict) {
+bool DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, literal_t literal, CoVarVec const &elements, char const *op, T rhs, bool strict) {
     // rewrite '>', '<', and '>=' into '<='
     if (std::strcmp(op, ">") == 0) {
         op = ">=";
@@ -297,8 +297,8 @@ bool DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, int lit
         }
     }
     else if (std::strcmp(op, "=") == 0) {
-        int a{0};
-        int b{0};
+        literal_t a{0};
+        literal_t b{0};
         if (strict) {
             if (init.assignment().is_true(literal)) {
                 a = b = 1;
@@ -382,7 +382,7 @@ bool DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, int lit
 }
 
 template <typename T>
-bool DLPropagator<T>::add_edges_(Clingo::PropagateInit& init, int literal, CoVarVec const &covec, T rhs, bool strict) {
+bool DLPropagator<T>::add_edges_(Clingo::PropagateInit& init, literal_t literal, CoVarVec const &covec, T rhs, bool strict) {
     char const *msg = "normalizing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";
     if (strict && init.assignment().is_false(literal)) {
         return true;
@@ -446,7 +446,7 @@ void DLPropagator<T>::add_edges_(Clingo::PropagateInit& init, vertex_t u_id, ver
 
 template <typename T>
 void DLPropagator<T>::add_edge_(Clingo::PropagateInit &init, vertex_t u_id, vertex_t v_id, value_t weight, literal_t lit) {
-    auto id = numeric_cast<int>(edges_.size());
+    auto id = numeric_cast<edge_t>(edges_.size());
     edges_.push_back({u_id, v_id, weight, lit});
     lit_to_edges_.emplace(lit, id);
     for (int i = 0; i < init.number_of_threads(); ++i) {
@@ -463,7 +463,7 @@ void DLPropagator<T>::cc_reset_() {
     for (auto &info : vertex_info_) {
         info.set_visited(0, false);
     }
-    for (unsigned int i = 0; i < zero_vertices_.size(); ++i) {
+    for (size_t i = 0; i < zero_vertices_.size(); ++i) {
         vertex_info_[zero_vertices_[i]].set_visited(i, true);
     }
 }
@@ -481,11 +481,11 @@ bool DLPropagator<T>::is_zero_(vertex_t index) const {
 
 template <typename T>
 void DLPropagator<T>::cc_calculate_(AdjacencyMap &outgoing, AdjacencyMap &incoming) {
-    uint32_t cc = 0;
+    index_t cc = 0;
     // Note that this marks zero nodes as visited.
     cc_reset_();
 
-    std::vector<int> node_stack;
+    std::vector<vertex_t> node_stack;
     for (vertex_t node = 0; node < numeric_cast<vertex_t>(vertex_info_.size()); ++node) {
         if (cc_visited_(node)) {
             continue;
@@ -517,7 +517,7 @@ void DLPropagator<T>::cc_calculate_(AdjacencyMap &outgoing, AdjacencyMap &incomi
     stats_.ccs = cc;
 
     zero_vertices_.reserve(cc);
-    for (auto i = numeric_cast<uint32_t>(zero_vertices_.size()); i < cc; ++i) {
+    for (auto i = numeric_cast<index_t>(zero_vertices_.size()); i < cc; ++i) {
         auto node = map_vertex_(Clingo::Function("__null", {Clingo::Number(i)}));
         zero_vertices_.emplace_back(node);
         vertex_info_[node].set_visited(i, true);
@@ -564,10 +564,10 @@ void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, edge_t edg
     struct State {
         value_t weight;
         edge_t id;
-        uint32_t n;
-        uint32_t previous;
+        index_t n;
+        index_t previous;
     };
-    static constexpr auto invalid = std::numeric_limits<uint32_t>::max();
+    static constexpr auto invalid = std::numeric_limits<index_t>::max();
     std::vector<State> queue;
     std::vector<literal_t> clause;
 
@@ -584,7 +584,7 @@ void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, edge_t edg
         }
 
         queue.emplace_back(State{start.weight, start_id, 1, invalid});
-        for (uint32_t queue_offset = 0; queue_offset < numeric_cast<uint32_t>(queue.size()); ++queue_offset) {
+        for (index_t queue_offset = 0; queue_offset < numeric_cast<index_t>(queue.size()); ++queue_offset) {
             auto rs_state = queue[queue_offset];
             auto rs = edges_[rs_state.id];
             auto out = outgoing.equal_range(rs.to);
@@ -674,7 +674,7 @@ auto DLPropagator<T>::cost_(Graph const &graph, Edge const &edge) const -> value
 }
 
 template <typename T>
-auto DLPropagator<T>::cost_(SortMode mode, Graph const &graph, vertex_t index) const -> value_t {
+auto DLPropagator<T>::cost_(SortMode mode, Graph const &graph, edge_t index) const -> value_t {
     switch(mode) {
         case SortMode::Weight: {
             return edges_[index].weight;
@@ -697,7 +697,7 @@ auto DLPropagator<T>::cost_(SortMode mode, Graph const &graph, vertex_t index) c
 
 template <typename T>
 void DLPropagator<T>::sort_edges(SortMode mode, ThreadState &state) {
-    std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](int l, int r) {
+    std::sort(state.todo_edges.begin(), state.todo_edges.end(), [&](edge_t l, edge_t r) {
         return cost_(mode, state.dl_graph, l) < cost_(mode, state.dl_graph, r);
     });
 }

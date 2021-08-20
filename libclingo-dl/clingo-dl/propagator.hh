@@ -144,7 +144,7 @@ private:
     //! Compute the current cost of a vertex in the given graph.
     [[nodiscard]] value_t cost_(Graph const &graph, Edge const &edge) const;
     //! Compute a weight to sort vertices before propagation.
-    [[nodiscard]] value_t cost_(SortMode mode, Graph const &graph, vertex_t index) const;
+    [[nodiscard]] value_t cost_(SortMode mode, Graph const &graph, edge_t index) const;
     //! Sort vertices in the propagation queue according to the given mode.
     void sort_edges(SortMode mode, ThreadState &state);
     //! Propagate the given literals.

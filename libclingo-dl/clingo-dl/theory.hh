@@ -39,6 +39,8 @@ using edge_t = uint32_t;
 using Clingo::literal_t;
 //! Type for decision levels.
 using level_t = uint32_t;
+//! Type for array indices/sizes.
+using index_t = uint32_t;
 
 //! Vector of coefficients and variables.
 template <class N>
