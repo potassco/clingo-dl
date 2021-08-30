@@ -29,18 +29,20 @@
 #include <fstream>
 #include <limits>
 
+namespace ClingoDL {
+
 using Clingo::Detail::handle_error;
 
-class ClingoDLApp : public Clingo::Application, private Clingo::SolveEventHandler {
+class App : public Clingo::Application, private Clingo::SolveEventHandler {
 public:
-    ClingoDLApp() {
+    App() {
         handle_error(clingodl_create(&theory_));
     }
-    ClingoDLApp(ClingoDLApp const &) = default;
-    ClingoDLApp(ClingoDLApp &&) = default;
-    ClingoDLApp &operator=(ClingoDLApp const &) = default;
-    ClingoDLApp &operator=(ClingoDLApp &&) = default;
-    ~ClingoDLApp() override {
+    App(App const &) = default;
+    App(App &&) = default;
+    App &operator=(App const &) = default;
+    App &operator=(App &&) = default;
+    ~App() override {
         clingodl_destroy(theory_);
     }
     char const *program_name() const noexcept override {
@@ -130,7 +132,9 @@ private:
     OptimizerConfig opt_cfg_;
 };
 
+} // namespace CLingoDL
+
 int main(int argc, char *argv[]) {
-    ClingoDLApp app;
+    ClingoDL::App app;
     return Clingo::clingo_main(app, {argv + 1, static_cast<size_t>(argc - 1)});
 }

@@ -30,7 +30,7 @@ private:
 
 void parse_program(clingodl_theory_t *theory, Clingo::Control &ctl, const char *str) {
     Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
-        Rewriter rewriter{theory, builder.to_c()};
+        ClingoDL::Rewriter rewriter{theory, builder.to_c()};
         rewriter.rewrite(str);
     });
 }
@@ -47,10 +47,10 @@ Clingo::SymbolVector optimize(Clingo::Control &ctl, Clingo::Symbol bound, double
     ctl.ground({{"base", {}}});
     REQUIRE(clingodl_prepare(theory, ctl.to_c()));
     SolveHandler handler = {theory};
-    OptimizerConfig cfg;
+    ClingoDL::OptimizerConfig cfg;
     cfg.symbol = bound;
     cfg.factor = factor;
-    Optimizer{cfg, handler, theory}.solve(ctl);
+    ClingoDL::Optimizer{cfg, handler, theory}.solve(ctl);
     REQUIRE(clingodl_destroy(theory));
     return handler.symbols();
 }

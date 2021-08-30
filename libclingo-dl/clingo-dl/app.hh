@@ -27,10 +27,17 @@
 
 #include <clingo.hh>
 #include <clingo-dl.h>
+#include <optional>
 #include <iostream>
 #include <limits>
 #include <cmath>
 
+namespace ClingoDL {
+
+//! Type used for integer values.
+using int_value_t = int;
+
+//! Helper class to rewrite logic programs to use with the clingo DL theory.
 class Rewriter {
 public:
     Rewriter(clingodl_theory_t *theory, clingo_program_builder_t *builder)
@@ -38,72 +45,48 @@ public:
     , builder_{builder} {
     }
 
+    //! Rewrite the given files.
     void rewrite(Clingo::StringSpan files) {
         Clingo::Detail::handle_error(clingo_ast_parse_files(files.begin(), files.size(), rewrite_, this, nullptr, nullptr, 0));
     }
 
+    //! Rewrite the given program.
     void rewrite(char const *str) {
         Clingo::Detail::handle_error(clingo_ast_parse_string(str, rewrite_, this, nullptr, nullptr, 0));
     }
 
 private:
+    //! C callback to add a statement using the builder.
     static bool add_(clingo_ast_t *stm, void *data) {
         auto *self = static_cast<Rewriter*>(data);
         return clingo_program_builder_add(self->builder_, stm);
     }
 
+    //! C callback to rewrite a statement and add it via the builder.
     static bool rewrite_(clingo_ast_t *stm, void *data) {
         auto *self = static_cast<Rewriter*>(data);
         return clingodl_rewrite_ast(self->theory_, stm, add_, self);
     }
 
-    clingodl_theory_t *theory_;
-    clingo_program_builder_t *builder_;
+    clingodl_theory_t *theory_;         //!< A theory handle to rewrite statements.
+    clingo_program_builder_t *builder_; //!< The builder to add rewritten statements to.
 };
 
-class Bound {
-public:
-    int operator *() const {
-        return value_;
-    }
-    explicit operator bool() const {
-        return has_value_;
-    }
-    Bound &operator=(int value) {
-        value_ = value;
-        has_value_ = true;
-        return *this;
-    }
-    friend bool operator==(Bound const &a, Bound const &b) {
-        return a.value_ == b.value_ && a.has_value_ == b.has_value_;
-    }
-    friend bool operator!=(Bound const &a, Bound const &b) {
-        return !(a == b);
-    }
-    friend std::ostream &operator<<(std::ostream &out, Bound const &b) {
-        if (b) {
-            out << *b;
-        }
-        else {
-            out << "unset";
-        }
-        return out;
-    }
-private:
-    int value_{0};
-    bool has_value_{false};
-};
-
+//! The configuration of the optimization algorithm.
 struct OptimizerConfig {
-    Clingo::Symbol symbol;
-    double factor{1.0};
-    mutable size_t index{0};
-    int initial{0};
-    bool has_initial{false};
-    bool active{false};
+    Clingo::Symbol symbol;   //!< The variable to minimize.
+    double factor{1.0};      //!< The factor by which to increase optimization step size.
+    mutable size_t index{0}; //!< The index of the symbol to minimize.
+    int_value_t initial{0};  //!< The initial value of the bound.
+    bool has_initial{false}; //!< Whether the bound is set initially.
+    bool active{false};      //!< Whether optimization is enabled.
 };
 
 class Optimizer : private Clingo::SolveEventHandler {
+private:
+    //! Type used to store bounds.
+    using Bound = std::optional<int_value_t>;
+
 public:
     Optimizer(OptimizerConfig const &opt_cfg, Clingo::SolveEventHandler &handler, clingodl_theory_t *theory)
     : opt_cfg_{opt_cfg}
@@ -176,10 +159,10 @@ private:
         if (lower_bound_ && aux <= *lower_bound_) {
             aux = *lower_bound_ + 1.0;
         }
-        if (aux < std::numeric_limits<int>::min()) {
-            aux = std::numeric_limits<int>::min();
+        if (aux < std::numeric_limits<int_value_t>::min()) {
+            aux = std::numeric_limits<int_value_t>::min();
         }
-        search_bound_ = static_cast<int>(aux);
+        search_bound_ = static_cast<int_value_t>(aux);
 
         // update (exponential) adujustment value
         adjust_ = adjust_ * opt_cfg_.factor;
@@ -189,7 +172,7 @@ private:
         return false;
     }
 
-    int get_bound(Clingo::Model &model) {
+    int_value_t get_bound(Clingo::Model &model) {
         // get bound
         if (opt_cfg_.index == 0) {
             if (!clingodl_lookup_symbol(theory_, opt_cfg_.symbol.to_c(), &opt_cfg_.index)) {
@@ -205,7 +188,7 @@ private:
         if (value.type != clingodl_value_type_int) {
             throw std::runtime_error("only integer minimization is supported");
         }
-        return value.int_number;
+        return value.int_number; // NOLINT
     }
 
     void prepare_(Clingo::Control& ctl) {
@@ -238,5 +221,7 @@ private:
     Bound optimization;
     double adjust_{1};
 };
+
+} // namespace ClingoDL
 
 #endif // CLINGODL_APP_HH
