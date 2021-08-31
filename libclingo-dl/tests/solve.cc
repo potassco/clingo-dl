@@ -28,12 +28,22 @@
 #include <clingo-dl-app/app.hh>
 #include "catch.hpp"
 
+namespace ClingoDL {
+
+namespace {
+
+//! A DL assignment.
 using A = std::pair<Clingo::Symbol, double>;
+//! A vector of DL assignments.
 using AV = std::vector<A>;
+//! A vector of symbols.
 using SV = std::vector<Clingo::Symbol>;
+//! A solution in form of a pair of DL assignments and symbols.
 using SP = std::pair<AV, SV>;
+//! A vector solutions.
 using RV = std::vector<SP>;
 
+//! Encoding for the job shop problem.
 constexpr char const *ENC = R"(
 task(T):-executionTime(T,_,_).
 machine(M):-executionTime(_,M,_).
@@ -80,6 +90,7 @@ assign(3,4,4).
 bound(104).
 )";
 
+//! Create a symbol for sequence atoms of task/machine pairs.
 Clingo::Symbol seq(int a, int b, int c, int d, int e) {
     return Clingo::Function("seq", {
         Clingo::Function("", {Clingo::Number(a), Clingo::Number(b)}),
@@ -88,10 +99,12 @@ Clingo::Symbol seq(int a, int b, int c, int d, int e) {
     });
 }
 
+//! A DL assignment for task/machine pairs.
 A ass(int a, int b, int c) {
     return A(Clingo::Function("", {Clingo::Number(a), Clingo::Number(b)}), c);
 }
 
+//! Solutions to the task assignment problem.
 RV SOLS = {SP{{
     ass(1, 1, 100), ass(1, 2, 0),  ass(1, 3, 34),  ass(1, 4, 95),  // NOLINT
     ass(2, 1, 95),  ass(2, 2, 72), ass(2, 3, 104), ass(2, 4, 0),   // NOLINT
@@ -125,17 +138,22 @@ RV SOLS = {SP{{
     seq(3, 3, 3, 1, 28), seq(3, 3, 3, 2, 28), seq(3, 3, 3, 4, 28), // NOLINT
 }}};
 
+//! A handler to gather statistics in a DL theory.
 class Handler : public Clingo::SolveEventHandler {
 public:
-    Handler(clingodl_theory_t *theory) : theory_{theory} { }
+    Handler(clingodl_theory_t *theory)
+    : theory_{theory} {
+    }
+    //! Add theory specific statistics.
     void on_statistics(Clingo::UserStatistics step, Clingo::UserStatistics accu) override {
         clingodl_on_statistics(theory_, step.to_c(), accu.to_c());
     }
 
 private:
-    clingodl_theory_t *theory_;
+    clingodl_theory_t *theory_; //!< The DL theory.
 };
 
+//! Solve a given DL problem returning all models.
 RV solve(clingodl_theory_t *theory, Clingo::Control &ctl) {
     Handler h{theory};
     using namespace Clingo;
@@ -169,12 +187,15 @@ RV solve(clingodl_theory_t *theory, Clingo::Control &ctl) {
     return result;
 }
 
+//! Parse and rewrite a DL problem.
 void parse_program(clingodl_theory_t *theory, Clingo::Control &ctl, const char *str) {
     Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
-        ClingoDL::Rewriter rewriter{theory, builder.to_c()};
+        Rewriter rewriter{theory, builder.to_c()};
         rewriter.rewrite(str);
     });
 }
+
+} // namespace
 
 TEST_CASE("solving", "[clingo]") {
     SECTION("with control") {
@@ -364,3 +385,5 @@ TEST_CASE("solving", "[clingo]") {
         }
     }
 }
+
+} // namespace ClingoDL

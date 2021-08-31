@@ -28,41 +28,52 @@
 #include <clingo-dl-app/app.hh>
 #include "catch.hpp"
 
+namespace ClingoDL {
+
 namespace {
 
-struct SolveHandler : public Clingo::SolveEventHandler {
+//! Helper class to extract the last model while solving.
+class SolveHandler : public Clingo::SolveEventHandler {
 public:
     SolveHandler(clingodl_theory_t *theory)
     : theory_{theory} {
     }
+    //! Return the symbols in the last model found while solving.
     [[nodiscard]] Clingo::SymbolVector const &symbols() const {
         return symbols_;
     }
+
 private:
+    //! Stores the last model.
     bool on_model(Clingo::Model &model) override {
         REQUIRE(clingodl_on_model(theory_, model.to_c()));
         symbols_ = model.symbols(Clingo::ShowType::Theory);
         std::sort(symbols_.begin(), symbols_.end());
         return false;
     }
+    //! Let's the theory add statistics.
     void on_statistics(Clingo::UserStatistics step, Clingo::UserStatistics accu) override {
         REQUIRE(clingodl_on_statistics(theory_, step.to_c(), accu.to_c()));
     }
-    clingodl_theory_t *theory_;
-    Clingo::SymbolVector symbols_;
+
+    clingodl_theory_t *theory_;    //!< The DL theory.
+    Clingo::SymbolVector symbols_; //!< The symbols in the last model.
 };
 
+//! Parse and rewrite the given logic program.
 void parse_program(clingodl_theory_t *theory, Clingo::Control &ctl, const char *str) {
     Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
-        ClingoDL::Rewriter rewriter{theory, builder.to_c()};
+        Rewriter rewriter{theory, builder.to_c()};
         rewriter.rewrite(str);
     });
 }
 
+//! Create symbols representing DL assignments.
 Clingo::Symbol assign(Clingo::Symbol name, int value) {
     return Clingo::Function("dl", {name, Clingo::Number(value)});
 }
 
+//! Run the optimization algorithm minimizing the given variable.
 Clingo::SymbolVector optimize(Clingo::Control &ctl, Clingo::Symbol bound, double factor, char const *prg) {
     clingodl_theory_t *theory{nullptr};
     REQUIRE(clingodl_create(&theory));
@@ -71,10 +82,10 @@ Clingo::SymbolVector optimize(Clingo::Control &ctl, Clingo::Symbol bound, double
     ctl.ground({{"base", {}}});
     REQUIRE(clingodl_prepare(theory, ctl.to_c()));
     SolveHandler handler = {theory};
-    ClingoDL::OptimizerConfig cfg;
+    OptimizerConfig cfg;
     cfg.symbol = bound;
     cfg.factor = factor;
-    ClingoDL::Optimizer{cfg, handler, theory}.solve(ctl);
+    Optimizer{cfg, handler, theory}.solve(ctl);
     REQUIRE(clingodl_destroy(theory));
     return handler.symbols();
 }
@@ -107,3 +118,5 @@ TEST_CASE("optimize", "[clingo-dl]") {
         REQUIRE(!ctl.statistics()["user_step"]["DifferenceLogic"].has_subkey("Optimization"));
     }
 }
+
+} // namespace ClingoDL
