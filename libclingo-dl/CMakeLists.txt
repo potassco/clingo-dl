@@ -11,9 +11,13 @@ set(header-group-clingo-dl
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/theory.hh"
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/util.hh")
 source_group("${ide_header_group}\\clingo-dl" FILES ${header-group-clingo-dl})
+set(header-group-clingo-dl-impl
+    "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/impl/util.hh")
+source_group("${ide_header_group}\\clingo-dl\\impl" FILES ${header-group-clingo-dl-impl})
 set(header
     ${header-group}
-    ${header-group-clingo-dl})
+    ${header-group-clingo-dl}
+    ${header-group-clingo-dl-impl})
 # ]]]
 # [[[source: src
 set(ide_source_group "Source Files")
