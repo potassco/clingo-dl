@@ -33,6 +33,7 @@ namespace ClingoDL {
 
 using Clingo::Detail::handle_error;
 
+//! Application class to run clingo-dl.
 class App : public Clingo::Application, private Clingo::SolveEventHandler {
 public:
     App() {
@@ -45,21 +46,24 @@ public:
     ~App() override {
         clingodl_destroy(theory_);
     }
+    //! Set program name to clingo-dl.
     char const *program_name() const noexcept override {
         return "clingo-dl";
     }
+    //! Set the version.
     char const *version() const noexcept override {
         return CLINGODL_VERSION;
     }
+    //! Pass models to the theory.
     bool on_model(Clingo::Model &model) override {
         handle_error(clingodl_on_model(theory_, model.to_c()));
         return true;
     }
-
+    //! Pass statistics to the theory.
     void on_statistics(Clingo::UserStatistics step, Clingo::UserStatistics accu) override {
         handle_error(clingodl_on_statistics(theory_, step.to_c(), accu.to_c()));
     }
-
+    //! Run main solving function.
     void main(Clingo::Control &ctl, Clingo::StringSpan files) override { // NOLINT
         handle_error(clingodl_register(theory_, ctl.to_c()));
 
@@ -76,7 +80,7 @@ public:
             Optimizer{opt_cfg_, *this, theory_}.solve(ctl);
         }
     }
-
+    //! Parse the variable to minimize and an optional initial bound.
     bool parse_bound(char const *value) {
         std::ostringstream oss;
         oss << "(" << value << ",)";
@@ -94,7 +98,7 @@ public:
         }
         return true;
     }
-
+    //! Parse factor to adjust optimization step length.
     bool parse_factor(char const *value) {
         std::stringstream strValue;
         strValue.imbue(std::locale::classic());
@@ -107,7 +111,7 @@ public:
         opt_cfg_.factor = factor;
         return strValue.rdbuf()->in_avail() == 0;
     }
-
+    //! Register options of the theory and optimization related options.
     void register_options(Clingo::ClingoOptions &options) override {
         handle_error(clingodl_register_options(theory_, options.to_c()));
         char const * group = "Clingo.DL Options";
@@ -122,18 +126,19 @@ public:
             [this](char const *value) { return parse_factor(value); },
             false, "<factor>");
     }
-
+    //! Validate options of the theory.
     void validate_options() override {
         handle_error(clingodl_validate_options(theory_));
     }
 
 private:
-    clingodl_theory_t *theory_{nullptr};
-    OptimizerConfig opt_cfg_;
+    clingodl_theory_t *theory_{nullptr}; //!< The underlying DL theory.
+    OptimizerConfig opt_cfg_;            //!< The optimization configuration.
 };
 
 } // namespace CLingoDL
 
+//! Run the clingo-dl application.
 int main(int argc, char *argv[]) {
     ClingoDL::App app;
     return Clingo::clingo_main(app, {argv + 1, static_cast<size_t>(argc - 1)});
