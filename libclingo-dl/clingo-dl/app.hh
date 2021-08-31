@@ -82,6 +82,7 @@ struct OptimizerConfig {
     bool active{false};      //!< Whether optimization is enabled.
 };
 
+//! Class providing a configurable optimization algorithm.
 class Optimizer : private Clingo::SolveEventHandler {
 private:
     //! Type used to store bounds.
@@ -94,9 +95,12 @@ public:
     , theory_{theory} {
     }
 
-    // NOTE: with an API extension to implement a custom enumerator,
-    //       one could implement this more nicely
-    //       right now this implementation is restricted to the application
+    //! Run the optimization algorithm.
+    //!
+    //! \note
+    //! With an API extension to implement a custom enumerator, one could
+    //! implement this more nicely. Right now, this implementation is
+    //! restricted to the application.
     void solve(Clingo::Control& ctl) {
         Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
             Rewriter rewriter{theory_, builder.to_c()};
@@ -130,13 +134,17 @@ public:
             }
         }
     }
+
 private:
+    //! Function to add DL specific statistics.
     void on_statistics(Clingo::UserStatistics step, Clingo::UserStatistics accu) override {
         add_stats(step);
         add_stats(accu);
         handler_.on_statistics(step, accu);
     }
 
+    //! Add information about bounds to the given root statistics object and
+    //! pass call the theory specific handler.
     void add_stats(Clingo::UserStatistics root) const {
         if (optimization || lower_bound_) {
             Clingo::UserStatistics diff = root.add_subkey("DifferenceLogic", Clingo::StatisticsType::Map);
@@ -149,6 +157,7 @@ private:
         }
     }
 
+    //! Function to extract the current bound and pass the model to the theory.
     bool on_model(Clingo::Model &model) override {
         // update (upper) bound
         optimization = get_bound(model);
@@ -172,6 +181,7 @@ private:
         return false;
     }
 
+    //! Extract the bound from the given model.
     int_value_t get_bound(Clingo::Model &model) {
         // get bound
         if (opt_cfg_.index == 0) {
@@ -191,6 +201,10 @@ private:
         return value.int_number; // NOLINT
     }
 
+    //! Prepare the program for solving.
+    //!
+    //! This adds constraints to enforce the current upper or search bound as
+    //! well as removes no longer required bounds.
     void prepare_(Clingo::Control& ctl) {
         if (upper_bound_ && upper_bound_ != upper_bound_last_) {
             upper_bound_last_ = upper_bound_;
@@ -210,16 +224,16 @@ private:
         }
     }
 
-    OptimizerConfig const &opt_cfg_;
-    Clingo::SolveEventHandler &handler_;
-    clingodl_theory_t *theory_;
-    Bound search_bound_;
-    Bound search_bound_last_;
-    Bound lower_bound_;
-    Bound upper_bound_;
-    Bound upper_bound_last_;
-    Bound optimization;
-    double adjust_{1};
+    OptimizerConfig const &opt_cfg_;     //!< Configuration of the optimization algorithm.
+    Clingo::SolveEventHandler &handler_; //!< Theory specific solve event handler.
+    clingodl_theory_t *theory_;          //!< The underlying DL theory.
+    Bound search_bound_;                 //!< The current (volatile) search bound.
+    Bound search_bound_last_;            //!< The previous search bound.
+    Bound lower_bound_;                  //!< The current lower bound (from UNSAT results).
+    Bound upper_bound_;                  //!< The current upper bound (from SAT results).
+    Bound upper_bound_last_;             //!< The last value of the upper bound.
+    Bound optimization;                  //!< The current optimization value (last model found).
+    double adjust_{1};                   //!< Amount by which to decrease seach bound.
 };
 
 } // namespace ClingoDL
