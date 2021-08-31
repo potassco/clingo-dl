@@ -35,20 +35,38 @@ namespace ClingoDL {
 template <class T, class P>
 struct HeapFromM {
     using index_t = Heap<0>::index_type;
+    //! The value type of the vertices in the heap.
     using value_t = T;
+    //! The index of the vertex in the heap vector.
     index_t &offset(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].offset; }
+    //! The cost of the vertex.
     value_t &cost(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].cost_from; }
+    //! The end point of the given edge.
     vertex_t to(edge_t idx) { return static_cast<P *>(this)->edges_[idx].to; }
+    //! The starting point of the given edge.
     vertex_t from(edge_t idx) { return static_cast<P *>(this)->edges_[idx].from; }
+    //! The outgoing vertices of the given vertex.
     std::vector<vertex_t> &out(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].outgoing; }
+    //! The edge that was used to reach the given vertex.
     edge_t &path(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].path_from; }
+    //! Flag indicating whether the vertex has been visited.
+    //!
+    //! \note This is a integer here because it is also used as a dfs index
+    //! when adding edges.
     vertex_t &visited(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].visited_from; }
+    //! Whether the vertex is relevant for propagation.
     bool &relevant(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].relevant_from; }
+    //! The set of all visited vertices.
     std::vector<vertex_t> &visited_set() { return static_cast<P *>(this)->visited_from_; }
+    //! Outgoing candidate edges that are not false.
     std::vector<vertex_t> &candidate_outgoing(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].candidate_outgoing; }
+    //! Incoming candidate edges that are not false.
     std::vector<vertex_t> &candidate_incoming(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].candidate_incoming; }
+    //! Mark an incoming edge as removed.
     void remove_incoming(edge_t idx) { static_cast<P *>(this)->edge_states_[idx].removed_incoming = true; }
+    //! Mark an outgoing edge as removed.
     void remove_outgoing(edge_t idx) { static_cast<P *>(this)->edge_states_[idx].removed_outgoing = true; }
+    //! The cost to propagate the edge.
     uint64_t &propagation_cost() { return static_cast<P *>(this)->stats_.propagate_cost_from; }
 };
 
@@ -100,10 +118,10 @@ struct Vertex {
     VertexIndexVec incoming;            //!< Incoming edges to this vertex that are true.
     VertexIndexVec candidate_incoming;  //!< Edges that might become outgoing edges.
     VertexIndexVec candidate_outgoing;  //!< Edges that might become incoming edges.
-    PotentialStack potential_stack; //!< Vector of pairs of level and potential.
+    PotentialStack potential_stack;     //!< Vector of pairs of level and potential.
     value_t cost_from{0};
     value_t cost_to{0};
-    uint32_t offset{0};
+    vertex_t offset{0};
     edge_t path_from{0};
     edge_t path_to{0};
     vertex_t degree_out{0};
