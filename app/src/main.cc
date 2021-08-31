@@ -1,6 +1,6 @@
 // {{{ MIT License
 
-// Copyright 2018 Roland Kaminski, Philipp Wanko, Max Ostrowski
+// Copyright Roland Kaminski, Philipp Wanko, and Max Ostrowski
 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
@@ -24,7 +24,7 @@
 
 #include <clingo.hh>
 #include <clingo-dl.h>
-#include <clingo-dl/app.hh>
+#include <clingo-dl-app/app.hh>
 #include <sstream>
 #include <fstream>
 #include <limits>

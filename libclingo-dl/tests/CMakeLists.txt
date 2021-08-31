@@ -12,7 +12,7 @@ set(source
 # ]]]
 
 add_executable(test_clingo-dl ${source})
-target_link_libraries(test_clingo-dl PRIVATE libclingo libclingo-dl_t)
+target_link_libraries(test_clingo-dl PRIVATE libclingo-dl-app_t)
 target_include_directories(test_clingo-dl PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
 )

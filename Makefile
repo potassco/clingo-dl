@@ -8,7 +8,7 @@ CXXFLAGS=-Wall -Wextra -Wpedantic -Werror
 .PHONY: all configure compdb
 
 all: configure
-	@MAKEFLAGS= MFLAGS= cmake --build "build/$(BUILD_TYPE)" --target all
+	@TERM=dumb MAKEFLAGS= MFLAGS= cmake --build "build/$(BUILD_TYPE)" --target all
 
 test: all
 	@cmake --build "build/$(BUILD_TYPE)" --target "test"
