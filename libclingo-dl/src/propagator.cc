@@ -284,7 +284,7 @@ bool DLPropagator<T>::add_constraints_(Clingo::PropagateInit &init) {
 }
 
 template <typename T>
-bool DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, literal_t literal, CoVarVec const &elements, char const *op, T rhs, bool strict) {
+bool DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, literal_t literal, CoVarVec const &elements, char const *op, T rhs, bool strict) { // NOLINT
     // rewrite '>', '<', and '>=' into '<='
     if (std::strcmp(op, ">") == 0) {
         op = ">=";
@@ -532,7 +532,7 @@ void DLPropagator<T>::cc_calculate_(AdjacencyMap &outgoing, AdjacencyMap &incomi
 
     zero_vertices_.reserve(cc);
     for (auto i = numeric_cast<index_t>(zero_vertices_.size()); i < cc; ++i) {
-        auto node = map_vertex_(Clingo::Function("__null", {Clingo::Number(i)}));
+        auto node = map_vertex_(Clingo::Function("__null", {Clingo::Number(numeric_cast<int>(i))}));
         zero_vertices_.emplace_back(node);
         vertex_info_[node].set_visited(i, true);
     }
@@ -562,7 +562,7 @@ void DLPropagator<T>::cc_calculate_(AdjacencyMap &outgoing, AdjacencyMap &incomi
 }
 
 template <typename T>
-void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, edge_t edge_start, AdjacencyMap &outgoing) {
+void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, edge_t edge_start, AdjacencyMap &outgoing) { // NOLINT
     // let r and s be edge literals and T be the true literal:
     //
     //            r     T
@@ -717,7 +717,7 @@ void DLPropagator<T>::sort_edges(SortMode mode, ThreadState &state) {
 }
 
 template <typename T>
-void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::LiteralSpan changes) {
+void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::LiteralSpan changes) { // NOLINT
     // This function checks for conflicts and propagates edges if enabled. If
     // propagation is enabled, the graph has to be propagated after each edge
     // added. If limited propagation is enabled and the limit is reached,

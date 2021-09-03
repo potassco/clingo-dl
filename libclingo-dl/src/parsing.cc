@@ -234,7 +234,7 @@ template <class N>
     if (len < 2 || name[0] != '"' || name[len - 1] != '"') { // NOLINT
         return std::nullopt;
     }
-    char *parsed = nullptr;
+    char *parsed = nullptr; // NOLINT
     auto res = std::strtod(name + 1, &parsed); // NOLINT
     if (parsed != name + len - 1) { // NOLINT
         return std::nullopt;
@@ -305,7 +305,7 @@ Clingo::Symbol evaluate(Clingo::TheoryTerm const &term) {
 
 //! Parse the given theory term for an arithmetic expression.
 template <class N>
-void parse_elem(Clingo::TheoryTerm const &term, std::function<int (Clingo::Symbol)> const &map_vert, CoVarVec<N> &res) {
+void parse_elem(Clingo::TheoryTerm const &term, std::function<int (Clingo::Symbol)> const &map_vert, CoVarVec<N> &res) { // NOLINT
     if (term.type() == Clingo::TheoryTermType::Number) {
         res.emplace_back(term.number(), INVALID_VAR);
     }

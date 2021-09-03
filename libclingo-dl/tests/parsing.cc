@@ -78,7 +78,7 @@ V parse(char const *prg) {
 
 } // namespace
 
-TEST_CASE("parsing", "[parsing]") {
+TEST_CASE("parsing", "[parsing]") { // NOLINT
     SECTION("strict / non-strict") {
         REQUIRE(parse("&diff { a - b } < 0.") == V{"1*a + -1*b < 0 (non-strict)"});
         REQUIRE(parse(":- &diff { a - b } < 0.") == V{"1*a + -1*b >= 0 (non-strict)"});

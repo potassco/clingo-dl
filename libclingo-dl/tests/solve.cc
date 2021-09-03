@@ -105,7 +105,7 @@ A ass(int a, int b, int c) {
 }
 
 //! Solutions to the task assignment problem.
-RV SOLS = {SP{{
+RV const SOLS = {SP{{
     ass(1, 1, 100), ass(1, 2, 0),  ass(1, 3, 34),  ass(1, 4, 95),  // NOLINT
     ass(2, 1, 95),  ass(2, 2, 72), ass(2, 3, 104), ass(2, 4, 0),   // NOLINT
     ass(3, 1, 34),  ass(3, 2, 0),  ass(3, 3, 72),  ass(3, 4, 104)  // NOLINT
@@ -168,10 +168,10 @@ RV solve(clingodl_theory_t *theory, Clingo::Control &ctl) {
             clingodl_value_t value;
             clingodl_assignment_get_value(theory, id, index, &value);
             if (value.type == clingodl_value_type_int) {
-                sol.emplace_back(Symbol{clingodl_get_symbol(theory, index)}, value.int_number);
+                sol.emplace_back(Symbol{clingodl_get_symbol(theory, index)}, value.int_number); // NOLINT
             }
             else if (value.type == clingodl_value_type_double) {
-                sol.emplace_back(Symbol{clingodl_get_symbol(theory, index)}, value.double_number);
+                sol.emplace_back(Symbol{clingodl_get_symbol(theory, index)}, value.double_number); // NOLINT
             }
             else {
                 REQUIRE(false);
@@ -197,7 +197,7 @@ void parse_program(clingodl_theory_t *theory, Clingo::Control &ctl, const char *
 
 } // namespace
 
-TEST_CASE("solving", "[clingo]") {
+TEST_CASE("solving", "[clingo]") { // NOLINT
     SECTION("with control") {
         using namespace Clingo;
         auto a = Id("a");

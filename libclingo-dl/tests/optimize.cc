@@ -92,7 +92,7 @@ Clingo::SymbolVector optimize(Clingo::Control &ctl, Clingo::Symbol bound, double
 
 } // namespace
 
-TEST_CASE("optimize", "[clingo-dl]") {
+TEST_CASE("optimize", "[clingo-dl]") { // NOLINT
     auto a = Clingo::Id("a");
     auto b = Clingo::Id("b");
     SECTION("sat") {

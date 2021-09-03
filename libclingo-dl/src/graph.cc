@@ -86,7 +86,7 @@ void Graph<T>::ensure_decision_level(level_t level, bool enable_propagate) {
 }
 
 template <typename T>
-bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) {
+bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) { // NOLINT
     ++stats_.edges_propagated;
     remove_candidate_edge(xy_idx);
     auto &xy = edges_[xy_idx];
@@ -165,7 +165,7 @@ bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) {
 }
 
 template <typename T>
-bool Graph<T>::add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> f) {
+bool Graph<T>::add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> f) { // NOLINT
 #ifdef CLINGODL_CROSSCHECK
     for (auto &node : nodes_) {
         static_cast<void>(node);
@@ -473,7 +473,7 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
 }
 
 template <typename T>
-bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret) {
+bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret) { // NOLINT
     auto &uv = edges_[uv_idx];
     auto &u = nodes_[uv.from];
     auto &v = nodes_[uv.to];
@@ -542,7 +542,7 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
 
 template <typename T>
 template <class M>
-bool Graph<T>::propagate_edges_(M &m, Clingo::PropagateControl &ctl, edge_t xy_idx, bool forward, bool backward) {
+bool Graph<T>::propagate_edges_(M &m, Clingo::PropagateControl &ctl, edge_t xy_idx, bool forward, bool backward) { // NOLINT
     if (!forward && !backward) {
         return true;
     }
@@ -590,7 +590,7 @@ bool Graph<T>::propagate_edges_(M &m, Clingo::PropagateControl &ctl, edge_t xy_i
 
 template <typename T>
 template <class M>
-auto Graph<T>::dijkstra_(vertex_t source_idx, std::vector<vertex_t> &visited_set, M &m) -> std::pair<uint32_t, uint32_t> {
+auto Graph<T>::dijkstra_(vertex_t source_idx, std::vector<vertex_t> &visited_set, M &m) -> std::pair<uint32_t, uint32_t> { // NOLINT
     uint32_t relevant = 0;
     uint32_t relevant_degree_out = 0;
     uint32_t relevant_degree_in = 0;

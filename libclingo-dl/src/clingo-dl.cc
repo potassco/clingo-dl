@@ -170,33 +170,44 @@ public:
     }
 
 private:
+    //! Add an integral value to the statistics.
+    template <class V, std::enable_if_t<std::is_integral_v<V>, bool> = true>
+    static void add_subkey_(Clingo::UserStatistics &root, char const *name, V value) {
+        root.add_subkey(name, Clingo::StatisticsType::Value).set_value(static_cast<double>(value));
+    }
+    //! Add an floating point value to the statistics.
+    template <class V, std::enable_if_t<std::is_floating_point_v<V>, bool> = true>
+    static void add_subkey_(Clingo::UserStatistics &root, char const *name, V value) {
+        root.add_subkey(name, Clingo::StatisticsType::Value).set_value(value);
+    }
+
     //!< Helper function to add the DL statistics to clingo's statistics.
     void add_statistics_(Clingo::UserStatistics& root, Statistics const &stats) {
         Clingo::UserStatistics diff = root.add_subkey("DifferenceLogic", Clingo::StatisticsType::Map);
-        diff.add_subkey("Time init(s)", Clingo::StatisticsType::Value).set_value(stats.time_init.count());
-        diff.add_subkey("CCs", Clingo::StatisticsType::Value).set_value(stats.ccs);
-        diff.add_subkey("Mutexes", Clingo::StatisticsType::Value).set_value(stats.mutexes);
-        diff.add_subkey("Edges", Clingo::StatisticsType::Value).set_value(stats.edges);
-        diff.add_subkey("Variables", Clingo::StatisticsType::Value).set_value(stats.variables);
+        add_subkey_(diff, "Time init(s)", stats.time_init.count());
+        add_subkey_(diff, "CCs", stats.ccs);
+        add_subkey_(diff, "Mutexes", stats.mutexes);
+        add_subkey_(diff, "Edges", stats.edges);
+        add_subkey_(diff, "Variables", stats.variables);
         Clingo::UserStatistics threads = diff.add_subkey("Thread", Clingo::StatisticsType::Array);
         threads.ensure_size(stats.thread_statistics.size(), Clingo::StatisticsType::Map);
         auto it = threads.begin();
         for (auto const &stat : stats.thread_statistics) {
             auto thread = *it++;
-            thread.add_subkey("Propagation(s)", Clingo::StatisticsType::Value).set_value(stat.time_propagate.count());
-            thread.add_subkey("Dijkstra(s)", Clingo::StatisticsType::Value).set_value(stat.time_dijkstra.count());
-            thread.add_subkey("Undo(s)", Clingo::StatisticsType::Value).set_value(stat.time_undo.count());
-            thread.add_subkey("True edges", Clingo::StatisticsType::Value).set_value(stat.true_edges);
-            thread.add_subkey("False edges", Clingo::StatisticsType::Value).set_value(stat.false_edges);
-            thread.add_subkey("False edges (inverse)", Clingo::StatisticsType::Value).set_value(stat.false_edges_trivial);
-            thread.add_subkey("False edges (partial)", Clingo::StatisticsType::Value).set_value(stat.false_edges_weak);
-            thread.add_subkey("False edges (partial+)", Clingo::StatisticsType::Value).set_value(stat.false_edges_weak_plus);
-            thread.add_subkey("Edges added", Clingo::StatisticsType::Value).set_value(stat.edges_added);
-            thread.add_subkey("Edges skipped", Clingo::StatisticsType::Value).set_value(stat.edges_skipped);
-            thread.add_subkey("Edges propagated", Clingo::StatisticsType::Value).set_value(stat.edges_propagated);
-            thread.add_subkey("Cost consistency", Clingo::StatisticsType::Value).set_value(stat.propagate_cost_add);
-            thread.add_subkey("Cost forward", Clingo::StatisticsType::Value).set_value(stat.propagate_cost_from);
-            thread.add_subkey("Cost backward", Clingo::StatisticsType::Value).set_value(stat.propagate_cost_to);
+            add_subkey_(thread, "Propagation(s)", stat.time_propagate.count());
+            add_subkey_(thread, "Dijkstra(s)", stat.time_dijkstra.count());
+            add_subkey_(thread, "Undo(s)", stat.time_undo.count());
+            add_subkey_(thread, "True edges", stat.true_edges);
+            add_subkey_(thread, "False edges", stat.false_edges);
+            add_subkey_(thread, "False edges (inverse)", stat.false_edges_trivial);
+            add_subkey_(thread, "False edges (partial)", stat.false_edges_weak);
+            add_subkey_(thread, "False edges (partial+)", stat.false_edges_weak_plus);
+            add_subkey_(thread, "Edges added", stat.edges_added);
+            add_subkey_(thread, "Edges skipped", stat.edges_skipped);
+            add_subkey_(thread, "Edges propagated", stat.edges_propagated);
+            add_subkey_(thread, "Cost consistency", stat.propagate_cost_add);
+            add_subkey_(thread, "Cost forward", stat.propagate_cost_from);
+            add_subkey_(thread, "Cost backward", stat.propagate_cost_to);
         }
     }
 
