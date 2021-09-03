@@ -57,7 +57,7 @@ T Graph<T>::get_value(vertex_t idx) const {
 }
 
 template <typename T>
-bool Graph<T>::edge_is_active(edge_t edge_idx) const {
+bool Graph<T>::edge_is_enabled(edge_t edge_idx) const {
     return edge_states_[edge_idx].active;
 }
 
@@ -87,7 +87,7 @@ void Graph<T>::ensure_decision_level(level_t level, bool enable_propagate) {
 template <typename T>
 bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) { // NOLINT
     ++stats_.edges_propagated;
-    remove_candidate_edge(xy_idx);
+    disable_edge(xy_idx);
     auto &xy = edges_[xy_idx];
     auto &x = nodes_[xy.from];
     auto &y = nodes_[xy.to];
@@ -323,7 +323,7 @@ bool Graph<T>::with_incoming_(vertex_t s_idx, P p, F f) {
         neg_cycle_.clear();
         if (f(t_idx, ts_idx)) {
             edge_states_[ts_idx].removed_incoming = true;
-            remove_candidate_edge(ts_idx);
+            disable_edge(ts_idx);
             // add constraint for the negative cycle
             if (!p(neg_cycle_)) {
                 // erease edges marked as removed
@@ -400,7 +400,7 @@ void Graph<T>::backtrack() {
 }
 
 template <typename T>
-void Graph<T>::remove_candidate_edge(edge_t uv_idx) {
+void Graph<T>::disable_edge(edge_t uv_idx) {
     auto &uv = edges_[uv_idx];
     auto &u = nodes_[uv.from];
     auto &v = nodes_[uv.to];
@@ -476,7 +476,7 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
                 assert(false && "edge is implied but lead to a conflict :(");
             }
 #endif
-            remove_candidate_edge(uv_idx);
+            disable_edge(uv_idx);
             return true;
         }
     }
@@ -533,7 +533,7 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
                     return false;
                 }
             }
-            remove_candidate_edge(uv_idx);
+            disable_edge(uv_idx);
             return true;
         }
 #ifdef CLINGODL_CROSSCHECK

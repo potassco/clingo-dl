@@ -670,8 +670,8 @@ template <typename T>
 void DLPropagator<T>::disable_edge_by_lit(ThreadState &state, literal_t lit) {
     if (disable_edges_) {
         for (auto it = lit_to_edges_.find(-lit), ie = lit_to_edges_.end(); it != ie && it->first == -lit; ++it) {
-            if (state.graph.edge_is_active(it->second)) {
-                state.graph.remove_candidate_edge(it->second);
+            if (state.graph.edge_is_enabled(it->second)) {
+                state.graph.disable_edge(it->second);
             }
         }
     }
@@ -770,7 +770,7 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
             ctl.remove_watch(lit);
         }
         for (; it != ie && it->first == lit; ++it) {
-            if (state.graph.edge_is_active(it->second)) {
+            if (state.graph.edge_is_enabled(it->second)) {
                 state.todo_edges.push_back(it->second);
             }
         }
@@ -779,7 +779,7 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
     // process edges in the todo queue
     sort_edges(conf_.get_sort_mode(thread_id), state);
     for (auto edge : state.todo_edges) {
-        if (state.graph.edge_is_active(edge)) {
+        if (state.graph.edge_is_enabled(edge)) {
             // check for conflicts
             if (!state.graph.add_edge(edge, [&](std::vector<edge_t> const &neg_cycle) {
                 std::vector<literal_t> clause;

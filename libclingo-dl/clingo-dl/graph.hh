@@ -207,15 +207,38 @@ public:
     [[nodiscard]] bool has_value(vertex_t idx) const;
     //! Return true the (inverted) potential of a vertex.
     [[nodiscard]] value_t get_value(vertex_t idx) const;
-    [[nodiscard]] bool edge_is_active(edge_t edge_idx) const;
+    //! Return true if the edge is enabled.
+    //!
+    //! Disabled edges are ignored during full propagation.
+    [[nodiscard]] bool edge_is_enabled(edge_t edge_idx) const;
+    //! This disables an edge.
+    //!
+    //! Any edge whose literal became true or false is disabled. See also
+    //! edge_is_enabled(). The state is disabled when backtracking.
+    void disable_edge(edge_t uv_idx);
+    //! Return true if the propagator can run the full propagate.
+    //!
+    //! Propagation can be disabled on a decision level. It will stay disabled
+    //! on higher decision level and reset during backtracking.
     [[nodiscard]] bool can_propagate() const;
+    //! Disable propagation on the current and higher decision levels.
+    //!
+    //! See also can_propagate().
     void disable_propagate();
+    //! Make sure that the trail contains the given decision level.
     void ensure_decision_level(level_t level, bool enable_propagate);
-    //! This function adds an edge to the graph and returns false if the edge induces a negative cycle.
+    //! Add an edge to the graph and return false if the edge induces a negative cycle.
+    //!
+    //! This function assumes that the graph is not conflicting.
     [[nodiscard]] bool add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> f);
+    //! Fully propagates the graph after adding the given edge.
+    //!
+    //! Afterward any of the remaining edges can be added to the graph without
+    //! causing a conflict. The function assumes that the graph was fully
+    //! propagated before the edge was added.
     [[nodiscard]] bool propagate(edge_t xy_idx, Clingo::PropagateControl &ctl);
+    //! Backtracks the last decision level established with ensure_decision_level().
     void backtrack();
-    void remove_candidate_edge(edge_t uv_idx);
     [[nodiscard]] PropagationMode mode() const;
 
 private:
