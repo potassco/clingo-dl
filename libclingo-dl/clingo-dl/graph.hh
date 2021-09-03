@@ -201,15 +201,17 @@ class Graph : private HeapToM<T, Graph<T>>, private HeapFromM<T, Graph<T>> {
 
 public:
     Graph(ThreadStatistics &stats, EdgeVec const &edges, PropagationMode propagate);
+    //! Return no edges have been added to the graph yet.
     [[nodiscard]] bool empty() const;
-    [[nodiscard]] bool valid_node(vertex_t idx) const;
-    [[nodiscard]] bool node_value_defined(vertex_t idx) const;
+    //! Return true if a potential has been assigned to the vertex.
     [[nodiscard]] bool has_value(vertex_t idx) const;
-    [[nodiscard]] value_t node_value(vertex_t idx) const;
+    //! Return true the (inverted) potential of a vertex.
+    [[nodiscard]] value_t get_value(vertex_t idx) const;
     [[nodiscard]] bool edge_is_active(edge_t edge_idx) const;
     [[nodiscard]] bool can_propagate() const;
     void disable_propagate();
     void ensure_decision_level(level_t level, bool enable_propagate);
+    //! This function adds an edge to the graph and returns false if the edge induces a negative cycle.
     [[nodiscard]] bool add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> f);
     [[nodiscard]] bool propagate(edge_t xy_idx, Clingo::PropagateControl &ctl);
     void backtrack();
@@ -217,9 +219,19 @@ public:
     [[nodiscard]] PropagationMode mode() const;
 
 private:
+    //! Traverse the incoming edges of a node.
+    //!
+    //! Edges that became inactive will be removed during the traversal.
+    //! Callback f is called for each visited edge and the edge is removed if
+    //! the callback returns false. Furthermore, function p is called in this
+    //! case, which can be used to add constraints to the graph. If adding a
+    //! constraint causes a conflict indicated by the return value of the
+    //! callback, the traversal will stop.
     template <class P, class F>
     [[nodiscard]] bool with_incoming_(vertex_t s_idx, P p, F f);
     template <class F>
+    //! If s has been reached from u, we can use the current potentials to
+    //! detect some conflicts involving incoming edges of s.
     [[nodiscard]] bool cheap_propagate_(vertex_t u_idx, vertex_t s_idx, F f);
     void add_candidate_edge_(edge_t uv_idx);
     [[nodiscard]] bool propagate_edge_true_(edge_t uv_idx, edge_t xy_idx);

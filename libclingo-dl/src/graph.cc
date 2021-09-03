@@ -46,21 +46,20 @@ bool Graph<T>::empty() const {
 }
 
 template <typename T>
-bool Graph<T>::valid_node(vertex_t idx) const { return nodes_.size() > idx; }
+bool Graph<T>::has_value(vertex_t idx) const {
+    return idx < nodes_.size() && nodes_[idx].defined();
+}
 
 template <typename T>
-bool Graph<T>::node_value_defined(vertex_t idx) const { return nodes_[idx].defined(); }
+T Graph<T>::get_value(vertex_t idx) const {
+    assert(has_value(idx));
+    return -nodes_[idx].potential();
+}
 
 template <typename T>
-bool Graph<T>::has_value(vertex_t idx) const { return valid_node(idx) && node_value_defined(idx); }
-
-
-template <typename T>
-T Graph<T>::node_value(vertex_t idx) const { return -nodes_[idx].potential(); }
-
-
-template <typename T>
-bool Graph<T>::edge_is_active(edge_t edge_idx) const { return edge_states_[edge_idx].active; }
+bool Graph<T>::edge_is_active(edge_t edge_idx) const {
+    return edge_states_[edge_idx].active;
+}
 
 
 template <typename T>
@@ -166,6 +165,13 @@ bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) { // NOLI
 
 template <typename T>
 bool Graph<T>::add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> f) { // NOLINT
+    // This function adds an edge to the graph and returns false if the edge
+    // induces a negative cycle.
+    //
+    // For this to work, the graph must not already have a negative cycle. The
+    // function also propagates cheap to propagate edges considering nodes
+    // visited during cycle detection. Negative cycles are reported via the
+    // given callback function.
 #ifdef CLINGODL_CROSSCHECK
     for (auto &node : nodes_) {
         static_cast<void>(node);
@@ -303,19 +309,24 @@ bool Graph<T>::with_incoming_(vertex_t s_idx, P p, F f) {
     auto &s = nodes_[s_idx];
     auto &in = s.candidate_incoming;
     auto jt = in.begin();
+    // traverse over incoming edges
     for (auto it = jt, ie = in.end(); it != ie; ++it) {
         auto &ts_idx = *it;
         auto &ts = edges_[ts_idx];
         auto t_idx = ts.from;
+        // remove edges marked inactive
         if (!edge_states_[ts_idx].active) {
             edge_states_[ts_idx].removed_incoming = true;
             continue;
         }
+        // visit the incoming vertex and edge
         neg_cycle_.clear();
         if (f(t_idx, ts_idx)) {
             edge_states_[ts_idx].removed_incoming = true;
             remove_candidate_edge(ts_idx);
+            // add constraint for the negative cycle
             if (!p(neg_cycle_)) {
+                // erease edges marked as removed
                 in.erase(jt, it+1);
                 return false;
             }
@@ -331,9 +342,9 @@ template <typename T>
 template <class F>
 [[nodiscard]] bool Graph<T>::cheap_propagate_(vertex_t u_idx, vertex_t s_idx, F f) {
     // we check for the following case:
-    // u ->* s -> * t
-    //       ^-----/
-    //          ts
+    //   u ->* s ->* t
+    //         ^----/
+    //           ts
     return with_incoming_(s_idx, f, [&](vertex_t t_idx, edge_t ts_idx) {
         auto &s = nodes_[s_idx];
         auto &t = nodes_[t_idx];

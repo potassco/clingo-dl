@@ -159,9 +159,9 @@ auto DLPropagator<T>::lower_bound(Clingo::id_t thread_id, vertex_t index) const 
     auto zero_node = zero_vertices_[cc];
 
     if (state.graph.has_value(zero_node)) {
-        adjust = state.graph.node_value(zero_node);
+        adjust = state.graph.get_value(zero_node);
     }
-    return state.graph.node_value(index) - adjust;
+    return state.graph.get_value(index) - adjust;
 }
 
 template <typename T>
@@ -170,7 +170,7 @@ void DLPropagator<T>::extend_model(Clingo::Model &model) {
     std::vector<T> adjust;
     adjust.reserve(zero_vertices_.size());
     for (auto node : zero_vertices_) {
-        adjust.emplace_back(state.graph.has_value(node) ? state.graph.node_value(node) : 0);
+        adjust.emplace_back(state.graph.has_value(node) ? state.graph.get_value(node) : 0);
     }
 
     Clingo::SymbolVector vec;
@@ -179,7 +179,7 @@ void DLPropagator<T>::extend_model(Clingo::Model &model) {
             Clingo::SymbolVector params;
             params.emplace_back(vertex_info_[idx].symbol);
             auto cc = vertex_info_[idx].cc;
-            params.emplace_back(to_symbol<T>(state.graph.node_value(idx) - adjust[cc]));
+            params.emplace_back(to_symbol<T>(state.graph.get_value(idx) - adjust[cc]));
             vec.emplace_back(Function("dl", params));
         }
     }
@@ -250,7 +250,7 @@ void DLPropagator<T>::check(Clingo::PropagateControl &ctl) {
     if (ctl.assignment().is_total()) {
         for (auto &x : edges_) {
             if (ctl.assignment().is_true(x.lit)) {
-                if (!state.graph.node_value_defined(x.from) || !state.graph.node_value_defined(x.to) || !(state.graph.node_value(x.from) - state.graph.node_value(x.to) <= x.weight)) {
+                if (!state.graph.has_value(x.from) || !state.graph.has_value(x.to) || !(state.graph.get_value(x.from) - state.graph.get_value(x.to) <= x.weight)) {
                     throw std::logic_error("not a valid solution");
                 }
             }
@@ -679,7 +679,7 @@ void DLPropagator<T>::disable_edge_by_lit(ThreadState &state, literal_t lit) {
 
 template <typename T>
 auto DLPropagator<T>::get_potential_(Graph const &graph, vertex_t index) const -> value_t {
-    return graph.node_value_defined(index) ? -graph.node_value(index) : 0;
+    return graph.has_value(index) ? -graph.get_value(index) : 0;
 }
 
 template <typename T>
