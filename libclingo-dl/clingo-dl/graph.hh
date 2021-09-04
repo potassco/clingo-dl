@@ -32,6 +32,7 @@
 
 namespace ClingoDL {
 
+// TODO: document + make nested
 template <class T, class P>
 struct HeapFromM {
     using index_t = Heap<0>::index_type;
@@ -66,10 +67,14 @@ struct HeapFromM {
     void remove_incoming(edge_t idx) { static_cast<P *>(this)->edge_states_[idx].removed_incoming = true; }
     //! Mark an outgoing edge as removed.
     void remove_outgoing(edge_t idx) { static_cast<P *>(this)->edge_states_[idx].removed_outgoing = true; }
+    //! Check if the edge is active.
+    bool active(edge_t idx) { return static_cast<P *>(this)->edge_states_[idx].active; }
     //! The cost to propagate the edge.
     uint64_t &propagation_cost() { return static_cast<P *>(this)->stats_.propagate_cost_from; }
+    //! The cost to propagate the edge.
 };
 
+// TODO: document + make nested
 template <class T, class P>
 struct HeapToM {
     using index_t = Heap<0>::index_type;
@@ -87,6 +92,8 @@ struct HeapToM {
     std::vector<vertex_t> &candidate_incoming(vertex_t idx) { return static_cast<P *>(this)->nodes_[idx].candidate_outgoing; }
     void remove_incoming(edge_t idx) { static_cast<P *>(this)->edge_states_[idx].removed_outgoing = true; }
     void remove_outgoing(edge_t idx) { static_cast<P *>(this)->edge_states_[idx].removed_incoming = true; }
+    //! Check if the edge is active.
+    bool active(edge_t idx) { return static_cast<P *>(this)->edge_states_[idx].active; }
     uint64_t &propagation_cost() { return static_cast<P *>(this)->stats_.propagate_cost_to; }
 };
 
@@ -100,6 +107,7 @@ struct Edge {
     Clingo::literal_t lit; //!< Solver literal associated with the edge.
 };
 
+// TODO: document + make nested
 template <typename T>
 struct Vertex {
     using value_t = T;
@@ -181,6 +189,7 @@ struct ThreadStatistics {
     uint64_t edges_propagated{0};
 };
 
+// TODO: document + make nested
 struct EdgeState {
     uint8_t removed_outgoing : 1;
     uint8_t removed_incoming : 1;
@@ -189,13 +198,13 @@ struct EdgeState {
 
 template <typename T>
 class Graph : private HeapToM<T, Graph<T>>, private HeapFromM<T, Graph<T>> {
-    using value_t = T;
-    using Edge = ClingoDL::Edge<value_t>;
-    using EdgeVec = std::vector<Edge>;
-    using Vertex = ClingoDL::Vertex<value_t>;
-    using VertexVec = std::vector<Vertex>;
-    using HTM = HeapToM<value_t, Graph<value_t>>;
-    using HFM = HeapFromM<value_t, Graph<value_t>>;
+    using value_t = T;                              //!< The value type (integral or floating point).
+    using Edge = ClingoDL::Edge<value_t>;           //!< The data structure for edges.
+    using EdgeVec = std::vector<Edge>;              //!< A vector of edges.
+    using Vertex = ClingoDL::Vertex<value_t>;       //!< The data structure for vertices.
+    using VertexVec = std::vector<Vertex>;          //!< A vector of vertices.
+    using HTM = HeapToM<value_t, Graph<value_t>>;   //!< Helper type to access the graph.
+    using HFM = HeapFromM<value_t, Graph<value_t>>; //!< Helper type to access the transposed graph.
     friend HTM;
     friend HFM;
 
@@ -239,6 +248,7 @@ public:
     [[nodiscard]] bool propagate(edge_t xy_idx, Clingo::PropagateControl &ctl);
     //! Backtracks the last decision level established with ensure_decision_level().
     void backtrack();
+    //! Return the configured propagation mode.
     [[nodiscard]] PropagationMode mode() const;
 
 private:
@@ -252,9 +262,9 @@ private:
     //! callback, the traversal will stop.
     template <class P, class F>
     [[nodiscard]] bool with_incoming_(vertex_t s_idx, P p, F f);
-    template <class F>
     //! If s has been reached from u, we can use the current potentials to
     //! detect some conflicts involving incoming edges of s.
+    template <class F>
     [[nodiscard]] bool cheap_propagate_(vertex_t u_idx, vertex_t s_idx, F f);
     void add_candidate_edge_(edge_t uv_idx);
     [[nodiscard]] bool propagate_edge_true_(edge_t uv_idx, edge_t xy_idx);

@@ -26,7 +26,37 @@
 
 namespace ClingoDL {
 
-static constexpr auto invalid_edge_index = std::numeric_limits<vertex_t>::max();
+namespace {
+
+constexpr auto invalid_edge_index = std::numeric_limits<vertex_t>::max();
+
+#ifdef CLINGODL_CROSSCHECK
+
+//! Count relevant incoming/outgoing edges.
+template <class M>
+std::pair<uint32_t, uint32_t> count_relevant_(M &m) {
+    uint32_t relevant_in = 0;
+    uint32_t relevant_out = 0;
+    for (auto &node : m.visited_set()) {
+        if (m.relevant(node)) {
+            for (auto &edge : m.candidate_incoming(node)) {
+                if (m.active(edge)) {
+                    ++relevant_in;
+                }
+            }
+            for (auto &edge : m.candidate_outgoing(node)) {
+                if (m.active(edge)) {
+                    ++relevant_out;
+                }
+            }
+        }
+    }
+    return {relevant_in, relevant_out};
+}
+
+#endif
+
+} // namespace
 
 template <typename T>
 Graph<T>::Graph(ThreadStatistics &stats, EdgeVec const &edges, PropagationMode propagate)
@@ -85,7 +115,7 @@ void Graph<T>::ensure_decision_level(level_t level, bool enable_propagate) {
 }
 
 template <typename T>
-bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) { // NOLINT
+bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) {
     ++stats_.edges_propagated;
     disable_edge(xy_idx);
     auto &xy = edges_[xy_idx];
@@ -107,42 +137,9 @@ bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) { // NOLI
         std::tie(num_relevant_out_to, num_relevant_in_to) = dijkstra_(xy.to, visited_to_, *static_cast<HTM *>(this));
     }
 #ifdef CLINGODL_CROSSCHECK
-    uint32_t check_relevant_out_from = 0;
-    uint32_t check_relevant_in_from = 0;
-    for (auto &node : visited_from_) {
-        if (nodes_[node].relevant_from) {
-            for (auto &edge : nodes_[node].candidate_incoming) {
-                if (edge_states_[edge].active) {
-                    ++check_relevant_in_from;
-                }
-            }
-            for (auto &edge : nodes_[node].candidate_outgoing) {
-                if (edge_states_[edge].active) {
-                    ++check_relevant_out_from;
-                }
-            }
-        }
-    }
-    assert(num_relevant_out_from == check_relevant_out_from);
-    assert(num_relevant_in_from == check_relevant_in_from);
-    uint32_t check_relevant_out_to = 0;
-    uint32_t check_relevant_in_to = 0;
-    for (auto &node : visited_to_) {
-        if (nodes_[node].relevant_to) {
-            for (auto &edge : nodes_[node].candidate_incoming) {
-                if (edge_states_[edge].active) {
-                    ++check_relevant_in_to;
-                }
-            }
-            for (auto &edge : nodes_[node].candidate_outgoing) {
-                if (edge_states_[edge].active) {
-                    ++check_relevant_out_to;
-                }
-            }
-        }
-    }
-    assert(num_relevant_out_to == check_relevant_out_to);
-    assert(num_relevant_in_to == check_relevant_in_to);
+    // check if the counts of relevant incoming/outgoing vertices are correct
+    assert(std::make_pair(num_relevant_in_from, num_relevant_out_from) == count_relevant_(*static_cast<HFM *>(this)));
+    assert(std::make_pair(num_relevant_out_to, num_relevant_in_to) == count_relevant_(*static_cast<HTM *>(this)));
 #endif
 
     bool forward_from = num_relevant_in_from < num_relevant_out_to;
