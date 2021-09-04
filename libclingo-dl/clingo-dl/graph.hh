@@ -96,8 +96,7 @@ class Graph {
 private:
     struct Vertex;
     struct EdgeState;
-    enum class Direction { From, To };
-    template <Direction E>
+    template <class D>
     struct Impl;
     using value_t = T;                     //!< The value type (integral or floating point).
     using Edge = ClingoDL::Edge<value_t>;  //!< The data structure for edges.

@@ -28,6 +28,9 @@ namespace ClingoDL {
 
 namespace {
 
+struct From { };
+struct To { };
+
 constexpr auto invalid_edge_index = std::numeric_limits<vertex_t>::max();
 
 #ifdef CLINGODL_CROSSCHECK
@@ -107,8 +110,8 @@ struct Graph<T>::EdgeState {
 //! \note The same effect could be achieved by providing a lot of private
 //! template member functions. This implementation has the advantage that the
 //! complexity is hidden in the implementation.
-template <class T>
-template <typename Graph<T>::Direction D>
+template <typename T>
+template <typename D>
 struct Graph<T>::Impl : Graph {
     using index_t = Heap<4>::index_type;
 
@@ -119,7 +122,7 @@ struct Graph<T>::Impl : Graph {
 
     //! The cost of the vertex.
     value_t &cost(vertex_t idx) {
-        if constexpr (D == Direction::From) {
+        if constexpr (std::is_same_v<D, From>) {
             return nodes_[idx].cost_from;
         }
         else {
@@ -129,7 +132,7 @@ struct Graph<T>::Impl : Graph {
 
     //! The end point of the given edge.
     vertex_t to(edge_t idx) {
-        if constexpr (D == Direction::From) {
+        if constexpr (std::is_same_v<D, From>) {
             return edges_[idx].to;
         }
         else {
@@ -139,7 +142,7 @@ struct Graph<T>::Impl : Graph {
 
     //! The starting point of the given edge.
     vertex_t from(edge_t idx) {
-        if constexpr (D == Direction::From) {
+        if constexpr (std::is_same_v<D, From>) {
             return edges_[idx].from;
         }
         else {
@@ -149,7 +152,7 @@ struct Graph<T>::Impl : Graph {
 
     //! The outgoing vertices of the given vertex.
     std::vector<vertex_t> &out(vertex_t idx) {
-        if constexpr (D == Direction::From) {
+        if constexpr (std::is_same_v<D, From>) {
             return nodes_[idx].outgoing;
         }
         else {
@@ -159,7 +162,7 @@ struct Graph<T>::Impl : Graph {
 
     //! The edge that was used to reach the given vertex.
     edge_t &path(vertex_t idx) {
-        if constexpr (D == Direction::From) {
+        if constexpr (std::is_same_v<D, From>) {
             return nodes_[idx].path_from;
         }
         else {
@@ -171,8 +174,8 @@ struct Graph<T>::Impl : Graph {
     //!
     //! \note This is a integer here because it is also used as a dfs index
     //! when adding edges.
-    std::conditional_t<D == Direction::From, vertex_t, bool> &visited(vertex_t idx) {
-        if constexpr(D == Direction::From) {
+    std::conditional_t<std::is_same_v<D, From>, vertex_t, bool> &visited(vertex_t idx) {
+        if constexpr(std::is_same_v<D, From>) {
             return nodes_[idx].visited_from;
         }
         else {
@@ -182,7 +185,7 @@ struct Graph<T>::Impl : Graph {
 
     //! Whether the vertex is relevant for propagation.
     bool &relevant(vertex_t idx) {
-        if constexpr (D == Direction::From) {
+        if constexpr (std::is_same_v<D, From>) {
             return nodes_[idx].relevant_from;
         }
         else {
@@ -192,7 +195,7 @@ struct Graph<T>::Impl : Graph {
 
     //! The set of all visited vertices.
     std::vector<vertex_t> &visited_set() {
-        if constexpr (D == Direction::From) {
+        if constexpr (std::is_same_v<D, From>) {
             return visited_from_;
         }
         else {
@@ -202,7 +205,7 @@ struct Graph<T>::Impl : Graph {
 
     //! Outgoing candidate edges that are not false.
     std::vector<vertex_t> &candidate_outgoing(vertex_t idx) {
-        if constexpr (D == Direction::From) {
+        if constexpr (std::is_same_v<D, From>) {
             return nodes_[idx].candidate_outgoing;
         }
         else {
@@ -212,7 +215,7 @@ struct Graph<T>::Impl : Graph {
 
     //! Incoming candidate edges that are not false.
     std::vector<vertex_t> &candidate_incoming(vertex_t idx) {
-        if constexpr (D == Direction::From) {
+        if constexpr (std::is_same_v<D, From>) {
             return nodes_[idx].candidate_incoming;
         }
         else {
@@ -222,7 +225,7 @@ struct Graph<T>::Impl : Graph {
 
     //! Mark an incoming edge as removed.
     void remove_incoming(edge_t idx) {
-        if constexpr (D == Direction::From) {
+        if constexpr (std::is_same_v<D, From>) {
             edge_states_[idx].removed_incoming = true;
         }
         else {
@@ -232,7 +235,7 @@ struct Graph<T>::Impl : Graph {
 
     //! Mark an outgoing edge as removed.
     void remove_outgoing(edge_t idx) {
-        if constexpr (D == Direction::From) {
+        if constexpr (std::is_same_v<D, From>) {
             edge_states_[idx].removed_outgoing = true;
         }
         else {
@@ -247,7 +250,7 @@ struct Graph<T>::Impl : Graph {
 
     //! The cost to propagate the edge.
     uint64_t &propagation_cost() {
-        if constexpr (D == Direction::From) {
+        if constexpr (std::is_same_v<D, From>) {
             return stats_.propagate_cost_from;
         }
         else {
@@ -448,19 +451,19 @@ bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) {
     vertex_t num_relevant_in_to{0};
     {
         Timer t{stats_.time_dijkstra};
-        std::tie(num_relevant_out_from, num_relevant_in_from) = static_cast<Impl<Direction::From>*>(this)->dijkstra(xy.from);
-        std::tie(num_relevant_out_to, num_relevant_in_to) = static_cast<Impl<Direction::To>*>(this)->dijkstra(xy.to);
+        std::tie(num_relevant_out_from, num_relevant_in_from) = static_cast<Impl<From>*>(this)->dijkstra(xy.from);
+        std::tie(num_relevant_out_to, num_relevant_in_to) = static_cast<Impl<To>*>(this)->dijkstra(xy.to);
     }
 #ifdef CLINGODL_CROSSCHECK
     // check if the counts of relevant incoming/outgoing vertices are correct
-    assert(std::make_pair(num_relevant_in_from, num_relevant_out_from) == count_relevant_(*static_cast<Impl<Direction::From> *>(this)));
-    assert(std::make_pair(num_relevant_out_to, num_relevant_in_to) == count_relevant_(*static_cast<Impl<Direction::To> *>(this)));
+    assert(std::make_pair(num_relevant_in_from, num_relevant_out_from) == count_relevant_(*static_cast<Impl<From> *>(this)));
+    assert(std::make_pair(num_relevant_out_to, num_relevant_in_to) == count_relevant_(*static_cast<Impl<To> *>(this)));
 #endif
 
     bool forward_from = num_relevant_in_from < num_relevant_out_to;
     bool backward_from = num_relevant_out_from < num_relevant_in_to;
 
-    bool ret = static_cast<Impl<Direction::From> *>(this)->propagate_edges(ctl, xy_idx, forward_from, backward_from) && static_cast<Impl<Direction::To> *>(this)->propagate_edges(ctl, xy_idx, !forward_from, !backward_from);
+    bool ret = static_cast<Impl<From> *>(this)->propagate_edges(ctl, xy_idx, forward_from, backward_from) && static_cast<Impl<To> *>(this)->propagate_edges(ctl, xy_idx, !forward_from, !backward_from);
 
     for (auto &x : visited_from_) {
         nodes_[x].visited_from = false;
@@ -496,7 +499,7 @@ bool Graph<T>::add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> 
     auto &uv = edges_[uv_idx];
     // NOTE: would be more efficient if relevant would return statically false here
     //       for the compiler to make comparison cheaper
-    auto &m = *static_cast<Impl<Direction::From> *>(this);
+    auto &m = *static_cast<Impl<From> *>(this);
 
     // initialize the nodes of the edge to add
     auto &u = nodes_[uv.from];
