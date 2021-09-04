@@ -58,6 +58,316 @@ std::pair<uint32_t, uint32_t> count_relevant_(M &m) {
 
 } // namespace
 
+// TODO: document + make nested
+template <typename T>
+struct Graph<T>::Vertex {
+    using value_t = T;
+    using PotentialStack = std::vector<std::pair<vertex_t, value_t>>;
+
+    //! Return true if the node has a value assigned.
+    [[nodiscard]] bool defined() const {
+        return !potential_stack.empty();
+    }
+    //! Return the current value associated with the vertex.
+    [[nodiscard]] value_t potential() const {
+        return potential_stack.back().second;
+    }
+
+    VertexIndexVec outgoing;            //!< Outgoing edges from this vertex that are true.
+    VertexIndexVec incoming;            //!< Incoming edges to this vertex that are true.
+    VertexIndexVec candidate_incoming;  //!< Edges that might become outgoing edges.
+    VertexIndexVec candidate_outgoing;  //!< Edges that might become incoming edges.
+    PotentialStack potential_stack;     //!< Vector of pairs of level and potential.
+    value_t cost_from{0};
+    value_t cost_to{0};
+    vertex_t offset{0};
+    edge_t path_from{0};
+    edge_t path_to{0};
+    vertex_t degree_out{0};
+    vertex_t degree_in{0};
+    vertex_t visited_from{0};
+    bool relevant_from{false};
+    bool relevant_to{false};
+    bool visited_to{false};
+};
+
+template <typename T>
+struct Graph<T>::EdgeState {
+    uint8_t removed_outgoing : 1;
+    uint8_t removed_incoming : 1;
+    uint8_t active : 1;
+};
+
+//! This struct provides functions to access the original and transposed graph
+//! based on a template parameter.
+//!
+//! It furthermore implements functions that can be applied to both kinds of
+//! graphs.
+//!
+//! \note The same effect could be achieved by providing a lot of private
+//! template member functions. This implementation has the advantage that the
+//! complexity is hidden in the implementation.
+template <class T>
+template <typename Graph<T>::Direction D>
+struct Graph<T>::Impl : Graph {
+    using index_t = Heap<4>::index_type;
+
+    //! The index of the vertex in the heap vector.
+    index_t &offset(vertex_t idx) {
+        return nodes_[idx].offset;
+    }
+
+    //! The cost of the vertex.
+    value_t &cost(vertex_t idx) {
+        if constexpr (D == Direction::From) {
+            return nodes_[idx].cost_from;
+        }
+        else {
+            return nodes_[idx].cost_to;
+        }
+    }
+
+    //! The end point of the given edge.
+    vertex_t to(edge_t idx) {
+        if constexpr (D == Direction::From) {
+            return edges_[idx].to;
+        }
+        else {
+            return edges_[idx].from;
+        }
+    }
+
+    //! The starting point of the given edge.
+    vertex_t from(edge_t idx) {
+        if constexpr (D == Direction::From) {
+            return edges_[idx].from;
+        }
+        else {
+            return edges_[idx].to;
+        }
+    }
+
+    //! The outgoing vertices of the given vertex.
+    std::vector<vertex_t> &out(vertex_t idx) {
+        if constexpr (D == Direction::From) {
+            return nodes_[idx].outgoing;
+        }
+        else {
+            return nodes_[idx].incoming;
+        }
+    }
+
+    //! The edge that was used to reach the given vertex.
+    edge_t &path(vertex_t idx) {
+        if constexpr (D == Direction::From) {
+            return nodes_[idx].path_from;
+        }
+        else {
+            return nodes_[idx].path_to;
+        }
+    }
+
+    //! Flag indicating whether the vertex has been visited.
+    //!
+    //! \note This is a integer here because it is also used as a dfs index
+    //! when adding edges.
+    std::conditional_t<D == Direction::From, vertex_t, bool> &visited(vertex_t idx) {
+        if constexpr(D == Direction::From) {
+            return nodes_[idx].visited_from;
+        }
+        else {
+            return nodes_[idx].visited_to;
+        }
+    }
+
+    //! Whether the vertex is relevant for propagation.
+    bool &relevant(vertex_t idx) {
+        if constexpr (D == Direction::From) {
+            return nodes_[idx].relevant_from;
+        }
+        else {
+            return nodes_[idx].relevant_to;
+        }
+    }
+
+    //! The set of all visited vertices.
+    std::vector<vertex_t> &visited_set() {
+        if constexpr (D == Direction::From) {
+            return visited_from_;
+        }
+        else {
+            return visited_to_;
+        }
+    }
+
+    //! Outgoing candidate edges that are not false.
+    std::vector<vertex_t> &candidate_outgoing(vertex_t idx) {
+        if constexpr (D == Direction::From) {
+            return nodes_[idx].candidate_outgoing;
+        }
+        else {
+            return nodes_[idx].candidate_incoming;
+        }
+    }
+
+    //! Incoming candidate edges that are not false.
+    std::vector<vertex_t> &candidate_incoming(vertex_t idx) {
+        if constexpr (D == Direction::From) {
+            return nodes_[idx].candidate_incoming;
+        }
+        else {
+            return nodes_[idx].candidate_outgoing;
+        }
+    }
+
+    //! Mark an incoming edge as removed.
+    void remove_incoming(edge_t idx) {
+        if constexpr (D == Direction::From) {
+            edge_states_[idx].removed_incoming = true;
+        }
+        else {
+            edge_states_[idx].removed_outgoing = true;
+        }
+    }
+
+    //! Mark an outgoing edge as removed.
+    void remove_outgoing(edge_t idx) {
+        if constexpr (D == Direction::From) {
+            edge_states_[idx].removed_outgoing = true;
+        }
+        else {
+            edge_states_[idx].removed_incoming = true;
+        }
+    }
+
+    //! Check if the edge is active.
+    bool active(edge_t idx) {
+        return edge_states_[idx].active;
+    }
+
+    //! The cost to propagate the edge.
+    uint64_t &propagation_cost() {
+        if constexpr (D == Direction::From) {
+            return stats_.propagate_cost_from;
+        }
+        else {
+            return stats_.propagate_cost_to;
+        }
+    }
+
+    std::pair<uint32_t, uint32_t> dijkstra(vertex_t source_idx) { // NOLINT
+        uint32_t num_relevant = 0;
+        uint32_t relevant_degree_out = 0;
+        uint32_t relevant_degree_in = 0;
+        assert(visited_set().empty() && costs_heap_.empty());
+        costs_heap_.push(*this, source_idx);
+        visited_set().push_back(source_idx);
+        visited(source_idx) = true;
+        cost(source_idx) = 0;
+        path(source_idx) = invalid_edge_index;
+        while (!costs_heap_.empty()) {
+            auto u_idx = costs_heap_.pop(*this);
+            auto tu = path(u_idx);
+            if (tu != invalid_edge_index && relevant(from(tu))) {
+                relevant(u_idx) = true;
+                --num_relevant; // just removed a relevant edge from the queue
+            }
+            bool relevant_u = relevant(u_idx);
+            if (relevant_u) {
+                relevant_degree_out += nodes_[u_idx].degree_out;
+                relevant_degree_in += nodes_[u_idx].degree_in;
+            }
+            for (auto &uv_idx : out(u_idx)) {
+                ++propagation_cost();
+                auto &uv = edges_[uv_idx];
+                auto v_idx = to(uv_idx);
+                // NOTE: explicitely using uv.from and uv.to is intended here
+                auto c = cost(u_idx) + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
+                assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
+                if (!visited(v_idx) || c < cost(v_idx)) {
+                    cost(v_idx) = c;
+                    if (!visited(v_idx)) {
+                        // node v contributes an edge with a relevant source
+                        if (relevant_u) {
+                            ++num_relevant;
+                        }
+                        visited_set().push_back(to(uv_idx));
+                        visited(v_idx) = true;
+                        costs_heap_.push(*this, v_idx);
+                    }
+                    else {
+                        if (relevant(from(path(v_idx)))) {
+                            // node v no longer contributes a relevant edge
+                            if (!relevant_u) {
+                                --num_relevant;
+                            }
+                        }
+                        // node v contributes a relevant edge now
+                        else if (relevant_u) {
+                            ++num_relevant;
+                        }
+                        costs_heap_.decrease(*this, offset(v_idx));
+                    }
+                    path(v_idx) = uv_idx;
+                }
+            }
+            // removed a relevant node from the queue and there are no edges with relevant sources anymore in the queue
+            // this condition assumes that initially there is exactly one reachable relevant node in the graph
+            if (relevant_u && num_relevant == 0) {
+                costs_heap_.clear();
+                break;
+            }
+        }
+        return {relevant_degree_out, relevant_degree_in};
+    }
+
+    bool propagate_edges(Clingo::PropagateControl &ctl, edge_t xy_idx, bool forward, bool backward) { // NOLINT
+        if (!forward && !backward) {
+            return true;
+        }
+        for (auto &node : visited_set()) {
+            if (relevant(node)) {
+                if (forward) {
+                    auto &in = candidate_incoming(node);
+                    in.resize(
+                        std::remove_if(
+                            in.begin(), in.end(),
+                            [&](edge_t uv_idx) {
+                                if (!edge_states_[uv_idx].active || propagate_edge_true_(uv_idx, xy_idx)) {
+                                    remove_incoming(uv_idx);
+                                    return true;
+                                }
+                                return false;
+                            }) -
+                        in.begin());
+                }
+                if (backward) {
+                    bool ret = true;
+                    auto &out = candidate_outgoing(node);
+                    out.resize(
+                        std::remove_if(
+                            out.begin(), out.end(),
+                            [&](edge_t uv_idx) {
+                                if (!ret) {
+                                    return false;
+                                }
+                                if (!edge_states_[uv_idx].active || propagate_edge_false_(ctl, uv_idx, xy_idx, ret)) {
+                                    remove_outgoing(uv_idx);
+                                    return true;
+                                }
+                                return false;
+                            }) -
+                        out.begin());
+                    if (!ret) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+};
+
 template <typename T>
 Graph<T>::Graph(ThreadStatistics &stats, EdgeVec const &edges, PropagationMode propagate)
 : edges_{edges}
@@ -69,6 +379,12 @@ Graph<T>::Graph(ThreadStatistics &stats, EdgeVec const &edges, PropagationMode p
         add_candidate_edge_(i);
     }
 }
+
+template <typename T>
+Graph<T>::~Graph() = default;
+
+template <typename T>
+Graph<T>::Graph(Graph &&other) noexcept = default;
 
 template <typename T>
 bool Graph<T>::empty() const {
@@ -90,7 +406,6 @@ template <typename T>
 bool Graph<T>::edge_is_enabled(edge_t edge_idx) const {
     return edge_states_[edge_idx].active;
 }
-
 
 template <typename T>
 bool Graph<T>::can_propagate() const {
@@ -133,19 +448,19 @@ bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) {
     vertex_t num_relevant_in_to{0};
     {
         Timer t{stats_.time_dijkstra};
-        std::tie(num_relevant_out_from, num_relevant_in_from) = dijkstra_(xy.from, visited_from_, *static_cast<HFM *>(this));
-        std::tie(num_relevant_out_to, num_relevant_in_to) = dijkstra_(xy.to, visited_to_, *static_cast<HTM *>(this));
+        std::tie(num_relevant_out_from, num_relevant_in_from) = static_cast<Impl<Direction::From>*>(this)->dijkstra(xy.from);
+        std::tie(num_relevant_out_to, num_relevant_in_to) = static_cast<Impl<Direction::To>*>(this)->dijkstra(xy.to);
     }
 #ifdef CLINGODL_CROSSCHECK
     // check if the counts of relevant incoming/outgoing vertices are correct
-    assert(std::make_pair(num_relevant_in_from, num_relevant_out_from) == count_relevant_(*static_cast<HFM *>(this)));
-    assert(std::make_pair(num_relevant_out_to, num_relevant_in_to) == count_relevant_(*static_cast<HTM *>(this)));
+    assert(std::make_pair(num_relevant_in_from, num_relevant_out_from) == count_relevant_(*static_cast<Impl<Direction::From> *>(this)));
+    assert(std::make_pair(num_relevant_out_to, num_relevant_in_to) == count_relevant_(*static_cast<Impl<Direction::To> *>(this)));
 #endif
 
     bool forward_from = num_relevant_in_from < num_relevant_out_to;
     bool backward_from = num_relevant_out_from < num_relevant_in_to;
 
-    bool ret = propagate_edges_(*static_cast<HFM *>(this), ctl, xy_idx, forward_from, backward_from) && propagate_edges_(*static_cast<HTM *>(this), ctl, xy_idx, !forward_from, !backward_from);
+    bool ret = static_cast<Impl<Direction::From> *>(this)->propagate_edges(ctl, xy_idx, forward_from, backward_from) && static_cast<Impl<Direction::To> *>(this)->propagate_edges(ctl, xy_idx, !forward_from, !backward_from);
 
     for (auto &x : visited_from_) {
         nodes_[x].visited_from = false;
@@ -181,7 +496,7 @@ bool Graph<T>::add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> 
     auto &uv = edges_[uv_idx];
     // NOTE: would be more efficient if relevant would return statically false here
     //       for the compiler to make comparison cheaper
-    auto &m = *static_cast<HFM *>(this);
+    auto &m = *static_cast<Impl<Direction::From> *>(this);
 
     // initialize the nodes of the edge to add
     auto &u = nodes_[uv.from];
@@ -546,122 +861,6 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
 #endif
     }
     return false;
-}
-
-template <typename T>
-template <class M>
-bool Graph<T>::propagate_edges_(M &m, Clingo::PropagateControl &ctl, edge_t xy_idx, bool forward, bool backward) { // NOLINT
-    if (!forward && !backward) {
-        return true;
-    }
-    for (auto &node : m.visited_set()) {
-        if (m.relevant(node)) {
-            if (forward) {
-                auto &in = m.candidate_incoming(node);
-                in.resize(
-                    std::remove_if(
-                        in.begin(), in.end(),
-                        [&](edge_t uv_idx) {
-                            if (!edge_states_[uv_idx].active || propagate_edge_true_(uv_idx, xy_idx)) {
-                                m.remove_incoming(uv_idx);
-                                return true;
-                            }
-                            return false;
-                        }) -
-                    in.begin());
-            }
-            if (backward) {
-                bool ret = true;
-                auto &out = m.candidate_outgoing(node);
-                out.resize(
-                    std::remove_if(
-                        out.begin(), out.end(),
-                        [&](edge_t uv_idx) {
-                            if (!ret) {
-                                return false;
-                            }
-                            if (!edge_states_[uv_idx].active || propagate_edge_false_(ctl, uv_idx, xy_idx, ret)) {
-                                m.remove_outgoing(uv_idx);
-                                return true;
-                            }
-                            return false;
-                        }) -
-                    out.begin());
-                if (!ret) {
-                    return false;
-                }
-            }
-        }
-    }
-    return true;
-}
-
-template <typename T>
-template <class M>
-auto Graph<T>::dijkstra_(vertex_t source_idx, std::vector<vertex_t> &visited_set, M &m) -> std::pair<uint32_t, uint32_t> { // NOLINT
-    uint32_t relevant = 0;
-    uint32_t relevant_degree_out = 0;
-    uint32_t relevant_degree_in = 0;
-    assert(visited_set.empty() && costs_heap_.empty());
-    costs_heap_.push(m, source_idx);
-    visited_set.push_back(source_idx);
-    m.visited(source_idx) = true;
-    m.cost(source_idx) = 0;
-    m.path(source_idx) = invalid_edge_index;
-    while (!costs_heap_.empty()) {
-        auto u_idx = costs_heap_.pop(m);
-        auto tu = m.path(u_idx);
-        if (tu != invalid_edge_index && m.relevant(m.from(tu))) {
-            m.relevant(u_idx) = true;
-            --relevant; // just removed a relevant edge from the queue
-        }
-        bool relevant_u = m.relevant(u_idx);
-        if (relevant_u) {
-            relevant_degree_out += nodes_[u_idx].degree_out;
-            relevant_degree_in += nodes_[u_idx].degree_in;
-        }
-        for (auto &uv_idx : m.out(u_idx)) {
-            ++m.propagation_cost();
-            auto &uv = edges_[uv_idx];
-            auto v_idx = m.to(uv_idx);
-            // NOTE: explicitely using uv.from and uv.to is intended here
-            auto c = m.cost(u_idx) + nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential();
-            assert(nodes_[uv.from].potential() + uv.weight - nodes_[uv.to].potential() >= 0);
-            if (!m.visited(v_idx) || c < m.cost(v_idx)) {
-                m.cost(v_idx) = c;
-                if (!m.visited(v_idx)) {
-                    // node v contributes an edge with a relevant source
-                    if (relevant_u) {
-                        ++relevant;
-                    }
-                    visited_set.push_back(m.to(uv_idx));
-                    m.visited(v_idx) = true;
-                    costs_heap_.push(m, v_idx);
-                }
-                else {
-                    if (m.relevant(m.from(m.path(v_idx)))) {
-                        // node v no longer contributes a relevant edge
-                        if (!relevant_u) {
-                            --relevant;
-                        }
-                    }
-                    // node v contributes a relevant edge now
-                    else if (relevant_u) {
-                        ++relevant;
-                    }
-                    costs_heap_.decrease(m, m.offset(v_idx));
-                }
-                m.path(v_idx) = uv_idx;
-            }
-        }
-        // removed a relevant node from the queue and there are no edges with relevant sources anymore in the queue
-        // this condition assumes that initially there is exactly one reachable relevant node in the graph
-        if (relevant_u && relevant == 0) {
-            costs_heap_.clear();
-            break;
-        }
-    }
-    return {relevant_degree_out, relevant_degree_in};
 }
 
 #ifdef CLINGODL_CROSSCHECK
