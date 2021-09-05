@@ -28,11 +28,12 @@ namespace ClingoDL {
 
 namespace {
 
-// TODO
+//!< Tag for traversals of the original graph.
 struct From { };
+//!< Tag for traversals of the transposed graph.
 struct To { };
 
-// TODO
+//! An index different from all valid edge indices.
 constexpr auto invalid_edge_index = std::numeric_limits<vertex_t>::max();
 
 } // namespace
@@ -73,30 +74,30 @@ struct Graph<T>::Vertex {
         return potential_stack.back().second;
     }
 
-    VertexIndexVec outgoing;            //!< Outgoing edges from this vertex that are true.
-    VertexIndexVec incoming;            //!< Incoming edges to this vertex that are true.
-    VertexIndexVec candidate_incoming;  //!< Edges that might become incoming edges.
-    VertexIndexVec candidate_outgoing;  //!< Edges that might become outgoing edges.
-    PotentialStack potential_stack;     //!< Vector of pairs of level and potential.
-    value_t cost_from{0}; // TODO
-    value_t cost_to{0};
-    vertex_t offset{0};
-    edge_t path_from{0};
-    edge_t path_to{0};
-    vertex_t degree_out{0};
-    vertex_t degree_in{0};
-    vertex_t visited_from{0};
-    bool relevant_from{false};
-    bool relevant_to{false};
-    bool visited_to{false};
+    VertexIndexVec outgoing;           //!< Outgoing edges from this vertex that are true.
+    VertexIndexVec incoming;           //!< Incoming edges to this vertex that are true.
+    VertexIndexVec candidate_incoming; //!< Edges that might become incoming edges.
+    VertexIndexVec candidate_outgoing; //!< Edges that might become outgoing edges.
+    PotentialStack potential_stack;    //!< Vector of pairs of level and potential.
+    value_t cost_from{0};              //!< Costs for traversals of the original graph.
+    value_t cost_to{0};                //!< Costs for traversals of the transposed graph.
+    vertex_t offset{0};                //!< Offset in the cost heap.
+    edge_t path_from{0};               //!< Path pointers for traversals of the original graph.
+    edge_t path_to{0};                 //!< Path pointers for traversals of the transposed graph.
+    vertex_t degree_out{0};            //!< Outgoing degree of candidate edges.
+    vertex_t degree_in{0};             //!< Incoming degree of candidate edges.
+    vertex_t visited_from{0};          //!< Either a flag to mark the vertex as visited or its depth first index.
+    bool visited_to{false};            //!< A flag to mark the vertex as visited for traversals of the transposed graph.
+    bool relevant_from{false};         //!< A flag to mark the vertex as visited for traversals of the original graph.
+    bool relevant_to{false};           //!< A flag to mark the vertex as visited for traversals of the transposed graph.
 };
 
 //!< Thread specific information for edges.
 template <typename T>
 struct Graph<T>::EdgeState {
-    uint8_t removed_outgoing : 1; // TODO
-    uint8_t removed_incoming : 1;
-    uint8_t enabled : 1;
+    uint8_t removed_outgoing : 1; //!< Flag to mark edges as removed from the candidate_outgoing vector.
+    uint8_t removed_incoming : 1; //!< Flag to mark edges as removed from the candidate_incoming vector.
+    uint8_t enabled : 1;          //!< Flag to mark the edge as enabled.
 };
 
 //!< Struct holding information to backtrack a decision level.
@@ -370,7 +371,8 @@ struct Graph<T>::Impl : Graph {
     }
 #endif
 
-    // TODO
+    //! Traverse incoming/outgoing edges and disable true edges and propagate
+    //! false edges.
     bool propagate_edges(Clingo::PropagateControl &ctl, edge_t xy_idx, bool forward, bool backward) { // NOLINT
         if (!forward && !backward) {
             return true;

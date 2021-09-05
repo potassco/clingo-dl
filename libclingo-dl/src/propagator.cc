@@ -156,10 +156,10 @@ auto DLPropagator<T>::lower_bound(Clingo::id_t thread_id, vertex_t index) const 
     auto &state = states_[thread_id];
     T adjust = 0;
     auto cc = vertex_info_[index].cc;
-    auto zero_node = zero_vertices_[cc];
+    auto zero_vertex = zero_vertices_[cc];
 
-    if (state.graph.has_value(zero_node)) {
-        adjust = state.graph.get_value(zero_node);
+    if (state.graph.has_value(zero_vertex)) {
+        adjust = state.graph.get_value(zero_vertex);
     }
     return state.graph.get_value(index) - adjust;
 }
@@ -169,8 +169,8 @@ void DLPropagator<T>::extend_model(Clingo::Model &model) {
     auto &state = states_[model.thread_id()];
     std::vector<T> adjust;
     adjust.reserve(zero_vertices_.size());
-    for (auto node : zero_vertices_) {
-        adjust.emplace_back(state.graph.has_value(node) ? state.graph.get_value(node) : 0);
+    for (auto vertex : zero_vertices_) {
+        adjust.emplace_back(state.graph.has_value(vertex) ? state.graph.get_value(vertex) : 0);
     }
 
     Clingo::SymbolVector vec;
@@ -496,33 +496,33 @@ bool DLPropagator<T>::is_zero_(vertex_t index) const {
 template <typename T>
 void DLPropagator<T>::cc_calculate_(AdjacencyMap &outgoing, AdjacencyMap &incoming) {
     index_t cc = 0;
-    // Note that this marks zero nodes as visited.
+    // Note that this marks zero vertices as visited.
     cc_reset_();
 
-    std::vector<vertex_t> node_stack;
-    for (vertex_t node = 0; node < numeric_cast<vertex_t>(vertex_info_.size()); ++node) {
-        if (cc_visited_(node)) {
+    std::vector<vertex_t> vertex_stack;
+    for (vertex_t start_vertex = 0; start_vertex < numeric_cast<vertex_t>(vertex_info_.size()); ++start_vertex) {
+        if (cc_visited_(start_vertex)) {
             continue;
         }
-        vertex_info_[node].set_visited(cc, true);
-        node_stack.emplace_back(node);
-        while (!node_stack.empty()) {
-            auto node = node_stack.back();
-            node_stack.pop_back();
-            auto edges = outgoing.equal_range(node);
+        vertex_info_[start_vertex].set_visited(cc, true);
+        vertex_stack.emplace_back(start_vertex);
+        while (!vertex_stack.empty()) {
+            auto vertex = vertex_stack.back();
+            vertex_stack.pop_back();
+            auto edges = outgoing.equal_range(vertex);
             for (auto edge = edges.first; edge != edges.second; ++edge) {
-                auto add_node = edges_[edge->second].to;
-                if (!cc_visited_(add_node)) {
-                    vertex_info_[add_node].set_visited(cc, true);
-                    node_stack.emplace_back(add_node);
+                auto add_vertex = edges_[edge->second].to;
+                if (!cc_visited_(add_vertex)) {
+                    vertex_info_[add_vertex].set_visited(cc, true);
+                    vertex_stack.emplace_back(add_vertex);
                 }
             }
-            edges = incoming.equal_range(node);
+            edges = incoming.equal_range(vertex);
             for (auto edge = edges.first; edge != edges.second; ++edge) {
-                auto add_node = edges_[edge->second].from;
-                if (!cc_visited_(add_node)) {
-                    vertex_info_[add_node].set_visited(cc, true);
-                    node_stack.emplace_back(add_node);
+                auto add_vertex = edges_[edge->second].from;
+                if (!cc_visited_(add_vertex)) {
+                    vertex_info_[add_vertex].set_visited(cc, true);
+                    vertex_stack.emplace_back(add_vertex);
                 }
             }
         }
@@ -532,15 +532,15 @@ void DLPropagator<T>::cc_calculate_(AdjacencyMap &outgoing, AdjacencyMap &incomi
 
     zero_vertices_.reserve(cc);
     for (auto i = numeric_cast<index_t>(zero_vertices_.size()); i < cc; ++i) {
-        auto node = map_vertex_(Clingo::Function("__null", {Clingo::Number(numeric_cast<int>(i))}));
-        zero_vertices_.emplace_back(node);
-        vertex_info_[node].set_visited(i, true);
+        auto vertex = map_vertex_(Clingo::Function("__null", {Clingo::Number(numeric_cast<int>(i))}));
+        zero_vertices_.emplace_back(vertex);
+        vertex_info_[vertex].set_visited(i, true);
     }
 
     std::vector<std::pair<vertex_t, vertex_t>> outgoing_change;
     std::vector<std::pair<vertex_t, vertex_t>> incoming_change;
-    for (auto zero_node : zero_vertices_) {
-        auto range = outgoing.equal_range(zero_node);
+    for (auto zero_vertex : zero_vertices_) {
+        auto range = outgoing.equal_range(zero_vertex);
         for (auto edge = range.first; edge != range.second; ++edge) {
             auto &e = edges_[edge->second];
             auto cc = vertex_info_[e.to].cc;
@@ -548,7 +548,7 @@ void DLPropagator<T>::cc_calculate_(AdjacencyMap &outgoing, AdjacencyMap &incomi
             outgoing_change.emplace_back(zero_vertices_[cc], edge->second);
         }
         outgoing.erase(range.first, range.second);
-        range = incoming.equal_range(zero_node);
+        range = incoming.equal_range(zero_vertex);
         for (auto edge = range.first; edge != range.second; ++edge) {
             auto &e = edges_[edge->second];
             auto cc = vertex_info_[e.from].cc;

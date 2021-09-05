@@ -125,7 +125,7 @@ private:
     void cc_reset_();
     //! Mark a vertex in a component as visited.
     [[nodiscard]] bool cc_visited_(vertex_t index) const;
-    //! Check if the given vertex is a zero node.
+    //! Check if the given vertex is a zero vertex.
     [[nodiscard]] bool is_zero_(vertex_t index) const;
     //! Calculate the connected components.
     void cc_calculate_(AdjacencyMap &outgoing, AdjacencyMap &incoming);
@@ -154,7 +154,7 @@ private:
     std::vector<Edge> edges_;      //!< Vector holding all edges.
     SymVertexMap vert_map_inv_;    //!< Mapping from symbols to vertex indices.
     VertexInfoVec vertex_info_;    //!< Node specific information.
-    VertexIndexVec zero_vertices_; //!< Vector holding all zero nodes.
+    VertexIndexVec zero_vertices_; //!< Vector holding all zero vertices.
     Statistics &stats_;            //!< Statistics for the propagator.
     PropagatorConfig conf_;        //!< Configuration of the propagator.
     bool disable_edges_{false};    //!< Whether to disable edges.
