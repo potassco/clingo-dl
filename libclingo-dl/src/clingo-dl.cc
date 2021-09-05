@@ -27,10 +27,12 @@
 
 #include <sstream>
 
-namespace ClingoDL {
-
 #define CLINGODL_TRY try // NOLINT
 #define CLINGODL_CATCH catch (...){ Clingo::Detail::handle_cxx_error(); return false; } return true // NOLINT
+
+using namespace ClingoDL;
+
+namespace {
 
 using Clingo::Detail::handle_error;
 
@@ -216,9 +218,190 @@ private:
     DLPropagator<T> prop_; //!< The underlying difference logic propagator.
 };
 
-} // namespace ClingoDL
+//! Check if b is a lower case prefix of a returning a pointer to the remainder of a.
+char const *iequals_pre(char const *a, char const *b) {
+    for (; *a && *b; ++a, ++b) { // NOLINT
+        if (tolower(*a) != tolower(*b)) { return nullptr; }
+    }
+    return *b != '\0' ? nullptr : a;
+}
 
-using namespace ClingoDL;
+//! Check if two strings are lower case equal.
+bool iequals(char const *a, char const *b) {
+    a = iequals_pre(a, b);
+    return a != nullptr && *a == '\0';
+}
+
+//! Turn the largest prefix of value into an unsigned integer and return the remainder.
+//!
+//! The function returns a nullpointer if there are no leading digits. The
+//! result is stored in data which is assumed to be a pointer to an uint64_t.
+char const *parse_uint64_pre(const char *value, void *data) {
+    auto &res = *static_cast<uint64_t*>(data);
+    char const *it = value;
+    res = 0;
+
+    for (; *it != '\0'; ++it) { // NOLINT
+        if ('0' <= *it && *it <= '9') {
+            auto tmp = res;
+            res *= 10; // NOLINT
+            res += *it - '0';
+            if (res < tmp) { return nullptr; }
+        }
+        else { break; }
+    }
+
+    return value != it ? it : nullptr;
+}
+
+//! Turn the value into an uint64_t assuming that data is a pointer to an
+//! uint64_t.
+bool parse_uint64(const char *value, void *data) {
+    value = parse_uint64_pre(value, data);
+    return value != nullptr && *value == '\0';
+}
+
+//! Parse thread-specific option via a callback.
+//!
+//! The thread number is optional and can follow separated with a comma.
+template <typename F, typename G>
+bool set_config(char const *value, void *data, F f, G g) {
+    try {
+        auto &config = *static_cast<PropagatorConfig*>(data);
+        uint64_t id = 0;
+        if (*value == '\0') {
+            f(config);
+            return true;
+        }
+        if (*value == ',' && parse_uint64(value + 1, &id) && id < 64) { // NOLINT
+            g(config.ensure(id));
+            return true;
+        }
+    }
+    catch (...) { }
+    return false;
+}
+
+//! Parse a level to limit full propagation.
+//!
+//! Return false if there is a parse error.
+bool parse_root(const char *value, void *data) {
+    uint64_t x = 0;
+    return (value = parse_uint64_pre(value, &x)) != nullptr && set_config(value, data,
+        [x](PropagatorConfig &config) { config.propagate_root = x; },
+        [x](ThreadConfig &config) { config.propagate_root = x; });
+}
+
+//! Parse the propagation budget and store it data.
+//!
+//! Return false if there is a parse error.
+bool parse_budget(const char *value, void *data) {
+    uint64_t x = 0;
+    return (value = parse_uint64_pre(value, &x)) != nullptr && set_config(value, data,
+        [x](PropagatorConfig &config) { config.propagate_budget = x; },
+        [x](ThreadConfig &config) { config.propagate_budget = x; });
+}
+
+//! Parse the mutex detection mode and store it data.
+//!
+//! Return false if there is a parse error.
+bool parse_mutex(const char *value, void *data) {
+    auto &pc = *static_cast<PropagatorConfig*>(data);
+    uint64_t x = 0;
+    if ((value = parse_uint64_pre(value, &x)) == nullptr) { return false; }
+    pc.mutex_size = x;
+    if (*value == '\0') {
+        pc.mutex_cutoff = 10 * x; // NOLINT
+        return true;
+    }
+    if (*value == ',') {
+        if (!parse_uint64(value + 1, &x)) { return false; } // NOLINT
+        pc.mutex_cutoff = x;
+    }
+    return true;
+}
+
+//! Parse the propagation mode and store it data.
+//!
+//! Return false if there is a parse error.
+bool parse_mode(const char *value, void *data) {
+    PropagationMode mode = PropagationMode::Check;
+    char const *rem = nullptr;
+    if ((rem = iequals_pre(value, "no")) != nullptr) {
+        mode = PropagationMode::Check;
+    }
+    else if ((rem = iequals_pre(value, "inverse")) != nullptr) {
+        mode = PropagationMode::Trivial;
+    }
+    else if ((rem = iequals_pre(value, "partial+")) != nullptr) {
+        mode = PropagationMode::WeakPlus;
+    }
+    else if ((rem = iequals_pre(value, "partial")) != nullptr) {
+        mode = PropagationMode::Weak;
+    }
+    else if ((rem = iequals_pre(value, "full")) != nullptr) {
+        mode = PropagationMode::Strong;
+    }
+    return rem != nullptr && set_config(rem, data,
+        [mode](PropagatorConfig &config) { config.propagate_mode = mode; },
+        [mode](ThreadConfig &config) { config.propagate_mode = mode; });
+}
+
+//! Parse the sort mode and store it data.
+//!
+//! Return false if there is a parse error.
+bool parse_sort(const char *value, void *data) {
+    SortMode sort = SortMode::Weight;
+    char const *rem = nullptr;
+    if ((rem = iequals_pre(value, "no")) != nullptr) {
+        sort = SortMode::No;
+    }
+    else if ((rem = iequals_pre(value, "weight-reversed")) != nullptr) {
+        sort = SortMode::WeightRev;
+    }
+    else if ((rem = iequals_pre(value, "weight")) != nullptr) {
+        sort = SortMode::Weight;
+    }
+    else if ((rem = iequals_pre(value, "potential-reversed")) != nullptr) {
+        sort = SortMode::PotentialRev;
+    }
+    else if ((rem = iequals_pre(value, "potential")) != nullptr) {
+        sort = SortMode::Potential;
+    }
+    return rem != nullptr && set_config(rem, data,
+        [sort](PropagatorConfig &config) { config.sort_mode = sort; },
+        [sort](ThreadConfig &config) { config.sort_mode = sort; });
+}
+
+//! Parse a Boolean and store it in data.
+//!
+//! Return false if there is a parse error.
+bool parse_bool(const char *value, void *data) {
+    auto &result = *static_cast<bool*>(data);
+    if (iequals(value, "no") || iequals(value, "off") || iequals(value, "0")) {
+        result = false;
+        return true;
+    }
+    if (iequals(value, "yes") || iequals(value, "on") || iequals(value, "1")) {
+        result = true;
+        return true;
+    }
+    return false;
+}
+
+//! Set the given error message if the Boolean is false.
+//!
+//! Return false if there is a parse error.
+bool check_parse(char const *key, bool ret) {
+    if (!ret) {
+        std::ostringstream msg;
+        msg << "invalid value for '" << key << "'";
+        clingo_set_error(clingo_error_runtime, msg.str().c_str());
+    }
+    return ret;
+}
+
+} // namespace
 
 struct clingodl_theory {
     std::unique_ptr<PropagatorFacade> clingodl{nullptr};
@@ -264,150 +447,6 @@ extern "C" bool clingodl_prepare(clingodl_theory_t *theory, clingo_control_t *co
 extern "C" bool clingodl_destroy(clingodl_theory_t *theory) {
     CLINGODL_TRY { delete theory; } // NOLINT
     CLINGODL_CATCH;
-}
-
-static char const *iequals_pre(char const *a, char const *b) {
-    for (; *a && *b; ++a, ++b) { // NOLINT
-        if (tolower(*a) != tolower(*b)) { return nullptr; }
-    }
-    return *b != '\0' ? nullptr : a;
-}
-static bool iequals(char const *a, char const *b) {
-    a = iequals_pre(a, b);
-    return a != nullptr && *a == '\0';
-}
-static char const *parse_uint64_pre(const char *value, void *data) {
-    auto &res = *static_cast<uint64_t*>(data);
-    char const *it = value;
-    res = 0;
-
-    for (; *it != '\0'; ++it) { // NOLINT
-        if ('0' <= *it && *it <= '9') {
-            auto tmp = res;
-            res *= 10; // NOLINT
-            res += *it - '0';
-            if (res < tmp) { return nullptr; }
-        }
-        else { break; }
-    }
-
-    return value != it ? it : nullptr;
-}
-static bool parse_uint64(const char *value, void *data) {
-    value = parse_uint64_pre(value, data);
-    return value != nullptr && *value == '\0';
-}
-
-template <typename F, typename G>
-bool set_config(char const *value, void *data, F f, G g) {
-    try {
-        auto &config = *static_cast<PropagatorConfig*>(data);
-        uint64_t id = 0;
-        if (*value == '\0') {
-            f(config);
-            return true;
-        }
-        if (*value == ',' && parse_uint64(value + 1, &id) && id < 64) { // NOLINT
-            g(config.ensure(id));
-            return true;
-        }
-    }
-    catch (...) { }
-    return false;
-}
-
-static bool parse_root(const char *value, void *data) {
-    uint64_t x = 0;
-    return (value = parse_uint64_pre(value, &x)) != nullptr && set_config(value, data,
-        [x](PropagatorConfig &config) { config.propagate_root = x; },
-        [x](ThreadConfig &config) { config.propagate_root = x; });
-}
-static bool parse_budget(const char *value, void *data) {
-    uint64_t x = 0;
-    return (value = parse_uint64_pre(value, &x)) != nullptr && set_config(value, data,
-        [x](PropagatorConfig &config) { config.propagate_budget = x; },
-        [x](ThreadConfig &config) { config.propagate_budget = x; });
-}
-static bool parse_mutex(const char *value, void *data) {
-    auto &pc = *static_cast<PropagatorConfig*>(data);
-    uint64_t x = 0;
-    if ((value = parse_uint64_pre(value, &x)) == nullptr) { return false; }
-    pc.mutex_size = x;
-    if (*value == '\0') {
-        pc.mutex_cutoff = 10 * x; // NOLINT
-        return true;
-    }
-    if (*value == ',') {
-        if (!parse_uint64(value + 1, &x)) { return false; } // NOLINT
-        pc.mutex_cutoff = x;
-    }
-    return true;
-}
-static bool parse_mode(const char *value, void *data) {
-    PropagationMode mode = PropagationMode::Check;
-    char const *rem = nullptr;
-    if ((rem = iequals_pre(value, "no")) != nullptr) {
-        mode = PropagationMode::Check;
-    }
-    else if ((rem = iequals_pre(value, "inverse")) != nullptr) {
-        mode = PropagationMode::Trivial;
-    }
-    else if ((rem = iequals_pre(value, "partial+")) != nullptr) {
-        mode = PropagationMode::WeakPlus;
-    }
-    else if ((rem = iequals_pre(value, "partial")) != nullptr) {
-        mode = PropagationMode::Weak;
-    }
-    else if ((rem = iequals_pre(value, "full")) != nullptr) {
-        mode = PropagationMode::Strong;
-    }
-    return rem != nullptr && set_config(rem, data,
-        [mode](PropagatorConfig &config) { config.propagate_mode = mode; },
-        [mode](ThreadConfig &config) { config.propagate_mode = mode; });
-}
-static bool parse_sort(const char *value, void *data) {
-    SortMode sort = SortMode::Weight;
-    char const *rem = nullptr;
-    if ((rem = iequals_pre(value, "no")) != nullptr) {
-        sort = SortMode::No;
-    }
-    else if ((rem = iequals_pre(value, "weight-reversed")) != nullptr) {
-        sort = SortMode::WeightRev;
-    }
-    else if ((rem = iequals_pre(value, "weight")) != nullptr) {
-        sort = SortMode::Weight;
-    }
-    else if ((rem = iequals_pre(value, "potential-reversed")) != nullptr) {
-        sort = SortMode::PotentialRev;
-    }
-    else if ((rem = iequals_pre(value, "potential")) != nullptr) {
-        sort = SortMode::Potential;
-    }
-    return rem != nullptr && set_config(rem, data,
-        [sort](PropagatorConfig &config) { config.sort_mode = sort; },
-        [sort](ThreadConfig &config) { config.sort_mode = sort; });
-}
-
-static bool parse_bool(const char *value, void *data) {
-    auto &result = *static_cast<bool*>(data);
-    if (iequals(value, "no") || iequals(value, "off") || iequals(value, "0")) {
-        result = false;
-        return true;
-    }
-    if (iequals(value, "yes") || iequals(value, "on") || iequals(value, "1")) {
-        result = true;
-        return true;
-    }
-    return false;
-}
-
-static bool check_parse(char const *key, bool ret) {
-    if (!ret) {
-        std::ostringstream msg;
-        msg << "invalid value for '" << key << "'";
-        clingo_set_error(clingo_error_runtime, msg.str().c_str());
-    }
-    return ret;
 }
 
 extern "C" bool clingodl_configure(clingodl_theory_t *theory, char const *key, char const *value) {

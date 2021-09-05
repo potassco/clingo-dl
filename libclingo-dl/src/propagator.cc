@@ -781,17 +781,7 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
     for (auto edge : state.todo_edges) {
         if (state.graph.edge_is_enabled(edge)) {
             // check for conflicts
-            if (!state.graph.add_edge(edge, [&](std::vector<edge_t> const &neg_cycle) {
-                std::vector<literal_t> clause;
-                for (auto eid : neg_cycle) {
-                    auto lit = -edges_[eid].lit;
-                    if (ass.is_true(lit)) {
-                        return true;
-                    }
-                    clause.emplace_back(lit);
-                }
-                return ctl.add_clause(clause) && ctl.propagate();
-            })) {
+            if (!state.graph.add_edge(ctl, edge)) {
                 return;
             }
 

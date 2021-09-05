@@ -43,22 +43,22 @@ using level_t = uint32_t;
 using index_t = uint32_t;
 
 //! Vector of coefficients and variables.
-template <class N>
-using CoVarVec = std::vector<std::pair<N, vertex_t>>;
+template <class T>
+using CoVarVec = std::vector<std::pair<T, vertex_t>>;
 
 //! An edge in the difference logic graph.
-template <typename N>
+template <typename T>
 struct EdgeAtom {
-    CoVarVec<N> lhs;
-    char const *rel;
-    N rhs;
-    Clingo::literal_t literal;
-    bool strict;
+    CoVarVec<T> lhs;           //!< The terms associated with the atom.
+    char const *rel;           //!< The comparision relation of the atom.
+    T rhs;                     //!< The value on the right hand side.
+    Clingo::literal_t literal; //!< The literal associated with the atom.
+    bool strict;               //!< Whether the atom is strict.
 };
 
 //! Epsilon value depending on number type.
-template <class N>
-[[nodiscard]] N epsilon();
+template <class T>
+[[nodiscard]] T epsilon();
 
 } // namespace
 

@@ -536,9 +536,8 @@ bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) {
     return ret;
 }
 
-// TODO: since propagate control has been introduces in other places, there is no need to report the cycle anymore
 template <typename T>
-bool Graph<T>::add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> f) { // NOLINT
+bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLINT
     // This function adds an edge to the graph and returns false if the edge
     // induces a negative cycle.
     //
@@ -624,31 +623,34 @@ bool Graph<T>::add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> 
     }
     else {
         // gather the edges in the negative cycle
-        neg_cycle_.clear();
-        neg_cycle_.push_back(v.path_from);
+        clause_.clear();
+        clause_.emplace_back(-edges_[v.path_from].lit);
         auto next_idx = edges_[v.path_from].from;
+#ifdef CLINGODL_CROSSCHECK
+        T weight = edges_[v.path_from].weight;
+#endif
         while (uv.to != next_idx) {
-            auto &next = vertices_[next_idx];
-            neg_cycle_.push_back(next.path_from);
-            next_idx = edges_[next.path_from].from;
+            auto &vertex = vertices_[next_idx];
+            auto &edge = edges_[vertex.path_from];
+            clause_.emplace_back(-edge.lit);
+            next_idx = edge.from;
+#ifdef CLINGODL_CROSSCHECK
+            weight += edge.weight;
+#endif
         }
 #ifdef CLINGODL_CROSSCHECK
-        T weight = 0;
-        for (auto &edge_idx : neg_cycle_) {
-            weight += edges_[edge_idx].weight;
-        }
         assert(weight < 0);
 #endif
-        consistent = f(neg_cycle_);
+        consistent = ctl.add_clause(clause_) && ctl.propagate();
     }
 
     if (propagate_ >= PropagationMode::Trivial && consistent) {
         if (visited_from_.empty() || propagate_ == PropagationMode::Trivial) {
-            consistent = with_incoming_(uv.from, f, [&](vertex_t t_idx, edge_t ts_idx) {
+            consistent = with_incoming_(ctl, uv.from, [&](vertex_t t_idx, edge_t ts_idx) {
                 auto &ts = edges_[ts_idx];
                 if (t_idx == uv.to && uv.weight + ts.weight < 0) {
-                    neg_cycle_.emplace_back(uv_idx);
-                    neg_cycle_.emplace_back(ts_idx);
+                    clause_.emplace_back(-edges_[uv_idx].lit);
+                    clause_.emplace_back(-edges_[ts_idx].lit);
                     ++stats_.false_edges_trivial;
                     return true;
                 }
@@ -656,10 +658,10 @@ bool Graph<T>::add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> 
             });
         }
         else if (propagate_ >= PropagationMode::Weak) {
-            consistent = cheap_propagate_(uv.from, uv.from, f);
+            consistent = cheap_propagate_(ctl, uv.from, uv.from);
             if (propagate_ >= PropagationMode::WeakPlus && consistent) {
                 for (auto &s_idx : visited_from_) {
-                    if (!cheap_propagate_(uv.from, s_idx, f)) {
+                    if (!cheap_propagate_(ctl, uv.from, s_idx)) {
                         consistent = false;
                         break;
                     }
@@ -678,8 +680,8 @@ bool Graph<T>::add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> 
 }
 
 template <typename T>
-template <class P, class F>
-bool Graph<T>::with_incoming_(vertex_t s_idx, P p, F f) {
+template <class F>
+bool Graph<T>::with_incoming_(Clingo::PropagateControl &ctl, vertex_t s_idx, F f) {
     auto &s = vertices_[s_idx];
     auto &in = s.candidate_incoming;
     auto jt = in.begin();
@@ -694,12 +696,12 @@ bool Graph<T>::with_incoming_(vertex_t s_idx, P p, F f) {
             continue;
         }
         // visit the incoming vertex and edge
-        neg_cycle_.clear();
+        clause_.clear();
         if (f(t_idx, ts_idx)) {
             edge_states_[ts_idx].removed_incoming = true;
             disable_edge(ts_idx);
             // add constraint for the negative cycle
-            if (!p(neg_cycle_)) {
+            if (!(ctl.add_clause(clause_) && ctl.propagate())) {
                 // erease edges marked as removed
                 in.erase(jt, it+1);
                 return false;
@@ -713,13 +715,12 @@ bool Graph<T>::with_incoming_(vertex_t s_idx, P p, F f) {
 }
 
 template <typename T>
-template <class F>
-[[nodiscard]] bool Graph<T>::cheap_propagate_(vertex_t u_idx, vertex_t s_idx, F f) {
+[[nodiscard]] bool Graph<T>::cheap_propagate_(Clingo::PropagateControl &ctl, vertex_t u_idx, vertex_t s_idx) {
     // we check for the following case:
     //   u ->* s ->* t
     //         ^----/
     //           ts
-    return with_incoming_(s_idx, f, [&](vertex_t t_idx, edge_t ts_idx) {
+    return with_incoming_(ctl, s_idx, [&](vertex_t t_idx, edge_t ts_idx) {
         auto &s = vertices_[s_idx];
         auto &t = vertices_[t_idx];
         auto &ts = edges_[ts_idx];
@@ -731,7 +732,7 @@ template <class F>
                 while (u_idx != r_idx && s_idx != r_idx) {
                     auto &r = vertices_[r_idx];
                     auto &rr = edges_[r.path_from];
-                    neg_cycle_.emplace_back(r.path_from);
+                    clause_.emplace_back(-edges_[r.path_from].lit);
                     r_idx = rr.from;
                     check += rr.weight;
                 }
@@ -743,7 +744,7 @@ template <class F>
                         ++stats_.false_edges_weak_plus;
                     }
                     assert(weight == check);
-                    neg_cycle_.emplace_back(ts_idx);
+                    clause_.emplace_back(-edges_[ts_idx].lit);
                     return true;
                 }
             }
@@ -890,13 +891,13 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
 #ifdef CLINGODL_CROSSCHECK
                 value_t sum = uv.weight - xy.weight;
 #endif
-                std::vector<Clingo::literal_t> clause;
-                clause.push_back(-uv.lit);
+                clause_.clear();
+                clause_.push_back(-uv.lit);
                 // forward
                 for (auto next_edge_idx = u.path_from; next_edge_idx != invalid_edge_index;) {
                     auto &next_edge = edges_[next_edge_idx];
                     auto &next_vertex = vertices_[next_edge.from];
-                    clause.push_back(-next_edge.lit);
+                    clause_.push_back(-next_edge.lit);
 #ifdef CLINGODL_CROSSCHECK
                     sum += next_edge.weight;
 #endif
@@ -906,7 +907,7 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
                 for (auto next_edge_idx = v.path_to; next_edge_idx != invalid_edge_index;) {
                     auto &next_edge = edges_[next_edge_idx];
                     auto &next_vertex = vertices_[next_edge.to];
-                    clause.push_back(-next_edge.lit);
+                    clause_.push_back(-next_edge.lit);
 #ifdef CLINGODL_CROSSCHECK
                     sum += next_edge.weight;
 #endif
@@ -915,7 +916,7 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
 #ifdef CLINGODL_CROSSCHECK
                 assert(sum < 0 && sum == cost_vu + uv.weight);
 #endif
-                if (!(ret = ctl.add_clause(clause) && ctl.propagate())) {
+                if (ret = ctl.add_clause(clause_) && ctl.propagate(); !ret) {
                     return false;
                 }
             }

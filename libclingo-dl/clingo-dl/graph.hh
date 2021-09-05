@@ -120,7 +120,7 @@ public:
     //! Add an edge to the graph and return false if the edge induces a negative cycle.
     //!
     //! This function assumes that the graph is not conflicting.
-    [[nodiscard]] bool add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> f);
+    [[nodiscard]] bool add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx);
     //! Fully propagates the graph after adding the given edge.
     //!
     //! Afterward any of the remaining edges can be added to the graph without
@@ -135,18 +135,16 @@ public:
 private:
     //! Traverse the incoming edges of a vertex.
     //!
-    //! Edges that were disabled will be removed during the traversal.
-    //! Callback f is called for each visited edge and the edge is removed if
-    //! the callback returns false. Furthermore, function p is called in this
-    //! case, which can be used to add constraints to the graph. If adding a
-    //! constraint causes a conflict indicated by the return value of the
-    //! callback, the traversal will stop.
-    template <class P, class F>
-    [[nodiscard]] bool with_incoming_(vertex_t s_idx, P p, F f);
+    //! Edges that were disabled will be removed during the traversal. The
+    //! clallback is called for each visited edge and the edge is removed if
+    //! the callback returns true. Furthermore, the functions assumes that the
+    //! callback provides a clause in this case. If adding the clause causes a
+    //! conflict, the traversal will stop and the function returns false.
+    template <class F>
+    [[nodiscard]] bool with_incoming_(Clingo::PropagateControl &ctl, vertex_t s_idx, F f);
     //! If s has been reached from u, we can use the current potentials to
     //! detect some conflicts involving incoming edges of s.
-    template <class F>
-    [[nodiscard]] bool cheap_propagate_(vertex_t u_idx, vertex_t s_idx, F f);
+    [[nodiscard]] bool cheap_propagate_(Clingo::PropagateControl &ctl, vertex_t u_idx, vertex_t s_idx);
     //! Helper to add candidate edges initially and during backtracking.
     void add_candidate_edge_(edge_t uv_idx);
     //! Disable edge u -> v, if there is a shorter path u ->* v.
@@ -173,6 +171,7 @@ private:
     std::vector<edge_t> disabled_edges_;     //!< Disabled edges in chronological order.
     std::vector<EdgeState> edge_states_;     //!< Thread-specific per edge information.
     std::vector<edge_t> neg_cycle_;          //!< Vector for storing negative cycles.
+    std::vector<literal_t> clause_;          //!< Vector for storing clauses.
     ThreadStatistics &stats_;                //!< Per thread statistics.
     PropagationMode const propagate_;        //!< The propagation mode.
 };
