@@ -76,7 +76,7 @@ struct Graph<T>::Vertex {
     VertexIndexVec candidate_incoming;  //!< Edges that might become incoming edges.
     VertexIndexVec candidate_outgoing;  //!< Edges that might become outgoing edges.
     PotentialStack potential_stack;     //!< Vector of pairs of level and potential.
-    value_t cost_from{0};
+    value_t cost_from{0}; // TODO
     value_t cost_to{0};
     vertex_t offset{0};
     edge_t path_from{0};
@@ -92,7 +92,7 @@ struct Graph<T>::Vertex {
 //!< Thread specific information for edges.
 template <typename T>
 struct Graph<T>::EdgeState {
-    uint8_t removed_outgoing : 1;
+    uint8_t removed_outgoing : 1; // TODO
     uint8_t removed_incoming : 1;
     uint8_t active : 1;
 };
@@ -264,6 +264,17 @@ struct Graph<T>::Impl : Graph {
         }
     }
 
+    //! Compute shortests paths starting from the given vertex.
+    //!
+    //! This function counts relevant nodes and stops as soon as it determines
+    //! that there are no more shorted paths through relevant vertices any
+    //! more. A vertex is relevant if it was reached via a shortest path
+    //! containing a relevant vertex. By construction, the graph always
+    //! contains a relevant vertex connected to the starting node via an edge.
+    //!
+    //! The function also counts the in and out degrees of visited relevant
+    //! nodes. The direction with the smaller degree can then be used to try to
+    //! find negative cycles.
     std::pair<uint32_t, uint32_t> dijkstra(vertex_t source_idx) { // NOLINT
         uint32_t num_relevant = 0;
         uint32_t relevant_degree_out = 0;
@@ -319,6 +330,12 @@ struct Graph<T>::Impl : Graph {
                     }
                     path(v_idx) = uv_idx;
                 }
+                else if (v_idx != source_idx && !relevant_u && c == cost(v_idx) && relevant(from(path(v_idx)))) {
+                    // similar to the case above where vertex v no longer contributes a relevant edge
+                    // we have to specifically handle the case that v is the source vertex which is always unrelevant
+                    --num_relevant;
+                    path(v_idx) = uv_idx;
+                }
             }
             // removed a relevant vertex from the queue and there are no edges with relevant sources anymore in the queue
             // this condition assumes that initially there is exactly one reachable relevant vertex in the graph
@@ -353,6 +370,7 @@ struct Graph<T>::Impl : Graph {
     }
 #endif
 
+    // TODO
     bool propagate_edges(Clingo::PropagateControl &ctl, edge_t xy_idx, bool forward, bool backward) { // NOLINT
         if (!forward && !backward) {
             return true;
@@ -492,7 +510,8 @@ bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) {
     bool forward_from = num_relevant_in_from < num_relevant_out_to;
     bool backward_from = num_relevant_out_from < num_relevant_in_to;
 
-    bool ret = static_cast<Impl<From> *>(this)->propagate_edges(ctl, xy_idx, forward_from, backward_from) && static_cast<Impl<To> *>(this)->propagate_edges(ctl, xy_idx, !forward_from, !backward_from);
+    bool ret = static_cast<Impl<From> *>(this)->propagate_edges(ctl, xy_idx, forward_from, backward_from) &&
+               static_cast<Impl<To> *>(this)->propagate_edges(ctl, xy_idx, !forward_from, !backward_from);
 
     for (auto &x : visited_from_) {
         vertices_[x].visited_from = false;
@@ -507,6 +526,7 @@ bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) {
     return ret;
 }
 
+// TODO
 template <typename T>
 bool Graph<T>::add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> f) { // NOLINT
     // This function adds an edge to the graph and returns false if the edge
@@ -781,6 +801,7 @@ void Graph<T>::add_candidate_edge_(edge_t uv_idx) {
     }
 }
 
+// TODO
 template <typename T>
 bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
     auto &uv = edges_[uv_idx];
@@ -828,6 +849,7 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
     return false;
 }
 
+// TODO
 template <typename T>
 bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret) { // NOLINT
     auto &uv = edges_[uv_idx];
@@ -896,6 +918,7 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
     return false;
 }
 
+// TODO
 #ifdef CLINGODL_CROSSCHECK
 template <typename T>
 std::unordered_map<int, T> Graph<T>::bellman_ford_(std::vector<vertex_t> const &edges, int source) {
