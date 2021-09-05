@@ -33,33 +33,28 @@ struct To { };
 
 constexpr auto invalid_edge_index = std::numeric_limits<vertex_t>::max();
 
-#ifdef CLINGODL_CROSSCHECK
+} // namespace
 
-//! Count relevant incoming/outgoing edges.
-template <class M>
-std::pair<uint32_t, uint32_t> count_relevant_(M &m) {
-    uint32_t relevant_in = 0;
-    uint32_t relevant_out = 0;
-    for (auto &node : m.visited_set()) {
-        if (m.relevant(node)) {
-            for (auto &edge : m.candidate_incoming(node)) {
-                if (m.active(edge)) {
-                    ++relevant_in;
-                }
-            }
-            for (auto &edge : m.candidate_outgoing(node)) {
-                if (m.active(edge)) {
-                    ++relevant_out;
-                }
-            }
-        }
-    }
-    return {relevant_in, relevant_out};
+void ThreadStatistics::reset() {
+    *this = ThreadStatistics{};
 }
 
-#endif
-
-} // namespace
+void ThreadStatistics::accu(ThreadStatistics const &x) {
+    time_propagate        += x.time_propagate;
+    time_undo             += x.time_undo;
+    time_dijkstra         += x.time_dijkstra;
+    true_edges            += x.true_edges;
+    false_edges           += x.false_edges;
+    false_edges_trivial   += x.false_edges_trivial;
+    false_edges_weak      += x.false_edges_weak;
+    false_edges_weak_plus += x.false_edges_weak_plus;
+    propagate_cost_add    += x.propagate_cost_add;
+    propagate_cost_from   += x.propagate_cost_from;
+    propagate_cost_to     += x.propagate_cost_to;
+    edges_added           += x.edges_added;
+    edges_skipped         += x.edges_skipped;
+    edges_propagated      += x.edges_propagated;
+}
 
 // TODO: document + make nested
 template <typename T>
@@ -324,6 +319,29 @@ struct Graph<T>::Impl : Graph {
         return {relevant_degree_out, relevant_degree_in};
     }
 
+#ifdef CLINGODL_CROSSCHECK
+    //! Count relevant incoming/outgoing edges.
+    std::pair<uint32_t, uint32_t> count_relevant_() {
+        uint32_t relevant_in = 0;
+        uint32_t relevant_out = 0;
+        for (auto &node : visited_set()) {
+            if (relevant(node)) {
+                for (auto &edge : candidate_incoming(node)) {
+                    if (active(edge)) {
+                        ++relevant_in;
+                    }
+                }
+                for (auto &edge : candidate_outgoing(node)) {
+                    if (active(edge)) {
+                        ++relevant_out;
+                    }
+                }
+            }
+        }
+        return {relevant_in, relevant_out};
+    }
+#endif
+
     bool propagate_edges(Clingo::PropagateControl &ctl, edge_t xy_idx, bool forward, bool backward) { // NOLINT
         if (!forward && !backward) {
             return true;
@@ -456,8 +474,8 @@ bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) {
     }
 #ifdef CLINGODL_CROSSCHECK
     // check if the counts of relevant incoming/outgoing vertices are correct
-    assert(std::make_pair(num_relevant_in_from, num_relevant_out_from) == count_relevant_(*static_cast<Impl<From> *>(this)));
-    assert(std::make_pair(num_relevant_out_to, num_relevant_in_to) == count_relevant_(*static_cast<Impl<To> *>(this)));
+    assert(std::make_pair(num_relevant_in_from, num_relevant_out_from) == static_cast<Impl<From> *>(this)->count_relevant_());
+    assert(std::make_pair(num_relevant_out_to, num_relevant_in_to) == static_cast<Impl<To> *>(this)->count_relevant_());
 #endif
 
     bool forward_from = num_relevant_in_from < num_relevant_out_to;

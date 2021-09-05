@@ -42,53 +42,27 @@ struct Edge {
     Clingo::literal_t lit; //!< Solver literal associated with the edge.
 };
 
+//! Struct to capture per thread statistics of the DL propagator/graph.
 struct ThreadStatistics {
-    void reset() {
-        time_propagate        = std::chrono::steady_clock::duration::zero();
-        time_undo             = std::chrono::steady_clock::duration::zero();
-        time_dijkstra         = std::chrono::steady_clock::duration::zero();
-        true_edges            = 0;
-        false_edges           = 0;
-        false_edges_trivial   = 0;
-        false_edges_weak      = 0;
-        false_edges_weak_plus = 0;
-        propagate_cost_add    = 0;
-        propagate_cost_from   = 0;
-        propagate_cost_to     = 0;
-        edges_added           = 0;
-        edges_skipped         = 0;
-        edges_propagated      = 0;
-    }
-    void accu(ThreadStatistics const &x) {
-        time_propagate        += x.time_propagate;
-        time_undo             += x.time_undo;
-        time_dijkstra         += x.time_dijkstra;
-        true_edges            += x.true_edges;
-        false_edges           += x.false_edges;
-        false_edges_trivial   += x.false_edges_trivial;
-        false_edges_weak      += x.false_edges_weak;
-        false_edges_weak_plus += x.false_edges_weak_plus;
-        propagate_cost_add    += x.propagate_cost_add;
-        propagate_cost_from   += x.propagate_cost_from;
-        propagate_cost_to     += x.propagate_cost_to;
-        edges_added           += x.edges_added;
-        edges_skipped         += x.edges_skipped;
-        edges_propagated      += x.edges_propagated;
-    }
-    Duration time_propagate = Duration{0};
-    Duration time_undo = Duration{0};
-    Duration time_dijkstra = Duration{0};
-    uint64_t true_edges{0};
-    uint64_t false_edges{0};
-    uint64_t false_edges_trivial{0};
-    uint64_t false_edges_weak{0};
-    uint64_t false_edges_weak_plus{0};
-    uint64_t propagate_cost_add{0};
-    uint64_t propagate_cost_from{0};
-    uint64_t propagate_cost_to{0};
-    uint64_t edges_added{0};
-    uint64_t edges_skipped{0};
-    uint64_t edges_propagated{0};
+    //! Reset the object to its initial state.
+    void reset();
+    //! Add values from given statistics object.
+    void accu(ThreadStatistics const &x);
+
+    Duration time_propagate{0};        //!< Total time spend in propagate callback.
+    Duration time_undo{0};             //!< Total time spend in the undo function.
+    Duration time_dijkstra{0};         //!< Total runtime of the dijkstra algorithm during full propagation.
+    uint64_t true_edges{0};            //!< The number of edges that have been made true.
+    uint64_t false_edges{0};           //!< The number of edges that have been made false.
+    uint64_t false_edges_trivial{0};   //!< Edges that could be made false by inverse propagation.
+    uint64_t false_edges_weak{0};      //!< Edges that could be made false by weak propagation.
+    uint64_t false_edges_weak_plus{0}; //!< Edges that could be made false by extended weak propagation.
+    uint64_t propagate_cost_add{0};    //!< Cost estimate for adding edges.
+    uint64_t propagate_cost_from{0};   //!< Cost estimate for propagation on original graph.
+    uint64_t propagate_cost_to{0};     //!< Cost estimate for propagation on transposed graph.
+    uint64_t edges_added{0};           //!< The number of edges added to the graph.
+    uint64_t edges_skipped{0};         //!< Edges added for which no potential updates were necessary.
+    uint64_t edges_propagated{0};      //!< The number of edges for which full propagation has been called.
 };
 
 template <typename T>
@@ -96,7 +70,7 @@ class Graph {
 private:
     struct Vertex;
     struct EdgeState;
-    template <class D>
+    template <typename D>
     struct Impl;
     using value_t = T;                     //!< The value type (integral or floating point).
     using Edge = ClingoDL::Edge<value_t>;  //!< The data structure for edges.
