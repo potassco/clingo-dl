@@ -301,7 +301,10 @@ struct Graph<T>::Impl : Graph {
                 ++propagation_cost();
                 auto &uv = edges_[uv_idx];
                 auto v_idx = to(uv_idx);
-                // NOTE: explicitely using uv.from and uv.to is intended here
+                // NOTE: We have to make sure that weights are positive for the
+                // algorithm to run correctly. We can use the potentials to do
+                // this. Explicitely using uv.from and uv.to is intended here.
+                //
                 auto c = cost(u_idx) + vertices_[uv.from].potential() + uv.weight - vertices_[uv.to].potential();
                 assert(vertices_[uv.from].potential() + uv.weight - vertices_[uv.to].potential() >= 0);
                 if (!visited(v_idx) || c < cost(v_idx)) {
@@ -481,15 +484,23 @@ void Graph<T>::ensure_decision_level(level_t level, bool enable_propagate) {
 
 template <typename T>
 bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) {
+    // The function is best understood considering the following example graph:
+    //
+    //   u ->* x -> y ->* v
+    //   ^---------------/
+    //
+    // We calculate relevant shortest paths from x ->* v.
+    // A shorted path is relevant if it contains edge x -> y.
+    //
+    // Similarly, we calculate relevant shorted paths u *<- y for the transposed graph.
+    // Again, a shorted path is relevant if it contains y <- x.
+    //
+    // There is a negative cycle, if cost(x ->* v) + cost(u *<- y) - cost(x -> y) + cost(v -> u) is negative.
     ++stats_.edges_propagated;
     disable_edge(xy_idx);
     auto &xy = edges_[xy_idx];
     auto &x = vertices_[xy.from];
     auto &y = vertices_[xy.to];
-    // BUG: this test is not correct
-    // if ((x.incoming.empty() && x.outgoing.size() == 1) || (y.outgoing.empty() && y.incoming.size() == 1)) {
-    //    return true;
-    //}
     x.relevant_to = true;
     y.relevant_from = true;
     vertex_t num_relevant_out_from{0};
@@ -526,7 +537,7 @@ bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) {
     return ret;
 }
 
-// TODO
+// TODO: since propagate control has been introduces in other places, there is no need to report the cycle anymore
 template <typename T>
 bool Graph<T>::add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> f) { // NOLINT
     // This function adds an edge to the graph and returns false if the edge
@@ -608,8 +619,8 @@ bool Graph<T>::add_edge(edge_t uv_idx, std::function<bool(std::vector<edge_t>)> 
         v.incoming.emplace_back(uv_idx);
         changed_edges_.emplace_back(uv_idx);
 #ifdef CLINGODL_CROSSCHECK
-        // NOTE: just a check that will throw if there is a cycle
-        bellman_ford_(changed_edges_, uv.from);
+        // check that the graph does not have a cycle
+        assert(bellman_ford_(changed_edges_, uv.from).has_value());
 #endif
     }
     else {
@@ -801,7 +812,10 @@ void Graph<T>::add_candidate_edge_(edge_t uv_idx) {
     }
 }
 
-// TODO
+// TODO: I do not quite remember the intend of this function anymore.
+//
+// It should be something like that we can disable any edges u -> v that are
+// longer than the shortest from u ->* v.
 template <typename T>
 bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
     auto &uv = edges_[uv_idx];
@@ -814,34 +828,29 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
         auto &x = vertices_[xy.from];
         auto &y = vertices_[xy.to];
 
-        auto a = u.cost_to + y.potential() - u.potential();
-        auto b = v.cost_from + v.potential() - x.potential();
-        auto d = a + b - xy.weight;
+        auto cost_uy = u.cost_to + y.potential() - u.potential();
+        auto cost_xv = v.cost_from + v.potential() - x.potential();
+        auto cost_uv = cost_uy + cost_xv - xy.weight;
 #ifdef CLINGODL_CROSSCHECK
         auto bf_costs_from_u = bellman_ford_(changed_edges_, uv.from);
         auto bf_costs_from_x = bellman_ford_(changed_edges_, xy.from);
-        auto aa = bf_costs_from_u.find(xy.to);
-        static_cast<void>(aa);
-        assert(aa != bf_costs_from_u.end());
-        assert(aa->second == a);
-        auto bb = bf_costs_from_x.find(uv.to);
-        static_cast<void>(bb);
-        assert(bb != bf_costs_from_u.end());
-        assert(bb->second == b);
+        auto bf_cost_uy = bf_costs_from_u->find(xy.to);
+        auto bf_cost_xv = bf_costs_from_x->find(uv.to);
+        static_cast<void>(bf_cost_uy);
+        static_cast<void>(bf_cost_xv);
+        assert(bf_cost_uy != bf_costs_from_u->end());
+        assert(bf_cost_xv != bf_costs_from_u->end());
+        assert(bf_cost_uy->second == cost_uy);
+        assert(bf_cost_xv->second == cost_xv);
 #endif
-        if (d <= uv.weight) {
-            ++stats_.true_edges;
+        if (cost_uv <= uv.weight) {
 #ifdef CLINGODL_CROSSCHECK
+            // make sure that the graph does not have a negative cycle even if it contains the edge
             auto edges = changed_edges_;
             edges.emplace_back(uv_idx);
-            // NOTE: throws if there is a cycle
-            try {
-                bellman_ford_(changed_edges_, uv.from);
-            }
-            catch (...) {
-                assert(false && "edge is implied but lead to a conflict :(");
-            }
+            assert(bellman_ford_(edges, uv.from).has_value());
 #endif
+            ++stats_.true_edges;
             disable_edge(uv_idx);
             return true;
         }
@@ -849,7 +858,11 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
     return false;
 }
 
-// TODO
+// TODO: I cannot quite follow the cost construction anymore.
+//
+// I have to figure out why the constructions differs quite a bit from the
+// propagate_edge_true_ function. The function should disable any edges that
+// would cause a negative cycle.
 template <typename T>
 bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret) { // NOLINT
     auto &uv = edges_[uv_idx];
@@ -862,10 +875,10 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
         auto &x = vertices_[xy.from];
         auto &y = vertices_[xy.to];
 
-        auto a = v.cost_to + y.potential() - v.potential();
-        auto b = u.cost_from + u.potential() - x.potential();
-        auto d = a + b - xy.weight;
-        if (d < -uv.weight) {
+        auto cost_vy = v.cost_to + y.potential() - v.potential();
+        auto cost_xu = u.cost_from + u.potential() - x.potential();
+        auto d = cost_vy + cost_xu - xy.weight;
+        if (d + uv.weight < 0) {
             ++stats_.false_edges;
             if (!ctl.assignment().is_false(uv.lit)) {
 #ifdef CLINGODL_CROSSCHECK
@@ -904,15 +917,10 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
             return true;
         }
 #ifdef CLINGODL_CROSSCHECK
+        // make sure that the graph does not have a negative cycle even if it contains the edge
         auto edges = changed_edges_;
         edges.emplace_back(uv_idx);
-        // NOTE: throws if there is a cycle
-        try {
-            bellman_ford_(changed_edges_, uv.from);
-        }
-        catch (...) {
-            assert(false && "edge must not cause a conflict");
-        }
+        assert(bellman_ford_(edges, uv.from).has_value());
 #endif
     }
     return false;
@@ -921,7 +929,7 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
 // TODO
 #ifdef CLINGODL_CROSSCHECK
 template <typename T>
-std::unordered_map<int, T> Graph<T>::bellman_ford_(std::vector<vertex_t> const &edges, int source) {
+std::optional<std::unordered_map<int, T>> Graph<T>::bellman_ford_(std::vector<vertex_t> const &edges, int source) {
     std::unordered_map<int, T> costs;
     costs[source] = 0;
     size_t vertices = 0;
@@ -953,7 +961,7 @@ std::unordered_map<int, T> Graph<T>::bellman_ford_(std::vector<vertex_t> const &
             auto v_cost = costs.find(uv.to);
             auto dist = u_cost->second + uv.weight;
             if (dist < v_cost->second) {
-                throw std::runtime_error("there is a negative cycle!!!");
+                return std::nullopt;
             }
         }
     }

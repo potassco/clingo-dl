@@ -152,7 +152,7 @@ private:
     [[nodiscard]] bool propagate_edge_true_(edge_t uv_idx, edge_t xy_idx);
     [[nodiscard]] bool propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret);
 #ifdef CLINGODL_CROSSCHECK
-    std::unordered_map<int, value_t> bellman_ford_(std::vector<edge_t> const &edges, int source);
+    std::optional<std::unordered_map<int, value_t>> bellman_ford_(std::vector<edge_t> const &edges, int source);
 #endif
     //! Sets the potential of a vertex and ensures that it can be backtracked.
     void set_potential_(Vertex &vtx, level_t level, value_t potential);
