@@ -65,18 +65,25 @@ struct ThreadStatistics {
     uint64_t edges_propagated{0};      //!< The number of edges for which full propagation has been called.
 };
 
+//! This class stores the DL graph and provides methods to incrementally add
+//! edges, perform propagation, and access the assignment to vertices.
+//!
+//! The class is meant to be used by the DLPropagator.
 template <typename T>
 class Graph {
 private:
     struct Vertex;
     struct EdgeState;
+    struct TrailEntry;
     template <typename D>
     struct Impl;
-    using value_t = T;                     //!< The value type (integral or floating point).
-    using Edge = ClingoDL::Edge<value_t>;  //!< The data structure for edges.
-    using EdgeVec = std::vector<Edge>;     //!< A vector of edges.
-    using VertexVec = std::vector<Vertex>; //!< A vector of vertices.
-
+    using HeapType = Heap<4>;
+    using index_t = HeapType::index_type;     //!< Type for indexing (32bit unsigned).
+    using value_t = T;                        //!< The value type (integral or floating point).
+    using Edge = ClingoDL::Edge<value_t>;     //!< The data structure for edges.
+    using EdgeVec = std::vector<Edge>;        //!< A vector of edges.
+    using VertexVec = std::vector<Vertex>;    //!< A vector of vertices.
+    using TrailVec = std::vector<TrailEntry>; //!< The trail to backtrack per decision level changes.
 public:
     Graph(ThreadStatistics &stats, EdgeVec const &edges, PropagationMode propagate);
     Graph(Graph const &other) = delete;
@@ -126,7 +133,7 @@ public:
     [[nodiscard]] PropagationMode mode() const;
 
 private:
-    //! Traverse the incoming edges of a node.
+    //! Traverse the incoming edges of a vertex.
     //!
     //! Edges that became inactive will be removed during the traversal.
     //! Callback f is called for each visited edge and the edge is removed if
@@ -140,23 +147,26 @@ private:
     //! detect some conflicts involving incoming edges of s.
     template <class F>
     [[nodiscard]] bool cheap_propagate_(vertex_t u_idx, vertex_t s_idx, F f);
+    //! Helper to add candidate edges initially and during backtracking.
     void add_candidate_edge_(edge_t uv_idx);
     [[nodiscard]] bool propagate_edge_true_(edge_t uv_idx, edge_t xy_idx);
     [[nodiscard]] bool propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret);
 #ifdef CLINGODL_CROSSCHECK
     std::unordered_map<int, value_t> bellman_ford_(std::vector<edge_t> const &edges, int source);
 #endif
-    void set_potential_(Vertex &node, level_t level, value_t potential);
+    //! Sets the potential of a vertex and ensures that it can be backtracked.
+    void set_potential_(Vertex &vtx, level_t level, value_t potential);
+    //! Returns the current decision level.
     [[nodiscard]] level_t current_decision_level_();
 
-    Heap<4> costs_heap_;
+    HeapType costs_heap_;
     std::vector<vertex_t> visited_from_;
     std::vector<vertex_t> visited_to_;
     EdgeVec const &edges_;
-    VertexVec nodes_;
-    std::vector<vertex_t> changed_nodes_;
+    VertexVec vertices_;
+    std::vector<vertex_t> changed_vertices_;
     std::vector<edge_t> changed_edges_;
-    std::vector<std::tuple<level_t, uint32_t, uint32_t, uint32_t, bool>> changed_trail_;
+    TrailVec changed_trail_;
     std::vector<edge_t> inactive_edges_;
     std::vector<EdgeState> edge_states_;
     std::vector<edge_t> neg_cycle_;
