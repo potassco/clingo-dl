@@ -28,9 +28,11 @@ namespace ClingoDL {
 
 namespace {
 
+// TODO
 struct From { };
 struct To { };
 
+// TODO
 constexpr auto invalid_edge_index = std::numeric_limits<vertex_t>::max();
 
 } // namespace
@@ -94,7 +96,7 @@ template <typename T>
 struct Graph<T>::EdgeState {
     uint8_t removed_outgoing : 1; // TODO
     uint8_t removed_incoming : 1;
-    uint8_t active : 1;
+    uint8_t enabled : 1;
 };
 
 //!< Struct holding information to backtrack a decision level.
@@ -103,7 +105,7 @@ struct Graph<T>::TrailEntry {
     level_t level;           //!< The corresponding decision level.
     index_t vertex_offset;   //!< Index up to which to backtrack changed vertices.
     index_t edge_offset;     //!< Index up to which to backtrack changed edges.
-    index_t inactive_offset; //!< Index up to which to backtrack inactive edges.
+    index_t disabled_offset; //!< Index up to which to backtrack inactive edges.
     bool can_propagate;      //!< Whether propagation was possible on this level.
 };
 
@@ -249,11 +251,6 @@ struct Graph<T>::Impl : Graph {
         }
     }
 
-    //! Check if the edge is active.
-    bool active(edge_t idx) {
-        return edge_states_[idx].active;
-    }
-
     //! The cost to propagate the edge.
     uint64_t &propagation_cost() {
         if constexpr (std::is_same_v<D, From>) {
@@ -358,12 +355,12 @@ struct Graph<T>::Impl : Graph {
         for (auto &vertex : visited_set()) {
             if (relevant(vertex)) {
                 for (auto &edge : candidate_incoming(vertex)) {
-                    if (active(edge)) {
+                    if (edge_is_enabled(edge)) {
                         ++relevant_in;
                     }
                 }
                 for (auto &edge : candidate_outgoing(vertex)) {
-                    if (active(edge)) {
+                    if (edge_is_enabled(edge)) {
                         ++relevant_out;
                     }
                 }
@@ -386,7 +383,7 @@ struct Graph<T>::Impl : Graph {
                         std::remove_if(
                             in.begin(), in.end(),
                             [&](edge_t uv_idx) {
-                                if (!edge_states_[uv_idx].active || propagate_edge_true_(uv_idx, xy_idx)) {
+                                if (!edge_states_[uv_idx].enabled || propagate_edge_true_(uv_idx, xy_idx)) {
                                     remove_incoming(uv_idx);
                                     return true;
                                 }
@@ -404,7 +401,7 @@ struct Graph<T>::Impl : Graph {
                                 if (!ret) {
                                     return false;
                                 }
-                                if (!edge_states_[uv_idx].active || propagate_edge_false_(ctl, uv_idx, xy_idx, ret)) {
+                                if (!edge_states_[uv_idx].enabled || propagate_edge_false_(ctl, uv_idx, xy_idx, ret)) {
                                     remove_outgoing(uv_idx);
                                     return true;
                                 }
@@ -457,7 +454,7 @@ T Graph<T>::get_value(vertex_t idx) const {
 
 template <typename T>
 bool Graph<T>::edge_is_enabled(edge_t edge_idx) const {
-    return edge_states_[edge_idx].active;
+    return edge_states_[edge_idx].enabled;
 }
 
 template <typename T>
@@ -477,7 +474,7 @@ void Graph<T>::ensure_decision_level(level_t level, bool enable_propagate) {
         changed_trail_.push_back({level,
                                   numeric_cast<index_t>(changed_vertices_.size()),
                                   numeric_cast<index_t>(changed_edges_.size()),
-                                  numeric_cast<index_t>(inactive_edges_.size()),
+                                  numeric_cast<index_t>(disabled_edges_.size()),
                                   can_propagate() && enable_propagate});
     }
 }
@@ -486,16 +483,16 @@ template <typename T>
 bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) {
     // The function is best understood considering the following example graph:
     //
-    //   u ->* x -> y ->* v
+    //   v ->* x -> y ->* u
     //   ^---------------/
     //
-    // We calculate relevant shortest paths from x ->* v.
+    // We calculate relevant shortest paths from x ->* u.
     // A shorted path is relevant if it contains edge x -> y.
     //
-    // Similarly, we calculate relevant shorted paths u *<- y for the transposed graph.
+    // Similarly, we calculate relevant shorted paths v *<- y for the transposed graph.
     // Again, a shorted path is relevant if it contains y <- x.
     //
-    // There is a negative cycle, if cost(x ->* v) + cost(u *<- y) - cost(x -> y) + cost(v -> u) is negative.
+    // There is a negative cycle, if cost(x ->* u) + cost(v *<- y) - cost(x -> y) + cost(u -> v) is negative.
     ++stats_.edges_propagated;
     disable_edge(xy_idx);
     auto &xy = edges_[xy_idx];
@@ -690,7 +687,7 @@ bool Graph<T>::with_incoming_(vertex_t s_idx, P p, F f) {
         auto &ts = edges_[ts_idx];
         auto t_idx = ts.from;
         // remove edges marked inactive
-        if (!edge_states_[ts_idx].active) {
+        if (!edge_states_[ts_idx].enabled) {
             edge_states_[ts_idx].removed_incoming = true;
             continue;
         }
@@ -757,7 +754,7 @@ template <typename T>
 void Graph<T>::backtrack() {
     auto vo = changed_trail_.back().vertex_offset;
     auto eo = changed_trail_.back().edge_offset;
-    auto io = changed_trail_.back().inactive_offset;
+    auto io = changed_trail_.back().disabled_offset;
     for (auto it = changed_vertices_.rbegin(), ie = changed_vertices_.rend() - vo; it != ie; ++it) {
         vertices_[*it].potential_stack.pop_back();
     }
@@ -766,12 +763,12 @@ void Graph<T>::backtrack() {
         vertices_[edge.from].outgoing.pop_back();
         vertices_[edge.to].incoming.pop_back();
     }
-    for (auto it = inactive_edges_.begin() + io, ie = inactive_edges_.end(); it != ie; ++it) {
+    for (auto it = disabled_edges_.begin() + io, ie = disabled_edges_.end(); it != ie; ++it) {
         add_candidate_edge_(*it);
     }
     changed_vertices_.resize(vo);
     changed_edges_.resize(eo);
-    inactive_edges_.resize(io);
+    disabled_edges_.resize(io);
     changed_trail_.pop_back();
 }
 
@@ -782,9 +779,9 @@ void Graph<T>::disable_edge(edge_t uv_idx) {
     auto &v = vertices_[uv.to];
     --u.degree_out;
     --v.degree_in;
-    inactive_edges_.push_back(uv_idx);
-    assert(edge_states_[uv_idx].active);
-    edge_states_[uv_idx].active = false;
+    disabled_edges_.push_back(uv_idx);
+    assert(edge_states_[uv_idx].enabled);
+    edge_states_[uv_idx].enabled = false;
 }
 
 template <typename T>
@@ -800,8 +797,8 @@ void Graph<T>::add_candidate_edge_(edge_t uv_idx) {
     auto &v = vertices_[uv.to];
     ++u.degree_out;
     ++v.degree_in;
-    assert(!uv_state.active);
-    uv_state.active = true;
+    assert(!uv_state.enabled);
+    uv_state.enabled = true;
     if (uv_state.removed_outgoing) {
         uv_state.removed_outgoing = false;
         u.candidate_outgoing.emplace_back(uv_idx);
@@ -819,7 +816,7 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
     //   u ->* x -> y ->* v
     //   \----------------^
     //
-    // Using the intermidate results calculated in propagate(), we get the
+    // Using the intermidiate costs calculated in propagate(), we get the
     // length of the shortest path u ->* v. If this path is shorter than
     // u -> v, then we disable the edge.
     auto &uv = edges_[uv_idx];
@@ -862,13 +859,16 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
     return false;
 }
 
-// TODO: I cannot quite follow the cost construction anymore.
-//
-// I have to figure out why the constructions differs quite a bit from the
-// propagate_edge_true_ function. The function should disable any edges that
-// would cause a negative cycle.
 template <typename T>
 bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret) { // NOLINT
+    // The function is best understood considering the following example graph:
+    //
+    //   v ->* x -> y ->* u
+    //   ^----------------/
+    //
+    // Using the intermidiate costs calculated in propagate(), we get the
+    // length of the shortest path v ->* u. If this path extended with u -> v
+    // has a negative length, then the edge has to be false.
     auto &uv = edges_[uv_idx];
     auto &u = vertices_[uv.from];
     auto &v = vertices_[uv.to];
@@ -881,12 +881,12 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
 
         auto cost_vy = v.cost_to + y.potential() - v.potential();
         auto cost_xu = u.cost_from + u.potential() - x.potential();
-        auto d = cost_vy + cost_xu - xy.weight;
-        if (d + uv.weight < 0) {
+        auto cost_vu = cost_vy + cost_xu - xy.weight;
+        if (cost_vu + uv.weight < 0) {
             ++stats_.false_edges;
             if (!ctl.assignment().is_false(uv.lit)) {
 #ifdef CLINGODL_CROSSCHECK
-                T sum = uv.weight - xy.weight;
+                value_t sum = uv.weight - xy.weight;
 #endif
                 std::vector<Clingo::literal_t> clause;
                 clause.push_back(-uv.lit);
@@ -911,7 +911,7 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
                     next_edge_idx = next_vertex.path_to;
                 }
 #ifdef CLINGODL_CROSSCHECK
-                assert(sum < 0);
+                assert(sum < 0 && sum == cost_vu + uv.weight);
 #endif
                 if (!(ret = ctl.add_clause(clause) && ctl.propagate())) {
                     return false;
@@ -930,19 +930,18 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
     return false;
 }
 
-// TODO
 #ifdef CLINGODL_CROSSCHECK
 template <typename T>
-std::optional<std::unordered_map<int, T>> Graph<T>::bellman_ford_(std::vector<vertex_t> const &edges, int source) {
-    std::unordered_map<int, T> costs;
+std::optional<std::unordered_map<vertex_t, T>> Graph<T>::bellman_ford_(std::vector<vertex_t> const &edges, vertex_t source) {
+    std::unordered_map<vertex_t, T> costs;
     costs[source] = 0;
-    size_t vertices = 0;
+    vertex_t vertices = 0;
     for (auto &vertex : vertices_) {
         if (vertex.defined()) {
             ++vertices;
         }
     }
-    for (size_t i = 0; i < vertices; ++i) {
+    for (vertex_t i = 0; i < vertices; ++i) {
         for (auto const &uv_idx : edges) {
             auto &uv = edges_[uv_idx];
             auto u_cost = costs.find(uv.from);

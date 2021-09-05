@@ -35,7 +35,7 @@ namespace ClingoDL {
 //! Struct to represent an edge in the difference logic graph.
 template <typename T>
 struct Edge {
-    using value_t = T;
+    using value_t = T;     //!< The value type (integral or floating point).
     vertex_t from;         //!< Start vertex index of the edge.
     vertex_t to;           //!< End vertex index of the edge.
     value_t weight;        //!< Weight of the edge.
@@ -77,7 +77,7 @@ private:
     struct TrailEntry;
     template <typename D>
     struct Impl;
-    using HeapType = Heap<4>;
+    using HeapType = Heap<4>;                 //!< The heap type used in (dijkstra-like) algorithms.
     using index_t = HeapType::index_type;     //!< Type for indexing (32bit unsigned).
     using value_t = T;                        //!< The value type (integral or floating point).
     using Edge = ClingoDL::Edge<value_t>;     //!< The data structure for edges.
@@ -135,7 +135,7 @@ public:
 private:
     //! Traverse the incoming edges of a vertex.
     //!
-    //! Edges that became inactive will be removed during the traversal.
+    //! Edges that were disabled will be removed during the traversal.
     //! Callback f is called for each visited edge and the edge is removed if
     //! the callback returns false. Furthermore, function p is called in this
     //! case, which can be used to add constraints to the graph. If adding a
@@ -151,28 +151,30 @@ private:
     void add_candidate_edge_(edge_t uv_idx);
     //! Disable edge u -> v, if there is a shorter path u ->* v.
     [[nodiscard]] bool propagate_edge_true_(edge_t uv_idx, edge_t xy_idx);
+    //! Make edge u -> v false, if there is a negative cycle u ->* v -> u.
     [[nodiscard]] bool propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret);
 #ifdef CLINGODL_CROSSCHECK
-    std::optional<std::unordered_map<int, value_t>> bellman_ford_(std::vector<edge_t> const &edges, int source);
+    //! Make edge u -> v false, if there is a negative cycle u ->* v -> u.
+    std::optional<std::unordered_map<vertex_t, value_t>> bellman_ford_(std::vector<edge_t> const &edges, vertex_t source);
 #endif
     //! Sets the potential of a vertex and ensures that it can be backtracked.
     void set_potential_(Vertex &vtx, level_t level, value_t potential);
     //! Returns the current decision level.
     [[nodiscard]] level_t current_decision_level_();
 
-    HeapType costs_heap_;
-    std::vector<vertex_t> visited_from_;
-    std::vector<vertex_t> visited_to_;
-    EdgeVec const &edges_;
-    VertexVec vertices_;
-    std::vector<vertex_t> changed_vertices_;
-    std::vector<edge_t> changed_edges_;
-    TrailVec changed_trail_;
-    std::vector<edge_t> inactive_edges_;
-    std::vector<EdgeState> edge_states_;
-    std::vector<edge_t> neg_cycle_;
-    ThreadStatistics &stats_;
-    PropagationMode propagate_;
+    HeapType costs_heap_;                    //!< Heap used throught various algorithms.
+    std::vector<vertex_t> visited_from_;     //!< Vertices visited during traversal of the original graph.
+    std::vector<vertex_t> visited_to_;       //!< Vertices visited during traversal of the transposed graph.
+    EdgeVec const &edges_;                   //!< Reference to the edges.
+    VertexVec vertices_;                     //!< Vertex specific information.
+    std::vector<vertex_t> changed_vertices_; //!< Vertices changed in chronological order.
+    std::vector<edge_t> changed_edges_;      //!< Edges changed in chronological order.
+    TrailVec changed_trail_;                 //!< Vector recording backtrackable per decision level information.
+    std::vector<edge_t> disabled_edges_;     //!< Disabled edges in chronological order.
+    std::vector<EdgeState> edge_states_;     //!< Thread-specific per edge information.
+    std::vector<edge_t> neg_cycle_;          //!< Vector for storing negative cycles.
+    ThreadStatistics &stats_;                //!< Per thread statistics.
+    PropagationMode const propagate_;        //!< The propagation mode.
 };
 
 } // namespace ClingoDL
