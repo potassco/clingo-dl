@@ -54,9 +54,9 @@ struct ThreadStatistics {
     Duration time_dijkstra{0};         //!< Total runtime of the dijkstra algorithm during full propagation.
     uint64_t true_edges{0};            //!< The number of edges that have been made true.
     uint64_t false_edges{0};           //!< The number of edges that have been made false.
-    uint64_t false_edges_trivial{0};   //!< Edges that could be made false by inverse propagation.
-    uint64_t false_edges_weak{0};      //!< Edges that could be made false by weak propagation.
-    uint64_t false_edges_weak_plus{0}; //!< Edges that could be made false by extended weak propagation.
+    uint64_t false_edges_trivial{0};   //!< Edges made false by inverse propagation.
+    uint64_t false_edges_weak{0};      //!< Edges made false by weak propagation.
+    uint64_t false_edges_weak_plus{0}; //!< Edges made false by extended weak propagation.
     uint64_t propagate_cost_add{0};    //!< Cost estimate for adding edges.
     uint64_t propagate_cost_from{0};   //!< Cost estimate for propagation on original graph.
     uint64_t propagate_cost_to{0};     //!< Cost estimate for propagation on transposed graph.
