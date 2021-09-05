@@ -149,6 +149,7 @@ private:
     [[nodiscard]] bool cheap_propagate_(vertex_t u_idx, vertex_t s_idx, F f);
     //! Helper to add candidate edges initially and during backtracking.
     void add_candidate_edge_(edge_t uv_idx);
+    //! Disable edge u -> v, if there is a shorter path u ->* v.
     [[nodiscard]] bool propagate_edge_true_(edge_t uv_idx, edge_t xy_idx);
     [[nodiscard]] bool propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret);
 #ifdef CLINGODL_CROSSCHECK

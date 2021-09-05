@@ -812,12 +812,16 @@ void Graph<T>::add_candidate_edge_(edge_t uv_idx) {
     }
 }
 
-// TODO: I do not quite remember the intend of this function anymore.
-//
-// It should be something like that we can disable any edges u -> v that are
-// longer than the shortest from u ->* v.
 template <typename T>
 bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
+    // The function is best understood considering the following example graph:
+    //
+    //   u ->* x -> y ->* v
+    //   \----------------^
+    //
+    // Using the intermidate results calculated in propagate(), we get the
+    // length of the shortest path u ->* v. If this path is shorter than
+    // u -> v, then we disable the edge.
     auto &uv = edges_[uv_idx];
     auto &u = vertices_[uv.from];
     auto &v = vertices_[uv.to];
