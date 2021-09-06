@@ -112,9 +112,9 @@ inline Timer::~Timer() { elapsed_ += std::chrono::steady_clock::now() - start_; 
 template <int N>
 template <class M>
 void Heap<N>::push(M &m, index_type item) {
-    auto i = m.offset(item) = size();
+    m.offset(item) = size();
     heap_.push_back(item);
-    decrease(m, i);
+    decrease(m, item);
 }
 
 template <int N>
@@ -126,7 +126,7 @@ auto Heap<N>::pop(M &m) -> index_type {
         heap_[0] = heap_.back();
         m.offset(heap_[0]) = 0;
         heap_.pop_back();
-        increase(m, 0);
+        increase(m, heap_[0]);
     }
     else {
         heap_.pop_back();
@@ -136,10 +136,11 @@ auto Heap<N>::pop(M &m) -> index_type {
 
 template <int N>
 template <class M>
-void Heap<N>::decrease(M &m, index_type i) {
+void Heap<N>::decrease(M &m, index_type item) {
+    auto i = m.offset(item);
     while (i > 0) {
         index_type p = parent_(i);
-        if (m.cost(heap_[p]) > m.cost(heap_[i])) {
+        if (less_(m, i, p)) {
             swap_(m, i, p);
             i = p;
         }
@@ -151,7 +152,8 @@ void Heap<N>::decrease(M &m, index_type i) {
 
 template <int N>
 template <class M>
-void Heap<N>::increase(M &m, index_type i) {
+void Heap<N>::increase(M &m, index_type item) {
+    auto i = m.offset(item);
     for (index_type p = i, j = children_(p), s = size(); j < s; j = children_(p)) {
         index_type min = j;
         for (index_type k = j + 1; k < j + N; ++k) {
@@ -203,10 +205,7 @@ auto Heap<N>::children_(index_type offset) -> index_type {
 template <int N>
 template <class M>
 bool Heap<N>::less_(M &m, index_type a, index_type b) {
-    a = heap_[a], b = heap_[b];
-    auto ca = m.cost(a);
-    auto cb = m.cost(b);
-    return ca < cb || (ca == cb && m.relevant(a) < m.relevant(b));
+    return m.less(heap_[a], heap_[b]);
 }
 
 template <typename Int, std::enable_if_t<std::is_integral_v<Int>, int>>

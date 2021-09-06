@@ -107,10 +107,10 @@ public:
     index_type pop(M &m);
     //! Update an element after it's cost has been decreased.
     template <class M>
-    void decrease(M &m, index_type i);
+    void decrease(M &m, index_type item);
     //! Update an element after it's cost has been increased.
     template <class M>
-    void increase(M &m, index_type i);
+    void increase(M &m, index_type item);
     //! Get the number of elements in the heap.
     size_type size();
     //! Test if the heap is empty.

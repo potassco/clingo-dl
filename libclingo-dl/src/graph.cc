@@ -129,6 +129,19 @@ struct Graph<T>::Impl : Graph {
         return vertices_[idx].offset;
     }
 
+    //! Compare two vertices by cost/relevant.
+    bool less(vertex_t a, vertex_t b) {
+        auto ca = cost(a);
+        auto cb = cost(b);
+        return ca < cb || (ca == cb && relevant(a) < relevant(b));
+    }
+
+    //! Compare a cost with a vertex.
+    bool less(value_t ca, bool ra, vertex_t b) {
+        auto cb = cost(b);
+        return ca < cb || (ca == cb && ra < relevant(b));
+    }
+
     //! The cost of the vertex.
     value_t &cost(vertex_t idx) {
         if constexpr (std::is_same_v<D, From>) {
@@ -273,8 +286,13 @@ struct Graph<T>::Impl : Graph {
     //! The function also counts the in and out degrees of visited relevant
     //! nodes. The direction with the smaller degree can then be used to try to
     //! find negative cycles.
-    std::pair<uint32_t, uint32_t> dijkstra(vertex_t source_idx) { // NOLINT
-        uint32_t num_relevant = 0;
+    std::pair<uint32_t, uint32_t> dijkstra(vertex_t source_idx, edge_t relevant_idx) { // NOLINT
+        // Note: Initially there is exactly one relevant vertex in the graph,
+        // which is guaranteed to be reached by edge relevant_idx. Once this
+        // vertex enters the queue, the count corresponds to the number of
+        // relevant vertices in the queue. The algorithm can stop, once the
+        // count reaches zero.
+        uint32_t num_relevant = 1;
         uint32_t relevant_degree_out = 0;
         uint32_t relevant_degree_in = 0;
         assert(visited_set().empty() && costs_heap_.empty());
@@ -285,13 +303,9 @@ struct Graph<T>::Impl : Graph {
         path(source_idx) = invalid_edge_index;
         while (!costs_heap_.empty()) {
             auto u_idx = costs_heap_.pop(*this);
-            auto tu = path(u_idx);
-            if (tu != invalid_edge_index && relevant(from(tu))) {
-                relevant(u_idx) = true;
-                --num_relevant; // just removed a relevant edge from the queue
-            }
             bool relevant_u = relevant(u_idx);
             if (relevant_u) {
+                --num_relevant;
                 relevant_degree_out += vertices_[u_idx].degree_out;
                 relevant_degree_in += vertices_[u_idx].degree_in;
             }
@@ -302,45 +316,33 @@ struct Graph<T>::Impl : Graph {
                 // NOTE: We have to make sure that weights are positive for the
                 // algorithm to run correctly. We can use the potentials to do
                 // this. Explicitely using uv.from and uv.to is intended here.
-                //
                 auto c = cost(u_idx) + vertices_[uv.from].potential() + uv.weight - vertices_[uv.to].potential();
                 assert(vertices_[uv.from].potential() + uv.weight - vertices_[uv.to].potential() >= 0);
-                if (!visited(v_idx) || c < cost(v_idx)) {
+                if (!visited(v_idx) || less(c, relevant_u, v_idx)) {
+                    bool relevant_v = relevant(v_idx);
                     cost(v_idx) = c;
                     if (!visited(v_idx)) {
-                        // vertex v contributes an edge with a relevant source
-                        if (relevant_u) {
+                        // vertex v became relevant
+                        if (relevant_u && !relevant_v) {
                             ++num_relevant;
                         }
                         visited_set().push_back(to(uv_idx));
                         visited(v_idx) = true;
+                        relevant(v_idx) = relevant_u || uv_idx == relevant_idx;
                         costs_heap_.push(*this, v_idx);
                     }
                     else {
-                        if (relevant(from(path(v_idx)))) {
-                            // vertex v no longer contributes a relevant edge
-                            if (!relevant_u) {
-                                --num_relevant;
-                            }
+                        // vertex v became or lost relevance
+                        if (relevant_u != relevant_v) {
+                            relevant(v_idx) = relevant_u;
+                            num_relevant += relevant_u ? 1 : -1;
                         }
-                        // vertex v contributes a relevant edge now
-                        else if (relevant_u) {
-                            ++num_relevant;
-                        }
-                        costs_heap_.decrease(*this, offset(v_idx));
+                        costs_heap_.decrease(*this, v_idx);
                     }
                     path(v_idx) = uv_idx;
                 }
-                else if (v_idx != source_idx && !relevant_u && c == cost(v_idx) && relevant(from(path(v_idx)))) {
-                    // similar to the case above where vertex v no longer contributes a relevant edge
-                    // we have to specifically handle the case that v is the source vertex which is always unrelevant
-                    --num_relevant;
-                    path(v_idx) = uv_idx;
-                }
             }
-            // removed a relevant vertex from the queue and there are no edges with relevant sources anymore in the queue
-            // this condition assumes that initially there is exactly one reachable relevant vertex in the graph
-            if (relevant_u && num_relevant == 0) {
+            if (num_relevant == 0) {
                 costs_heap_.clear();
                 break;
             }
@@ -508,8 +510,8 @@ bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) {
     vertex_t num_relevant_in_to{0};
     {
         Timer t{stats_.time_dijkstra};
-        std::tie(num_relevant_out_from, num_relevant_in_from) = static_cast<Impl<From>*>(this)->dijkstra(xy.from);
-        std::tie(num_relevant_out_to, num_relevant_in_to) = static_cast<Impl<To>*>(this)->dijkstra(xy.to);
+        std::tie(num_relevant_out_from, num_relevant_in_from) = static_cast<Impl<From>*>(this)->dijkstra(xy.from, xy_idx);
+        std::tie(num_relevant_out_to, num_relevant_in_to) = static_cast<Impl<To>*>(this)->dijkstra(xy.to, xy_idx);
     }
 #ifdef CLINGODL_CROSSCHECK
     // check if the counts of relevant incoming/outgoing vertices are correct
@@ -604,7 +606,7 @@ bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLIN
                     costs_heap_.push(m, st.to);
                 }
                 else {
-                    costs_heap_.decrease(m, m.offset(st.to));
+                    costs_heap_.decrease(m, st.to);
                 }
             }
         }
