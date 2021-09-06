@@ -5,17 +5,14 @@
 - [Requirements](#requirements)
 - [Build, Install, and Test](#build-install-and-test)
   - [Build Options](#build-options)
-    - [Generic Options](#generic-options)
-    - [Python and Lua Support](#python-and-lua-support)
 
 # Installation using conda
-For the latest release use:
 
-    conda install -c potassco clingo-dl
+The latest clingo-dl release is available using the conda-forge channel:
 
-or the latest development version:
+    conda install -c conda-forge clingo-dl
 
-    conda install -c potassco/label/dev clingo-dl
+Furthermore, releases and development versions can also be installed from the `potassco` and `potassco/label/dev` channels.
 
 # Installation using pip
 
@@ -29,61 +26,54 @@ or the latest development version:
 
 # Requirements
 
-- a c++14 conforming compiler
-  - *at least* [gcc](https://gcc.gnu.org/) version 4.9
-  - [clang](http://clang.llvm.org/) version 3.1 (using either libstdc++
-    provided by gcc 4.9 or libc++)
-  - *at least* msvc++ 14.0 ([Visual Studio](https://www.visualstudio.com/) 2015
-    Update 3)
+- a C++17 conforming compiler
+  - *at least* [gcc] version 7.0
+  - *at least* [clang] version 4.0
+  - *at least* msvc++ 14.11 ([vs][Visual Studio] 2017 15.3)
   - other compilers might work
-- the [cmake](https://www.cmake.org/) build system
-  - at least version 3.3 is recommended
+- the [cmake] build system
+  - at least version 3.16 is recommended
   - at least version 3.1 is *required*
-- clingo(https://github.com/potassco/clingo/blob/master/INSTALL.md)
+- the [clingo] ASP solver
+  - *at least* version 5.5
+- optionally, the [python] programming language
+  - *at least* version 3.6
 
 # Build, Install, and Test
 
-To build clingo-dl in its default configurations in release
-mode, run:
+To build clingo-dl in its default configurations in release mode, run
 
     cmake -H<SOURCE_DIR> -B<BUILD_DIR> -DCMAKE_BUILD_TYPE=Release
     cmake --build <BUILD_DIR>
 
-The resulting binaries and shared libraries will be in `<BUILD_DIR>/bin` and
-are ready to use.
+The resulting binaries and shared libraries will be in `<BUILD_DIR>/bin` and are ready to use.
 
-To install all binaries and development files under cmake's install
-prefix (see the [build options](#build-options)), run:
+To install all binaries and development files under cmake's install prefix (see the [build options](#build-options)), run
 
     cmake --build <BUILD_DIR> --target install
 
 ## Build Options
 
-Cmake's `-L` option can be used to get an overview over the variables that can
-be set for building clingo-dl. To get clingo-dl specific options, run
+The most important options to control the build are
+
+- Variable `CMAKE_BUILD_TYPE` should be set to `Release`. (Default: unset)
+- Variable `CMAKE_INSTALL_PREFIX` controls where to install clingo-dl. (Default: `/usr/local/bin`)
+
+Cmake's `-L` option can be used to get an overview over the variables that can be set for building clingo-dl.
+To get clingo-dl specific options, run
 
     cmake -H<SOURCE_DIR> -B<BUILD_DIR> -DCMAKE_BUILD_TYPE=Release -LH
-    
-or, to also print important cmake specific configuration variables
+
+or, to also print important cmake specific configuration variables, run
 
     cmake -H<SOURCE_DIR> -B<BUILD_DIR> -DCMAKE_BUILD_TYPE=Release -LAH
 
-Options and variables can be passed to
-cmake on the command line using `-D<VARIABLE>=<VALUE>` or by editing
-`<BUILD_DIR>/CMakeCache.txt` after running cmake.
+Options and variables can be passed to cmake on the command line using `-D<VARIABLE>=<VALUE>`
+or by editing `<BUILD_DIR>/CMakeCache.txt` after running cmake.
 
-In the following, the most important options to control the build are listed.
-
-### Generic Options
-
-- Variable `CMAKE_BUILD_TYPE` should be set to `Release`.
-- Variable `CMAKE_INSTALL_PREFIX` controls where to install clingo-dl.
-- Option `CLINGODL_MANAGE_RPATH` controls how to find libraries on platforms
-  where this is supported, like Linux, macOS, or BSD but not Windows. This
-  option should be enabled if clingo-dl is installed in a non-default location,
-  like the users home directory; otherwise it has no effect.
-  (Default: `ON`)
-
-### Python and Lua Support
-
-- TODO
+[gcc]: https://gcc.gnu.org/
+[clang]: http://clang.llvm.org/
+[msvc]: https://www.visualstudio.com/
+[clingo]: https://github.com/potassco/clingo/
+[cmake]: https://www.cmake.org/
+[python]: https://www.python.org/

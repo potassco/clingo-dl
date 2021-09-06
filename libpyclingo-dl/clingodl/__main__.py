@@ -16,7 +16,7 @@ class Application(clingo.Application):
     '''
     def __init__(self, name):
         self.program_name = name
-        self.version = "1.2.1"
+        self.version = "1.3.0"
         self.__theory = ClingoDLTheory()
 
     def register_options(self, options):

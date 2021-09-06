@@ -1,6 +1,8 @@
 # Changes
 
-## clingo-dl 1.2.1
+## clingo-dl 1.3.0
+  * extended optimization algorithm
+  * large code refactoring
 
 ## clingo-dl 1.2.0
   * update to clingo 5.5.0
