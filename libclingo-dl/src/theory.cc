@@ -22,5 +22,35 @@
 //
 // }}}
 
-#define CATCH_CONFIG_MAIN
-#include "catch.hpp"
+#include "clingo-dl/theory.hh"
+
+namespace ClingoDL {
+
+namespace {
+
+//! Epsilon value for floating point arithmetics.
+constexpr double DOUBLE_EPSILON = 0.00001;
+
+//! Epsilon value for integral numbers.
+template <class T, typename std::enable_if<std::is_integral_v<T>, bool>::type = true>
+[[nodiscard]] T epsilon_() {
+    return 1;
+}
+
+//! Epsilon value for floating point numbers.
+template <class T, typename std::enable_if<std::is_floating_point_v<T>, bool>::type = true>
+[[nodiscard]] T epsilon_() {
+    return DOUBLE_EPSILON;
+}
+
+} // namespace
+
+template <class T>
+T epsilon() {
+    return epsilon_<T>();
+}
+
+template int epsilon<int>();
+template double epsilon<double>();
+
+} // namespace ClingoDL

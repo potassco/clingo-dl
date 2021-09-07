@@ -4,19 +4,29 @@ set(header-group
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl.h")
 source_group("${ide_header_group}" FILES ${header-group})
 set(header-group-clingo-dl
-    "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/app.hh"
+    "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/config.hh"
+    "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/graph.hh"
+    "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/parsing.hh"
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/propagator.hh"
+    "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/theory.hh"
     "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/util.hh")
 source_group("${ide_header_group}\\clingo-dl" FILES ${header-group-clingo-dl})
+set(header-group-clingo-dl-impl
+    "${CMAKE_CURRENT_SOURCE_DIR}/clingo-dl/impl/util.hh")
+source_group("${ide_header_group}\\clingo-dl\\impl" FILES ${header-group-clingo-dl-impl})
 set(header
     ${header-group}
-    ${header-group-clingo-dl})
+    ${header-group-clingo-dl}
+    ${header-group-clingo-dl-impl})
 # ]]]
 # [[[source: src
 set(ide_source_group "Source Files")
 set(source-group
     "${CMAKE_CURRENT_SOURCE_DIR}/src/clingo-dl.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/propagator.cc")
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/graph.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/parsing.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/propagator.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/theory.cc")
 source_group("${ide_source_group}" FILES ${source-group})
 set(source
     ${source-group})
@@ -45,6 +55,9 @@ add_library(libclingo-dl ${clingodl_lib_type})
 target_sources(libclingo-dl ${clingodl_private_scope_} ${header} ${source})
 target_include_directories(libclingo-dl ${clingodl_public_scope_} "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
 target_compile_definitions(libclingo-dl ${clingodl_private_scope_} CLINGODL_BUILD_LIBRARY)
+if (CLINGODL_CROSSCHECK)
+    target_compile_definitions(libclingo-dl PUBLIC "CLINGODL_CROSSCHECK")
+endif()
 
 if (NOT CLINGODL_BUILD_STATIC AND CLINGODL_BUILD_SHARED AND NOT clingodl_build_interface)
     set_target_properties(libclingo-dl PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -90,6 +103,7 @@ if (CLINGODL_BUILD_TESTS)
     target_include_directories(libclingo-dl_t PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
     target_compile_definitions(libclingo-dl_t PUBLIC CLINGODL_NO_VISIBILITY)
     target_link_libraries(libclingo-dl_t PUBLIC libclingo)
+    target_compile_definitions(libclingo-dl_t PUBLIC "CLINGODL_CROSSCHECK")
     set_target_properties(libclingo-dl_t PROPERTIES
         OUTPUT_NAME clingo-dl_t
         LIBRARY_OUTPUT_NAME clingo-dl_t
