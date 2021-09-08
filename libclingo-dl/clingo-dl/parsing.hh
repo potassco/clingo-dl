@@ -40,8 +40,7 @@ term {
   - : 3, unary
 };
 &__diff_h/0 : term, {<=,>=,<,>,=,!=}, term, head;
-&__diff_b/0 : term, {<=,>=,<,>,=,!=}, term, body;
-&show_assignment/0 : term, directive
+&__diff_b/0 : term, {<=,>=,<,>,=,!=}, term, body
 }.)";
 
 //! Throw a syntax error with the given message.

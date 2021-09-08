@@ -212,8 +212,7 @@ TEST_CASE("solving", "[clingo]") { // NOLINT
                 "#program base.\n"
                 "1 { a; b } 1. &diff { a - b } <= 3.\n"
                 "&diff { 0 - a } <= -5 :- a.\n"
-                "&diff { 0 - b } <= -7 :- b.\n"
-                "&show_assignment{}.\n");
+                "&diff { 0 - b } <= -7 :- b.\n");
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
             auto result = solve(theory, ctl);
@@ -231,8 +230,7 @@ TEST_CASE("solving", "[clingo]") { // NOLINT
             REQUIRE(clingodl_register(theory, ctl.to_c()));
             parse_program(theory, ctl,
                 "#program base.\n"
-                "{ a }. &diff { b } != 5 :- not a.\n"
-                "&show_assignment{}.\n");
+                "{ a }. &diff { b } != 5 :- not a.\n");
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
             auto result = solve(theory, ctl);
@@ -244,8 +242,7 @@ TEST_CASE("solving", "[clingo]") { // NOLINT
             parse_program(theory, ctl,
                 "#program base.\n"
                 "&diff { 0 - a } <= -5.\n"
-                "&diff { 0 - b } <= -10.\n"
-                "&show_assignment{}.\n");
+                "&diff { 0 - b } <= -10.\n");
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
             auto result = solve(theory, ctl);
