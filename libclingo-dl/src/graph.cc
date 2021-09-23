@@ -63,6 +63,8 @@ void ThreadStatistics::accu(ThreadStatistics const &x) {
 template <typename T>
 struct Graph<T>::Vertex {
     using value_t = T;
+    static constexpr auto min_value = std::numeric_limits<value_t>::lowest();
+    static constexpr auto max_value = std::numeric_limits<value_t>::max();
     using PotentialStack = std::vector<std::pair<vertex_t, value_t>>;
 
     //! Return true if the vertex has a value assigned.
@@ -74,22 +76,26 @@ struct Graph<T>::Vertex {
         return potential_stack.back().second;
     }
 
-    VertexIndexVec outgoing;           //!< Outgoing edges from this vertex that are true.
-    VertexIndexVec incoming;           //!< Incoming edges to this vertex that are true.
-    VertexIndexVec candidate_incoming; //!< Edges that might become incoming edges.
-    VertexIndexVec candidate_outgoing; //!< Edges that might become outgoing edges.
-    PotentialStack potential_stack;    //!< Vector of pairs of level and potential.
-    value_t cost_from{0};              //!< Costs for traversals of the original graph.
-    value_t cost_to{0};                //!< Costs for traversals of the transposed graph.
-    vertex_t offset{0};                //!< Offset in the cost heap.
-    edge_t path_from{0};               //!< Path pointers for traversals of the original graph.
-    edge_t path_to{0};                 //!< Path pointers for traversals of the transposed graph.
-    vertex_t degree_out{0};            //!< Outgoing degree of candidate edges.
-    vertex_t degree_in{0};             //!< Incoming degree of candidate edges.
-    vertex_t visited_from{0};          //!< Either a flag to mark the vertex as visited or its depth first index.
-    bool visited_to{false};            //!< A flag to mark the vertex as visited for traversals of the transposed graph.
-    bool relevant_from{false};         //!< A flag to mark the vertex as visited for traversals of the original graph.
-    bool relevant_to{false};           //!< A flag to mark the vertex as visited for traversals of the transposed graph.
+    VertexIndexVec outgoing;               //!< Outgoing edges from this vertex that are true.
+    VertexIndexVec incoming;               //!< Incoming edges to this vertex that are true.
+    VertexIndexVec candidate_incoming;     //!< Edges that might become incoming edges.
+    VertexIndexVec candidate_outgoing;     //!< Edges that might become outgoing edges.
+    PotentialStack potential_stack;        //!< Vector of pairs of level and potential.
+    value_t cost_from{0};                  //!< Costs for traversals of the original graph.
+    value_t cost_to{0};                    //!< Costs for traversals of the transposed graph.
+    value_t bound_lower_{min_value};       //!< The lower bound of a vertex.
+    value_t upper_lower_{max_value};       //!< The upper bound of a vertex.
+    edge_t path_lower{invalid_edge_index}; //!< Path pointers for determining the lower bound.
+    edge_t path_upper{invalid_edge_index}; //!< Path pointers for determining the upper bound.
+    edge_t path_from{0};                   //!< Path pointers for traversals of the original graph.
+    edge_t path_to{0};                     //!< Path pointers for traversals of the transposed graph.
+    vertex_t offset{0};                    //!< Offset in the cost heap.
+    vertex_t degree_out{0};                //!< Outgoing degree of candidate edges.
+    vertex_t degree_in{0};                 //!< Incoming degree of candidate edges.
+    vertex_t visited_from{0};              //!< Either a flag to mark the vertex as visited or its depth first index.
+    bool visited_to{false};                //!< A flag to mark the vertex as visited for traversals of the transposed graph.
+    bool relevant_from{false};             //!< A flag to mark the vertex as visited for traversals of the original graph.
+    bool relevant_to{false};               //!< A flag to mark the vertex as visited for traversals of the transposed graph.
 };
 
 //!< Thread specific information for edges.
@@ -281,7 +287,8 @@ struct Graph<T>::Impl : Graph {
     //! that there are no more shorted paths through relevant vertices any
     //! more. A vertex is relevant if it was reached via a shortest path
     //! containing a relevant vertex. By construction, the graph always
-    //! contains a relevant vertex connected to the starting node via an edge.
+    //! contains a relevant vertex connected to the starting vertex via an
+    //! edge.
     //!
     //! The function also counts the in and out degrees of visited relevant
     //! nodes. The direction with the smaller degree can then be used to try to
@@ -348,6 +355,56 @@ struct Graph<T>::Impl : Graph {
             }
         }
         return {relevant_degree_out, relevant_degree_in};
+    }
+
+    void propagate_bounds(edge_t uv_idx) {
+        // TODO: the in/out degrees can be counted as above
+        auto u_idx = from(uv_idx);
+        // TODO: the zero node has to be exempt from this check and needs to receive a lower bound of 0
+        if (path_bound(u_idx) == invalid_edge_index) {
+            return;
+        }
+        assert(visited_set().empty() && costs_heap_.empty());
+        auto v_idx = to(uv_idx);
+        auto bound_uv = bound_value(u_idx) + edges_[uv_idx].weight;
+        if (path_bound(v_idx) == invalid_edge_index || bound_uv < bound_value(v_idx)) {
+            visited(v_idx) = true;
+            visited_set().push_back(v_idx);
+            cost(v_idx) = 0;
+            costs_heap_.push(*this, v_idx);
+            // TODO: previous bound/path values have to be made backtrackable
+            bound_value(v_idx) = bound_uv;
+            bound_path(v_idx) = uv_idx;
+        }
+        while (!costs_heap_.empty()) {
+            auto s_idx = costs_heap_.pop(*this);
+            for (auto &st_idx : out(s_idx)) {
+                // TODO: maybe use a separate counter
+                // ++propagation_cost();
+                auto &st = edges_[st_idx];
+                auto t_idx = to(st_idx);
+                // NOTE: We have to make sure that weights are positive for the
+                // algorithm to run correctly. We can use the potentials to do
+                // this. Explicitely using uv.from and uv.to is intended here.
+                auto c = cost(t_idx) + vertices_[st.from].potential() + st.weight - vertices_[st.to].potential();
+                auto bound_st = bound_value(s_idx) + st.weight;
+                assert(vertices_[st.from].potential() + st.weight - vertices_[st.to].potential() >= 0);
+                if ((!visited(t_idx) || less(c, false, t_idx)) && (path_bound(t_idx) == invalid_edge_index || bound_st < bound_value(t_idx))) {
+                    cost(t_idx) = c;
+                    if (!visited(t_idx)) {
+                        visited_set().push_back(to(st_idx));
+                        visited(t_idx) = true;
+                        costs_heap_.push(*this, t_idx);
+                        // TODO: previous bound/path values have to be made backtrackable
+                    }
+                    else {
+                        costs_heap_.decrease(*this, t_idx);
+                    }
+                    path_bound(t_idx) = st_idx;
+                    bound_value(t_idx) = bound_st;
+                }
+            }
+        }
     }
 
 #ifdef CLINGODL_CROSSCHECK
