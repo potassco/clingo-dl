@@ -337,6 +337,49 @@ struct Graph<T>::Impl : Graph {
         }
     }
 
+#ifdef CLINGODL_CROSSCHECK
+    //! Compute shortests paths using the Bellman Ford algorithm.
+    std::optional<std::unordered_map<vertex_t, value_t>> bellman_ford_(std::vector<edge_t> const &edges, vertex_t source) {
+        std::unordered_map<vertex_t, T> costs;
+        costs[source] = 0;
+        vertex_t vertices = 0;
+        for (auto &vertex : vertices_) {
+            if (vertex.defined()) {
+                ++vertices;
+            }
+        }
+        for (vertex_t i = 0; i < vertices; ++i) {
+            for (auto const &uv_idx : edges) {
+                auto &uv = edges_[uv_idx];
+                auto u_cost = costs.find(from(uv_idx));
+                if (u_cost != costs.end()) {
+                    auto u_idx = to(uv_idx);
+                    auto v_cost = costs.find(u_idx);
+                    auto dist = u_cost->second + uv.weight;
+                    if (v_cost == costs.end()) {
+                        costs[u_idx] = dist;
+                    }
+                    else if (dist < v_cost->second) {
+                        v_cost->second = dist;
+                    }
+                }
+            }
+        }
+        for (auto const &uv_idx : edges) {
+            auto &uv = edges_[uv_idx];
+            auto u_cost = costs.find(from(uv_idx));
+            if (u_cost != costs.end()) {
+                auto v_cost = costs.find(to(uv_idx));
+                auto dist = u_cost->second + uv.weight;
+                if (dist < v_cost->second) {
+                    return std::nullopt;
+                }
+            }
+        }
+        return costs;
+    }
+#endif
+
     //! Compute shortests paths starting from the given vertex.
     //!
     //! This function counts relevant nodes and stops as soon as it determines
@@ -421,12 +464,10 @@ struct Graph<T>::Impl : Graph {
             bound_value(u_idx) = 0;
             bound_visited(u_idx) = true;
             bound_visited_set().push_back(u_idx);
-            bound_trail().emplace_back(std::make_tuple(u_idx, invalid_edge_index, bound_value(u_idx)));
         }
         if (!bound_visited(u_idx)) {
             return;
         }
-        bool debug = false;
         assert(visited_set().empty() && costs_heap_.empty());
         auto v_idx = to(uv_idx);
         auto bound_uv = bound_value(u_idx) + edges_[uv_idx].weight;
@@ -435,9 +476,11 @@ struct Graph<T>::Impl : Graph {
             costs_heap_.push(*this, v_idx);
             visited(v_idx) = true;
             visited_set().push_back(v_idx);
+            if (bound_visited(v_idx)) {
+                bound_trail().emplace_back(std::make_tuple(v_idx, bound_path(v_idx), bound_value(v_idx)));
+            }
             bound_value(v_idx) = bound_uv;
             bound_path(v_idx) = uv_idx;
-            debug = true;
         }
         std::vector<value_t> value_set;
         while (!costs_heap_.empty()) {
@@ -449,16 +492,18 @@ struct Graph<T>::Impl : Graph {
                 auto t_idx = to(st_idx);
                 // NOTE: We have to make sure that weights are positive for the
                 // algorithm to run correctly. We can use the potentials to do
-                // this. Explicitely using uv.from and uv.to is intended here.
+                // this. Explicitely using st.from and st.to is intended here.
                 auto c = cost(s_idx) + vertices_[st.from].potential() + st.weight - vertices_[st.to].potential();
                 auto bound_st = bound_value(s_idx) + st.weight;
                 assert(vertices_[st.from].potential() + st.weight - vertices_[st.to].potential() >= 0);
                 if ((!visited(t_idx) || less(c, false, t_idx)) && (!bound_visited(t_idx) || bound_st < bound_value(t_idx))) {
                     cost(t_idx) = c;
                     if (!visited(t_idx)) {
-                        visited_set().push_back(to(st_idx));
-                        bound_trail().emplace_back(std::make_tuple(t_idx, bound_path(st_idx), bound_value(t_idx)));
                         visited(t_idx) = true;
+                        visited_set().push_back(t_idx);
+                        if (bound_visited(t_idx)) {
+                            bound_trail().emplace_back(std::make_tuple(t_idx, bound_path(t_idx), bound_value(t_idx)));
+                        }
                         costs_heap_.push(*this, t_idx);
                     }
                     else {
@@ -476,9 +521,19 @@ struct Graph<T>::Impl : Graph {
             }
             visited(vertex_idx) = false;
         }
-        if (debug) {
-            std::cerr << "  TODO: check whether the " << visited_set().size() << " vertices have been propagated correctly" << std::endl;
+#ifdef CLINGODL_CROSSCHECK
+        if (!visited_set().empty()) {
+            if constexpr (std::is_same_v<D, From>) {
+                auto costs = bellman_ford_(changed_edges_, 0);
+                assert(costs.has_value());
+                assert(costs->size() == bound_visited_set().size());
+                for (auto [vertex_idx, value] : *costs) {
+                    assert(bound_visited(vertex_idx));
+                    assert(bound_value(vertex_idx) == value);
+                }
+            }
         }
+#endif
         visited_set().clear();
     }
 
@@ -671,6 +726,9 @@ bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx) {
     static_cast<void>(ctl);
     static_cast<Impl<From> *>(this)->propagate_bounds(uv_idx);
     static_cast<Impl<To> *>(this)->propagate_bounds(uv_idx);
+    // TODO: with the lower and upper bounds computed, we can now make edges
+    // false. This can be done in the same manner as with the full propagation
+    // algorithm.
     return true;
 }
 
@@ -742,7 +800,7 @@ bool Graph<T>::check_cycle_(Clingo::PropagateControl &ctl, edge_t uv_idx) {
         changed_edges_.emplace_back(uv_idx);
 #ifdef CLINGODL_CROSSCHECK
         // check that the graph does not have a cycle
-        assert(bellman_ford_(changed_edges_, uv.from).has_value());
+        assert(m.bellman_ford_(changed_edges_, uv.from).has_value());
 #endif
         return true;
     }
@@ -1031,8 +1089,9 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
         auto cost_xv = v.cost_from + v.potential() - x.potential();
         auto cost_uv = cost_uy + cost_xv - xy.weight;
 #ifdef CLINGODL_CROSSCHECK
-        auto bf_costs_from_u = bellman_ford_(changed_edges_, uv.from);
-        auto bf_costs_from_x = bellman_ford_(changed_edges_, xy.from);
+        auto &m = *static_cast<Impl<From> *>(this);
+        auto bf_costs_from_u = m.bellman_ford_(changed_edges_, uv.from);
+        auto bf_costs_from_x = m.bellman_ford_(changed_edges_, xy.from);
         auto bf_cost_uy = bf_costs_from_u->find(xy.to);
         auto bf_cost_xv = bf_costs_from_x->find(uv.to);
         static_cast<void>(bf_cost_uy);
@@ -1047,7 +1106,7 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
             // make sure that the graph does not have a negative cycle even if it contains the edge
             auto edges = changed_edges_;
             edges.emplace_back(uv_idx);
-            assert(bellman_ford_(edges, uv.from).has_value());
+            assert(m.bellman_ford_(edges, uv.from).has_value());
 #endif
             ++stats_.true_edges;
             disable_edge(uv_idx);
@@ -1122,53 +1181,12 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
         // make sure that the graph does not have a negative cycle even if it contains the edge
         auto edges = changed_edges_;
         edges.emplace_back(uv_idx);
-        assert(bellman_ford_(edges, uv.from).has_value());
+        auto &m = *static_cast<Impl<From> *>(this);
+        assert(m.bellman_ford_(edges, uv.from).has_value());
 #endif
     }
     return false;
 }
-
-#ifdef CLINGODL_CROSSCHECK
-template <typename T>
-std::optional<std::unordered_map<vertex_t, T>> Graph<T>::bellman_ford_(std::vector<vertex_t> const &edges, vertex_t source) {
-    std::unordered_map<vertex_t, T> costs;
-    costs[source] = 0;
-    vertex_t vertices = 0;
-    for (auto &vertex : vertices_) {
-        if (vertex.defined()) {
-            ++vertices;
-        }
-    }
-    for (vertex_t i = 0; i < vertices; ++i) {
-        for (auto const &uv_idx : edges) {
-            auto &uv = edges_[uv_idx];
-            auto u_cost = costs.find(uv.from);
-            if (u_cost != costs.end()) {
-                auto v_cost = costs.find(uv.to);
-                auto dist = u_cost->second + uv.weight;
-                if (v_cost == costs.end()) {
-                    costs[uv.to] = dist;
-                }
-                else if (dist < v_cost->second) {
-                    v_cost->second = dist;
-                }
-            }
-        }
-    }
-    for (auto const &uv_idx : edges) {
-        auto &uv = edges_[uv_idx];
-        auto u_cost = costs.find(uv.from);
-        if (u_cost != costs.end()) {
-            auto v_cost = costs.find(uv.to);
-            auto dist = u_cost->second + uv.weight;
-            if (dist < v_cost->second) {
-                return std::nullopt;
-            }
-        }
-    }
-    return costs;
-}
-#endif
 
 template <typename T>
 void Graph<T>::set_potential_(Vertex &vtx, level_t level, T potential) {

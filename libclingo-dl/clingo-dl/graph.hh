@@ -170,10 +170,6 @@ private:
     [[nodiscard]] bool propagate_edge_true_(edge_t uv_idx, edge_t xy_idx);
     //! Make edge u -> v false, if there is a negative cycle u ->* v -> u.
     [[nodiscard]] bool propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret);
-#ifdef CLINGODL_CROSSCHECK
-    //! Make edge u -> v false, if there is a negative cycle u ->* v -> u.
-    std::optional<std::unordered_map<vertex_t, value_t>> bellman_ford_(std::vector<edge_t> const &edges, vertex_t source);
-#endif
     //! Sets the potential of a vertex and ensures that it can be backtracked.
     void set_potential_(Vertex &vtx, level_t level, value_t potential);
     //! Returns the current decision level.
