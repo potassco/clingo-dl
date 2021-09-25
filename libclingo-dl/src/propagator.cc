@@ -780,21 +780,14 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
     sort_edges(conf_.get_sort_mode(thread_id), state);
     for (auto edge : state.todo_edges) {
         if (state.graph.edge_is_enabled(edge)) {
-            // check for conflicts
-            if (!state.graph.add_edge(ctl, edge)) {
-                return;
-            }
-
             // propagate edges
             bool propagate = (state.graph.mode() >= PropagationMode::Strong) ||
                 (level < state.propagate_root) || (
                     state.propagate_budget > 0 &&
                     state.graph.can_propagate() &&
                     state.stats.propagate_cost_add + state.propagate_budget > state.stats.propagate_cost_from + state.stats.propagate_cost_to);
-            if (!propagate) {
-                state.graph.disable_propagate();
-            }
-            else if (!state.graph.propagate(edge, ctl)) {
+            // check for conflicts
+            if (!state.graph.add_edge(ctl, edge, propagate)) {
                 return;
             }
         }

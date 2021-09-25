@@ -111,28 +111,37 @@ public:
     //! Propagation can be disabled on a decision level. It will stay disabled
     //! on higher decision level and reset during backtracking.
     [[nodiscard]] bool can_propagate() const;
-    //! Disable propagation on the current and higher decision levels.
-    //!
-    //! See also can_propagate().
-    void disable_propagate();
     //! Make sure that the trail contains the given decision level.
     void ensure_decision_level(level_t level, bool enable_propagate);
     //! Add an edge to the graph and return false if the edge induces a negative cycle.
     //!
     //! This function assumes that the graph is not conflicting.
-    [[nodiscard]] bool add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx);
-    //! Fully propagates the graph after adding the given edge.
-    //!
-    //! Afterward any of the remaining edges can be added to the graph without
-    //! causing a conflict. The function assumes that the graph was fully
-    //! propagated before the edge was added.
-    [[nodiscard]] bool propagate(edge_t xy_idx, Clingo::PropagateControl &ctl);
+    [[nodiscard]] bool add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx, bool propagate);
     //! Backtracks the last decision level established with ensure_decision_level().
     void backtrack();
     //! Return the configured propagation mode.
     [[nodiscard]] PropagationMode mode() const;
 
 private:
+    //! Checks if there is a cycle after adding the given edge.
+    //!
+    //! The function does not clean up information about found shortest paths.
+    //!
+    //! \note Has to be called during add_edge().
+    bool check_cycle_(Clingo::PropagateControl &ctl, edge_t uv_idx);
+    //! Perform configured simple propagations after adding the given edge.
+    //!
+    //! \note Has to be called during add_edge() and uses temporary state
+    //! established during check_cycle_().
+    bool propagate_simple_(Clingo::PropagateControl &ctl, edge_t uv_idx);
+    //! Fully propagates the graph after adding the given edge.
+    //!
+    //! Afterward any of the remaining edges can be added to the graph without
+    //! causing a conflict. The function assumes that the graph was fully
+    //! propagated before the edge was added.
+    //!
+    //! \note Has to be called during add_edge().
+    [[nodiscard]] bool propagate_full_(Clingo::PropagateControl &ctl, edge_t xy_idx);
     //! Traverse the incoming edges of a vertex.
     //!
     //! Edges that were disabled will be removed during the traversal. The
