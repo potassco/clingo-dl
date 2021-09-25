@@ -38,7 +38,8 @@ enum class PropagationMode {
     Trivial  = 1, //!< Check inverse constraits.
     Weak     = 2, //!< Perform weak propagation.
     WeakPlus = 3, //!< Perform weak propagation with some extra effort.
-    Strong   = 4  //!< Perform full propagation.
+    Zero     = 4, //!< Perform propagation through zero node.
+    Strong   = 5  //!< Perform full propagation.
 };
 
 //! Enumeration to configure sorting of edges before propagation.

@@ -83,8 +83,8 @@ struct Graph<T>::Vertex {
     PotentialStack potential_stack;        //!< Vector of pairs of level and potential.
     value_t cost_from{0};                  //!< Costs for traversals of the original graph.
     value_t cost_to{0};                    //!< Costs for traversals of the transposed graph.
-    value_t bound_lower_{min_value};       //!< The lower bound of a vertex.
-    value_t upper_lower_{max_value};       //!< The upper bound of a vertex.
+    value_t bound_lower{min_value};       //!< The lower bound of a vertex.
+    value_t bound_upper{max_value};       //!< The upper bound of a vertex.
     edge_t path_lower{invalid_edge_index}; //!< Path pointers for determining the lower bound.
     edge_t path_upper{invalid_edge_index}; //!< Path pointers for determining the upper bound.
     edge_t path_from{0};                   //!< Path pointers for traversals of the original graph.
@@ -94,6 +94,8 @@ struct Graph<T>::Vertex {
     vertex_t degree_in{0};                 //!< Incoming degree of candidate edges.
     vertex_t visited_from{0};              //!< Either a flag to mark the vertex as visited or its depth first index.
     bool visited_to{false};                //!< A flag to mark the vertex as visited for traversals of the transposed graph.
+    bool visited_lower{false};             //!< A flag to mark the vertex as visited for traversals of the original graph.
+    bool visited_upper{false};             //!< A flag to mark the vertex as visited for traversals of the transposed graph.
     bool relevant_from{false};             //!< A flag to mark the vertex as visited for traversals of the original graph.
     bool relevant_to{false};               //!< A flag to mark the vertex as visited for traversals of the transposed graph.
 };
@@ -113,6 +115,10 @@ struct Graph<T>::TrailEntry {
     index_t vertex_offset;   //!< Index up to which to backtrack changed vertices.
     index_t edge_offset;     //!< Index up to which to backtrack changed edges.
     index_t disabled_offset; //!< Index up to which to backtrack inactive edges.
+    index_t visited_lower_offset;    // TODO TODO TODO
+    index_t visited_upper_offset;    // TODO TODO TODO
+    index_t lower_value_offset;    // TODO TODO TODO
+    index_t upper_value_offset;    // TODO TODO TODO
     bool can_propagate;      //!< Whether propagation was possible on this level.
 };
 
@@ -158,6 +164,26 @@ struct Graph<T>::Impl : Graph {
         }
     }
 
+    //! The bound of a vertex.
+    value_t &bound_value(vertex_t idx) {
+        if constexpr (std::is_same_v<D, From>) {
+            return vertices_[idx].bound_lower;
+        }
+        else {
+            return vertices_[idx].bound_upper;
+        }
+    }
+
+    //! The bound changes during bound propagation.
+    BoundTrailVec &bound_trail() {
+        if constexpr (std::is_same_v<D, From>) {
+            return lower_trail_;
+        }
+        else {
+            return upper_trail_;
+        }
+    }
+
     //! The end point of the given edge.
     vertex_t to(edge_t idx) {
         if constexpr (std::is_same_v<D, From>) {
@@ -198,6 +224,16 @@ struct Graph<T>::Impl : Graph {
         }
     }
 
+    //! The edge that was used to reach the given vertex when computing bounds.
+    edge_t &bound_path(vertex_t idx) {
+        if constexpr (std::is_same_v<D, From>) {
+            return vertices_[idx].path_lower;
+        }
+        else {
+            return vertices_[idx].path_upper;
+        }
+    }
+
     //! Flag indicating whether the vertex has been visited.
     //!
     //! \note This is a integer here because it is also used as a dfs index
@@ -208,6 +244,16 @@ struct Graph<T>::Impl : Graph {
         }
         else {
             return vertices_[idx].visited_to;
+        }
+    }
+
+    //! Flag indicating whether the vertex has been visited during bound traversals.
+    bool &bound_visited(vertex_t idx) {
+        if constexpr(std::is_same_v<D, From>) {
+            return vertices_[idx].visited_lower;
+        }
+        else {
+            return vertices_[idx].visited_upper;
         }
     }
 
@@ -228,6 +274,16 @@ struct Graph<T>::Impl : Graph {
         }
         else {
             return visited_to_;
+        }
+    }
+
+    //! The set of all visited vertices.
+    std::vector<vertex_t> &bound_visited_set() {
+        if constexpr (std::is_same_v<D, From>) {
+            return visited_lower_;
+        }
+        else {
+            return visited_upper_;
         }
     }
 
@@ -360,22 +416,30 @@ struct Graph<T>::Impl : Graph {
     void propagate_bounds(edge_t uv_idx) {
         // TODO: the in/out degrees can be counted as above
         auto u_idx = from(uv_idx);
-        // TODO: the zero node has to be exempt from this check and needs to receive a lower bound of 0
-        if (path_bound(u_idx) == invalid_edge_index) {
+        // the zero node is reached with zero cost
+        if (u_idx == 0 && !bound_visited(u_idx)) {
+            bound_value(u_idx) = 0;
+            bound_visited(u_idx) = true;
+            bound_visited_set().push_back(u_idx);
+            bound_trail().emplace_back(std::make_tuple(u_idx, invalid_edge_index, bound_value(u_idx)));
+        }
+        if (!bound_visited(u_idx)) {
             return;
         }
+        bool debug = false;
         assert(visited_set().empty() && costs_heap_.empty());
         auto v_idx = to(uv_idx);
         auto bound_uv = bound_value(u_idx) + edges_[uv_idx].weight;
-        if (path_bound(v_idx) == invalid_edge_index || bound_uv < bound_value(v_idx)) {
-            visited(v_idx) = true;
-            visited_set().push_back(v_idx);
+        if (!bound_visited(v_idx) || bound_uv < bound_value(v_idx)) {
             cost(v_idx) = 0;
             costs_heap_.push(*this, v_idx);
-            // TODO: previous bound/path values have to be made backtrackable
+            visited(v_idx) = true;
+            visited_set().push_back(v_idx);
             bound_value(v_idx) = bound_uv;
             bound_path(v_idx) = uv_idx;
+            debug = true;
         }
+        std::vector<value_t> value_set;
         while (!costs_heap_.empty()) {
             auto s_idx = costs_heap_.pop(*this);
             for (auto &st_idx : out(s_idx)) {
@@ -386,25 +450,36 @@ struct Graph<T>::Impl : Graph {
                 // NOTE: We have to make sure that weights are positive for the
                 // algorithm to run correctly. We can use the potentials to do
                 // this. Explicitely using uv.from and uv.to is intended here.
-                auto c = cost(t_idx) + vertices_[st.from].potential() + st.weight - vertices_[st.to].potential();
+                auto c = cost(s_idx) + vertices_[st.from].potential() + st.weight - vertices_[st.to].potential();
                 auto bound_st = bound_value(s_idx) + st.weight;
                 assert(vertices_[st.from].potential() + st.weight - vertices_[st.to].potential() >= 0);
-                if ((!visited(t_idx) || less(c, false, t_idx)) && (path_bound(t_idx) == invalid_edge_index || bound_st < bound_value(t_idx))) {
+                if ((!visited(t_idx) || less(c, false, t_idx)) && (!bound_visited(t_idx) || bound_st < bound_value(t_idx))) {
                     cost(t_idx) = c;
                     if (!visited(t_idx)) {
                         visited_set().push_back(to(st_idx));
+                        bound_trail().emplace_back(std::make_tuple(t_idx, bound_path(st_idx), bound_value(t_idx)));
                         visited(t_idx) = true;
                         costs_heap_.push(*this, t_idx);
-                        // TODO: previous bound/path values have to be made backtrackable
                     }
                     else {
                         costs_heap_.decrease(*this, t_idx);
                     }
-                    path_bound(t_idx) = st_idx;
+                    bound_path(t_idx) = st_idx;
                     bound_value(t_idx) = bound_st;
                 }
             }
         }
+        for (auto &vertex_idx : visited_set()) {
+            if (!bound_visited(vertex_idx)) {
+                bound_visited(vertex_idx) = true;
+                bound_visited_set().push_back(vertex_idx);
+            }
+            visited(vertex_idx) = false;
+        }
+        if (debug) {
+            std::cerr << "  TODO: check whether the " << visited_set().size() << " vertices have been propagated correctly" << std::endl;
+        }
+        visited_set().clear();
     }
 
 #ifdef CLINGODL_CROSSCHECK
@@ -524,6 +599,11 @@ bool Graph<T>::can_propagate() const {
 }
 
 template <typename T>
+void Graph<T>::disable_propagate() {
+    changed_trail_.back().can_propagate = false;
+}
+
+template <typename T>
 void Graph<T>::ensure_decision_level(level_t level, bool enable_propagate) {
     // initialize the trail
     if (changed_trail_.empty() || current_decision_level_() < level) {
@@ -531,12 +611,16 @@ void Graph<T>::ensure_decision_level(level_t level, bool enable_propagate) {
                                   numeric_cast<index_t>(changed_vertices_.size()),
                                   numeric_cast<index_t>(changed_edges_.size()),
                                   numeric_cast<index_t>(disabled_edges_.size()),
+                                  numeric_cast<index_t>(visited_lower_.size()),
+                                  numeric_cast<index_t>(visited_upper_.size()),
+                                  numeric_cast<index_t>(lower_trail_.size()),
+                                  numeric_cast<index_t>(upper_trail_.size()),
                                   can_propagate() && enable_propagate});
     }
 }
 
 template <typename T>
-bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx, bool propagate) { // NOLINT2
+bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLINT2
     // This function adds an edge to the graph and returns false if the edge
     // induces a negative cycle.
     //
@@ -563,15 +647,31 @@ bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx, bool propa
     visited_from_.clear();
     costs_heap_.clear();
 
-    // full propagation
-    if (!propagate) {
-        changed_trail_.back().can_propagate = false;
+    // propagate cycles through zero node
+    // (using equality here intentional because full and zero vertex propagation should be exclusive)
+    if (mode() == PropagationMode::Zero) {
+        consistent = consistent && propagate_zero_(ctl, uv_idx);
     }
-    else if (can_propagate()) {
+
+    // full propagation
+    if (can_propagate()) {
         consistent = consistent && propagate_full_(ctl, uv_idx);
     }
 
     return consistent;
+}
+
+template <typename T>
+bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx) {
+    static bool warn = true;
+    if (warn) {
+        std::cerr << "warning propagation through the zero node is not fully implmented yet" << std::endl;
+        warn = false;
+    }
+    static_cast<void>(ctl);
+    static_cast<Impl<From> *>(this)->propagate_bounds(uv_idx);
+    static_cast<Impl<To> *>(this)->propagate_bounds(uv_idx);
+    return true;
 }
 
 template <typename T>
@@ -832,23 +932,41 @@ template <typename T>
 
 template <typename T>
 void Graph<T>::backtrack() {
-    auto vo = changed_trail_.back().vertex_offset;
-    auto eo = changed_trail_.back().edge_offset;
-    auto io = changed_trail_.back().disabled_offset;
-    for (auto it = changed_vertices_.rbegin(), ie = changed_vertices_.rend() - vo; it != ie; ++it) {
+    auto entry = changed_trail_.back();
+    for (auto it = changed_vertices_.rbegin(), ie = changed_vertices_.rend() - entry.vertex_offset; it != ie; ++it) {
         vertices_[*it].potential_stack.pop_back();
     }
-    for (auto it = changed_edges_.rbegin(), ie = changed_edges_.rend() - eo; it != ie; ++it) {
+    for (auto it = changed_edges_.rbegin(), ie = changed_edges_.rend() - entry.edge_offset; it != ie; ++it) {
         auto &edge = edges_[*it];
         vertices_[edge.from].outgoing.pop_back();
         vertices_[edge.to].incoming.pop_back();
     }
-    for (auto it = disabled_edges_.begin() + io, ie = disabled_edges_.end(); it != ie; ++it) {
+    for (auto it = disabled_edges_.begin() + entry.disabled_offset, ie = disabled_edges_.end(); it != ie; ++it) {
         add_candidate_edge_(*it);
     }
-    changed_vertices_.resize(vo);
-    changed_edges_.resize(eo);
-    disabled_edges_.resize(io);
+    for (auto it = visited_lower_.begin() + entry.visited_lower_offset, ie = visited_lower_.end(); it != ie; ++it) {
+        vertices_[*it].visited_lower = false;
+    }
+    for (auto it = visited_upper_.begin() + entry.visited_upper_offset, ie = visited_upper_.end(); it != ie; ++it) {
+        vertices_[*it].visited_upper = false;
+    }
+    for (auto it = lower_trail_.rbegin(), ie = lower_trail_.rend() - entry.lower_value_offset; it != ie; ++it) {
+        auto &[vertex_idx, edge_idx, value] = *it;
+        vertices_[vertex_idx].path_lower = edge_idx;
+        vertices_[vertex_idx].bound_lower = value;
+    }
+    for (auto it = upper_trail_.rbegin(), ie = upper_trail_.rend() - entry.upper_value_offset; it != ie; ++it) {
+        auto &[vertex_idx, edge_idx, value] = *it;
+        vertices_[vertex_idx].path_upper = edge_idx;
+        vertices_[vertex_idx].bound_upper = value;
+    }
+    changed_vertices_.resize(entry.vertex_offset);
+    changed_edges_.resize(entry.edge_offset);
+    disabled_edges_.resize(entry.disabled_offset);
+    visited_lower_.resize(entry.visited_lower_offset);
+    visited_upper_.resize(entry.visited_upper_offset);
+    lower_trail_.resize(entry.lower_value_offset);
+    upper_trail_.resize(entry.upper_value_offset);
     changed_trail_.pop_back();
 }
 

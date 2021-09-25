@@ -339,6 +339,9 @@ bool parse_mode(const char *value, void *data) {
     else if ((rem = iequals_pre(value, "partial")) != nullptr) {
         mode = PropagationMode::Weak;
     }
+    else if ((rem = iequals_pre(value, "zero")) != nullptr) {
+        mode = PropagationMode::Zero;
+    }
     else if ((rem = iequals_pre(value, "full")) != nullptr) {
         mode = PropagationMode::Strong;
     }

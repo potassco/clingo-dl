@@ -84,6 +84,8 @@ private:
     using EdgeVec = std::vector<Edge>;        //!< A vector of edges.
     using VertexVec = std::vector<Vertex>;    //!< A vector of vertices.
     using TrailVec = std::vector<TrailEntry>; //!< The trail to backtrack per decision level changes.
+    using BoundTrailVec = std::vector<std::tuple<vertex_t, edge_t, value_t>>;
+
 public:
     Graph(ThreadStatistics &stats, EdgeVec const &edges, PropagationMode propagate);
     Graph(Graph const &other) = delete;
@@ -111,12 +113,16 @@ public:
     //! Propagation can be disabled on a decision level. It will stay disabled
     //! on higher decision level and reset during backtracking.
     [[nodiscard]] bool can_propagate() const;
+    //! Disable propagation on the current and higher decision levels.
+    //!
+    //! See also can_propagate().
+    void disable_propagate();
     //! Make sure that the trail contains the given decision level.
     void ensure_decision_level(level_t level, bool enable_propagate);
     //! Add an edge to the graph and return false if the edge induces a negative cycle.
     //!
     //! This function assumes that the graph is not conflicting.
-    [[nodiscard]] bool add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx, bool propagate);
+    [[nodiscard]] bool add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx);
     //! Backtracks the last decision level established with ensure_decision_level().
     void backtrack();
     //! Return the configured propagation mode.
@@ -134,6 +140,10 @@ private:
     //! \note Has to be called during add_edge() and uses temporary state
     //! established during check_cycle_().
     bool propagate_simple_(Clingo::PropagateControl &ctl, edge_t uv_idx);
+    //! Propagates edges to avoid cycles through the zero node.
+    //!
+    //! \note Has to be called during add_edge().
+    bool propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx);
     //! Fully propagates the graph after adding the given edge.
     //!
     //! Afterward any of the remaining edges can be added to the graph without
@@ -169,20 +179,24 @@ private:
     //! Returns the current decision level.
     [[nodiscard]] level_t current_decision_level_();
 
-    HeapType costs_heap_;                    //!< Heap used throught various algorithms.
-    std::vector<vertex_t> visited_from_;     //!< Vertices visited during traversal of the original graph.
-    std::vector<vertex_t> visited_to_;       //!< Vertices visited during traversal of the transposed graph.
-    EdgeVec const &edges_;                   //!< Reference to the edges.
-    VertexVec vertices_;                     //!< Vertex specific information.
-    std::vector<vertex_t> changed_vertices_; //!< Vertices changed in chronological order.
-    std::vector<edge_t> changed_edges_;      //!< Edges changed in chronological order.
-    TrailVec changed_trail_;                 //!< Vector recording backtrackable per decision level information.
-    std::vector<edge_t> disabled_edges_;     //!< Disabled edges in chronological order.
-    std::vector<EdgeState> edge_states_;     //!< Thread-specific per edge information.
-    std::vector<edge_t> neg_cycle_;          //!< Vector for storing negative cycles.
-    std::vector<literal_t> clause_;          //!< Vector for storing clauses.
-    ThreadStatistics &stats_;                //!< Per thread statistics.
-    PropagationMode const propagate_;        //!< The propagation mode.
+    HeapType costs_heap_;                       //!< Heap used throught various algorithms.
+    std::vector<vertex_t> visited_from_;        //!< Vertices visited during traversal of the original graph.
+    std::vector<vertex_t> visited_to_;          //!< Vertices visited during traversal of the transposed graph.
+    std::vector<vertex_t> visited_lower_; // TODO
+    std::vector<vertex_t> visited_upper_; // TODO
+    BoundTrailVec  lower_trail_; // TODO TODO TODO
+    BoundTrailVec  upper_trail_; // TODO TODO TODO
+    EdgeVec const &edges_;                      //!< Reference to the edges.
+    VertexVec vertices_;                        //!< Vertex specific information.
+    std::vector<vertex_t> changed_vertices_;    //!< Vertices changed in chronological order.
+    std::vector<edge_t> changed_edges_;         //!< Edges changed in chronological order.
+    TrailVec changed_trail_;                    //!< Vector recording backtrackable per decision level information.
+    std::vector<edge_t> disabled_edges_;        //!< Disabled edges in chronological order.
+    std::vector<EdgeState> edge_states_;        //!< Thread-specific per edge information.
+    std::vector<edge_t> neg_cycle_;             //!< Vector for storing negative cycles.
+    std::vector<literal_t> clause_;             //!< Vector for storing clauses.
+    ThreadStatistics &stats_;                   //!< Per thread statistics.
+    PropagationMode const propagate_;           //!< The propagation mode.
 };
 
 } // namespace ClingoDL
