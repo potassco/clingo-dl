@@ -360,7 +360,7 @@ TEST_CASE("solving", "[clingo]") { // NOLINT
         clingodl_destroy(theory);
     }
     SECTION("task-assignment") {
-        for (char const *mode : {"no", "inverse", "partial", "partial+", "full"}) {
+        for (char const *mode : {"no", "inverse", "partial", "partial+", "zero", "full"}) {
             for (char const *mutex : {"0", "10,100"}) {
                 for (char const *sort_edges : {"no", "weight", "potential"}) {
                     Clingo::Control ctl{{"0"}};

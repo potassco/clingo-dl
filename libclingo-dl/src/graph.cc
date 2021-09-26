@@ -486,7 +486,7 @@ struct Graph<T>::Impl : Graph {
             auto s_idx = costs_heap_.pop(*this);
             for (auto &st_idx : out(s_idx)) {
                 // TODO: maybe use a separate counter
-                // ++propagation_cost();
+                ++propagation_cost();
                 auto &st = edges_[st_idx];
                 auto t_idx = to(st_idx);
                 // NOTE: We have to make sure that weights are positive for the
@@ -537,9 +537,6 @@ struct Graph<T>::Impl : Graph {
             }
         }
 #endif
-        // TODO: do not clear this set here yet it is needed to loop over the
-        // relevant vertices and can be cleared later.
-        visited_set().clear();
         return {degree_out, degree_in};
     }
 
@@ -724,18 +721,24 @@ bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLIN
 
 template <typename T>
 bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx) {
-    static bool warn = true;
-    if (warn) {
-        std::cerr << "warning propagation through the zero node is not fully implmented yet" << std::endl;
-        warn = false;
-    }
-    static_cast<void>(ctl);
-    static_cast<void>(static_cast<Impl<From> *>(this)->propagate_bounds(uv_idx));
-    static_cast<void>(static_cast<Impl<To> *>(this)->propagate_bounds(uv_idx));
-    // TODO: with the lower and upper bounds computed, we can now make edges
-    // false. This can be done in the same manner as with the full propagation
-    // algorithm.
-    return true;
+    ++stats_.edges_propagated;
+    disable_edge(uv_idx);
+
+    Timer t{stats_.time_dijkstra};
+    auto [num_out_lower, num_in_lower] = static_cast<Impl<From> *>(this)->propagate_bounds(uv_idx);
+    auto [num_out_upper, num_in_upper] = static_cast<Impl<To> *>(this)->propagate_bounds(uv_idx);
+    t.stop();
+
+    bool forward_from = num_in_lower < num_out_upper;
+    bool backward_from = num_out_lower < num_in_upper;
+
+    bool ret = static_cast<Impl<From> *>(this)->propagate_edges(ctl, uv_idx, forward_from, backward_from) &&
+               static_cast<Impl<To> *>(this)->propagate_edges(ctl, uv_idx, !forward_from, !backward_from);
+
+    visited_from_.clear();
+    visited_to_.clear();
+
+    return ret;
 }
 
 template <typename T>
