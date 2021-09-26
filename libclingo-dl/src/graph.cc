@@ -456,8 +456,7 @@ struct Graph<T>::Impl : Graph {
         return {relevant_degree_out, relevant_degree_in};
     }
 
-    void propagate_bounds(edge_t uv_idx) {
-        // TODO: the in/out degrees can be counted as above
+    [[nodiscard]] std::pair<index_t, index_t> propagate_bounds(edge_t uv_idx) {
         auto u_idx = from(uv_idx);
         // the zero node is reached with zero cost
         if (u_idx == 0 && !bound_visited(u_idx)) {
@@ -466,7 +465,7 @@ struct Graph<T>::Impl : Graph {
             bound_visited_set().push_back(u_idx);
         }
         if (!bound_visited(u_idx)) {
-            return;
+            return {0, 0};
         }
         assert(visited_set().empty() && costs_heap_.empty());
         auto v_idx = to(uv_idx);
@@ -514,7 +513,11 @@ struct Graph<T>::Impl : Graph {
                 }
             }
         }
+        uint32_t degree_out = 0;
+        uint32_t degree_in = 0;
         for (auto &vertex_idx : visited_set()) {
+            degree_out += candidate_outgoing(vertex_idx).size();
+            degree_in += candidate_outgoing(vertex_idx).size();
             if (!bound_visited(vertex_idx)) {
                 bound_visited(vertex_idx) = true;
                 bound_visited_set().push_back(vertex_idx);
@@ -534,7 +537,10 @@ struct Graph<T>::Impl : Graph {
             }
         }
 #endif
+        // TODO: do not clear this set here yet it is needed to loop over the
+        // relevant vertices and can be cleared later.
         visited_set().clear();
+        return {degree_out, degree_in};
     }
 
 #ifdef CLINGODL_CROSSCHECK
@@ -724,8 +730,8 @@ bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx) {
         warn = false;
     }
     static_cast<void>(ctl);
-    static_cast<Impl<From> *>(this)->propagate_bounds(uv_idx);
-    static_cast<Impl<To> *>(this)->propagate_bounds(uv_idx);
+    static_cast<void>(static_cast<Impl<From> *>(this)->propagate_bounds(uv_idx));
+    static_cast<void>(static_cast<Impl<To> *>(this)->propagate_bounds(uv_idx));
     // TODO: with the lower and upper bounds computed, we can now make edges
     // false. This can be done in the same manner as with the full propagation
     // algorithm.
