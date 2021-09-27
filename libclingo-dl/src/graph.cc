@@ -693,6 +693,8 @@ struct Graph<T>::Impl : Graph {
                 disable_edge(uv_idx);
                 return true;
             }
+            // This condition is too strong for bound propagation
+            /*
 #ifdef CLINGODL_CROSSCHECK
             // make sure that the graph does not have a negative cycle even if it contains the edge
             auto edges = changed_edges_;
@@ -700,6 +702,7 @@ struct Graph<T>::Impl : Graph {
             auto &m = *static_cast<Impl<From> *>(static_cast<Graph*>(this));
             assert(m.bellman_ford_(edges, uv.from).has_value());
 #endif
+            */
         }
         return false;
     }
