@@ -383,7 +383,7 @@ struct Graph<T>::Impl : Graph {
     //! Compute shortests paths starting from the given vertex.
     //!
     //! This function counts relevant nodes and stops as soon as it determines
-    //! that there are no more shorted paths through relevant vertices any
+    //! that there are no more shortest paths through relevant vertices any
     //! more. A vertex is relevant if it was reached via a shortest path
     //! containing a relevant vertex. By construction, the graph always
     //! contains a relevant vertex connected to the starting vertex via an
@@ -896,10 +896,10 @@ bool Graph<T>::propagate_full_(Clingo::PropagateControl &ctl, edge_t xy_idx) {
     //   ^---------------/
     //
     // We calculate relevant shortest paths from x ->* u.
-    // A shorted path is relevant if it contains edge x -> y.
+    // A shortesd path is relevant if it contains edge x -> y.
     //
-    // Similarly, we calculate relevant shorted paths v *<- y for the transposed graph.
-    // Again, a shorted path is relevant if it contains y <- x.
+    // Similarly, we calculate relevant shortest paths v *<- y for the transposed graph.
+    // Again, a shortest path is relevant if it contains y <- x.
     //
     // There is a negative cycle, if cost(x ->* u) + cost(v *<- y) - cost(x -> y) + cost(u -> v) is negative.
     ++stats_.edges_propagated;
