@@ -461,7 +461,7 @@ struct Graph<T>::Impl : Graph {
     //! This function is conceptually similar to dijkstra_full() but computes
     //! paths starting from a zero node. Like this, it can reuse existing paths
     //! from previous calls.
-    [[nodiscard]] std::pair<index_t, index_t> dijkstra_bounds(edge_t uv_idx) { // NOLINT
+    void dijkstra_bounds(edge_t uv_idx) { // NOLINT
         auto u_idx = from(uv_idx);
         // the zero node is reached with zero cost
         if (u_idx == 0 && !bound_visited(u_idx)) {
@@ -470,7 +470,7 @@ struct Graph<T>::Impl : Graph {
             bound_visited_set().push_back(u_idx);
         }
         if (!bound_visited(u_idx)) {
-            return {0, 0};
+            return;
         }
         assert(visited_set().empty() && costs_heap_.empty());
         auto v_idx = to(uv_idx);
@@ -542,7 +542,6 @@ struct Graph<T>::Impl : Graph {
             }
         }
 #endif
-        return {degree_out, degree_in};
     }
 
 #ifdef CLINGODL_CROSSCHECK
@@ -576,7 +575,7 @@ struct Graph<T>::Impl : Graph {
             return true;
         }
         for (auto &vertex : visited_set()) {
-            if (full ? relevant(vertex) : bound_visited(vertex)) {
+            if (!full || relevant(vertex)) {
                 if (forward) {
                     auto &in = candidate_incoming(vertex);
                     in.resize(
@@ -726,23 +725,44 @@ bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx) {
 }
 
 template <typename T>
-bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx) {
+bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLINT
     ++stats_.edges_propagated;
     disable_edge(uv_idx);
 
     Timer t{stats_.time_dijkstra};
-    auto [num_out_lower, num_in_lower] = static_cast<Impl<From> *>(this)->dijkstra_bounds(uv_idx);
-    auto [num_out_upper, num_in_upper] = static_cast<Impl<To> *>(this)->dijkstra_bounds(uv_idx);
+    static_cast<Impl<From> *>(this)->dijkstra_bounds(uv_idx);
+    static_cast<Impl<To> *>(this)->dijkstra_bounds(uv_idx);
     t.stop();
 
-    bool forward_from = num_in_lower < num_out_upper;
-    bool backward_from = num_out_lower < num_in_upper;
-
-    bool ret = static_cast<Impl<From> *>(this)->template propagate_edges<false>(ctl, 0, forward_from, backward_from) &&
-               static_cast<Impl<To> *>(this)->template propagate_edges<false>(ctl, 0, !forward_from, !backward_from);
+    bool ret = static_cast<Impl<From> *>(this)->template propagate_edges<false>(ctl, 0, true, true) &&
+               static_cast<Impl<To> *>(this)->template propagate_edges<false>(ctl, 0, true, true);
 
     visited_from_.clear();
     visited_to_.clear();
+
+#ifdef CLINGODL_CROSSCHECK
+    if (ret) {
+        auto ass = ctl.assignment();
+        auto cost_from_zero = static_cast<Impl<From>*>(this)->bellman_ford_(changed_edges_, 0);
+        auto cost_to_zero = static_cast<Impl<To>*>(this)->bellman_ford_(changed_edges_, 0);
+        if (cost_from_zero && cost_to_zero) {
+            for (auto [x_idx, cost_x] : *cost_from_zero) {
+                for (auto &xy : edges_) {
+                    if (xy.from != x_idx) {
+                        continue;
+                    }
+                    auto it_y = cost_to_zero->find(xy.to);
+                    if (it_y == cost_to_zero->end()) {
+                        continue;
+                    }
+                    auto cost_y = it_y->second;
+                    assert (cost_x + cost_y + xy.weight >= 0 || ass.is_false(xy.lit));
+                }
+            }
+        }
+    }
+
+#endif
 
     return ret;
 }
@@ -1082,7 +1102,7 @@ void Graph<T>::add_candidate_edge_(edge_t uv_idx) {
 
 template <typename T>
 template <bool full>
-bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
+bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) { // NOLINT
     // The function is best understood considering the following example graph:
     //
     //   u ->* x -> y ->* v
