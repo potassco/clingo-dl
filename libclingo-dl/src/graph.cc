@@ -518,11 +518,7 @@ struct Graph<T>::Impl : Graph {
                 }
             }
         }
-        uint32_t degree_out = 0;
-        uint32_t degree_in = 0;
         for (auto &vertex_idx : visited_set()) {
-            degree_out += candidate_outgoing(vertex_idx).size();
-            degree_in += candidate_outgoing(vertex_idx).size();
             if (!bound_visited(vertex_idx)) {
                 bound_visited(vertex_idx) = true;
                 bound_visited_set().push_back(vertex_idx);
@@ -531,14 +527,12 @@ struct Graph<T>::Impl : Graph {
         }
 #ifdef CLINGODL_CROSSCHECK
         if (!visited_set().empty()) {
-            if constexpr (std::is_same_v<D, From>) {
-                auto costs = bellman_ford_(changed_edges_, 0);
-                assert(costs.has_value());
-                assert(costs->size() == bound_visited_set().size());
-                for (auto [vertex_idx, value] : *costs) {
-                    assert(bound_visited(vertex_idx));
-                    assert(bound_value(vertex_idx) == value);
-                }
+            auto costs = bellman_ford_(changed_edges_, 0);
+            assert(costs.has_value());
+            assert(costs->size() == bound_visited_set().size());
+            for (auto [vertex_idx, value] : *costs) {
+                assert(bound_visited(vertex_idx));
+                assert(bound_value(vertex_idx) == value);
             }
         }
 #endif
