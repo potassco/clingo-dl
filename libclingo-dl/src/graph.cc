@@ -63,8 +63,6 @@ void ThreadStatistics::accu(ThreadStatistics const &x) {
 template <typename T>
 struct Graph<T>::Vertex {
     using value_t = T;
-    static constexpr auto min_value = std::numeric_limits<value_t>::lowest();
-    static constexpr auto max_value = std::numeric_limits<value_t>::max();
     using PotentialStack = std::vector<std::pair<vertex_t, value_t>>;
 
     //! Return true if the vertex has a value assigned.
@@ -76,28 +74,28 @@ struct Graph<T>::Vertex {
         return potential_stack.back().second;
     }
 
-    VertexIndexVec outgoing;               //!< Outgoing edges from this vertex that are true.
-    VertexIndexVec incoming;               //!< Incoming edges to this vertex that are true.
-    VertexIndexVec candidate_incoming;     //!< Edges that might become incoming edges.
-    VertexIndexVec candidate_outgoing;     //!< Edges that might become outgoing edges.
-    PotentialStack potential_stack;        //!< Vector of pairs of level and potential.
-    value_t cost_from{0};                  //!< Costs for traversals of the original graph.
-    value_t cost_to{0};                    //!< Costs for traversals of the transposed graph.
-    value_t bound_lower{min_value};        //!< The lower bound of a vertex.
-    value_t bound_upper{max_value};        //!< The upper bound of a vertex.
-    edge_t path_lower{invalid_edge_index}; //!< Path pointers for determining the lower bound.
-    edge_t path_upper{invalid_edge_index}; //!< Path pointers for determining the upper bound.
-    edge_t path_from{0};                   //!< Path pointers for traversals of the original graph.
-    edge_t path_to{0};                     //!< Path pointers for traversals of the transposed graph.
-    vertex_t offset{0};                    //!< Offset in the cost heap.
-    vertex_t degree_out{0};                //!< Outgoing degree of candidate edges.
-    vertex_t degree_in{0};                 //!< Incoming degree of candidate edges.
-    vertex_t visited_from{0};              //!< Either a flag to mark the vertex as visited or its depth first index.
-    bool visited_to{false};                //!< A flag to mark the vertex as visited for traversals of the transposed graph.
-    bool visited_lower{false};             //!< A flag to mark the vertex as visited for traversals of the original graph.
-    bool visited_upper{false};             //!< A flag to mark the vertex as visited for traversals of the transposed graph.
-    bool relevant_from{false};             //!< A flag to mark the vertex as visited for traversals of the original graph.
-    bool relevant_to{false};               //!< A flag to mark the vertex as visited for traversals of the transposed graph.
+    VertexIndexVec outgoing;           //!< Outgoing edges from this vertex that are true.
+    VertexIndexVec incoming;           //!< Incoming edges to this vertex that are true.
+    VertexIndexVec candidate_incoming; //!< Edges that might become incoming edges.
+    VertexIndexVec candidate_outgoing; //!< Edges that might become outgoing edges.
+    PotentialStack potential_stack;    //!< Vector of pairs of level and potential.
+    value_t cost_from{0};              //!< Costs for traversals of the original graph.
+    value_t cost_to{0};                //!< Costs for traversals of the transposed graph.
+    value_t bound_lower{0};            //!< The lower bound of a vertex.
+    value_t bound_upper{0};            //!< The upper bound of a vertex.
+    edge_t path_lower{0};              //!< Path pointers for determining the lower bound.
+    edge_t path_upper{0};              //!< Path pointers for determining the upper bound.
+    edge_t path_from{0};               //!< Path pointers for traversals of the original graph.
+    edge_t path_to{0};                 //!< Path pointers for traversals of the transposed graph.
+    vertex_t offset{0};                //!< Offset in the cost heap.
+    vertex_t degree_out{0};            //!< Outgoing degree of candidate edges.
+    vertex_t degree_in{0};             //!< Incoming degree of candidate edges.
+    vertex_t visited_from{0};          //!< Either a flag to mark the vertex as visited or its depth first index.
+    bool visited_to{false};            //!< A flag to mark the vertex as visited for traversals of the transposed graph.
+    bool visited_lower{false};         //!< A flag to mark the vertex as visited for traversals of the original graph.
+    bool visited_upper{false};         //!< A flag to mark the vertex as visited for traversals of the transposed graph.
+    bool relevant_from{false};         //!< A flag to mark the vertex as visited for traversals of the original graph.
+    bool relevant_to{false};           //!< A flag to mark the vertex as visited for traversals of the transposed graph.
 };
 
 //!< Thread specific information for edges.
@@ -466,6 +464,7 @@ struct Graph<T>::Impl : Graph {
         // the zero node is reached with zero cost
         if (u_idx == 0 && !bound_visited(u_idx)) {
             bound_value(u_idx) = 0;
+            bound_path(u_idx) = invalid_edge_index;
             bound_visited(u_idx) = true;
             bound_visited_set().push_back(u_idx);
         }
