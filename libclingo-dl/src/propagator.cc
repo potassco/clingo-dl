@@ -778,15 +778,17 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
 
     // process edges in the todo queue
     sort_edges(conf_.get_sort_mode(thread_id), state);
-    for (auto edge : state.todo_edges) {
-        if (state.graph.edge_is_enabled(edge)) {
+    for (auto edge_idx : state.todo_edges) {
+        if (state.graph.edge_is_enabled(edge_idx)) {
             // disable propagation once budget exceeded
             bool has_budget = state.propagate_budget > 0 && state.stats.propagate_cost_add + state.propagate_budget > state.stats.propagate_cost_from + state.stats.propagate_cost_to;
             if (!propagate && !has_budget) {
                 state.graph.disable_propagate();
             }
+            auto &edge = edges_[edge_idx];
+            auto &info = vertex_info_[edge.from];
             // check for conflicts
-            if (!state.graph.add_edge(ctl, edge)) {
+            if (!state.graph.add_edge(ctl, edge_idx, info.cc)) {
                 return;
             }
         }

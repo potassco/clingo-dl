@@ -459,10 +459,10 @@ struct Graph<T>::Impl : Graph {
     //! This function is conceptually similar to dijkstra_full() but computes
     //! paths starting from a zero node. Like this, it can reuse existing paths
     //! from previous calls.
-    void dijkstra_bounds(edge_t uv_idx) { // NOLINT
+    void dijkstra_bounds(edge_t uv_idx, vertex_t zero_idx) { // NOLINT
         auto u_idx = from(uv_idx);
         // the zero node is reached with zero cost
-        if (u_idx == 0 && !bound_visited(u_idx)) {
+        if (u_idx == zero_idx && !bound_visited(u_idx)) {
             bound_value(u_idx) = 0;
             bound_path(u_idx) = invalid_edge_index;
             bound_visited(u_idx) = true;
@@ -526,7 +526,7 @@ struct Graph<T>::Impl : Graph {
         }
 #ifdef CLINGODL_CROSSCHECK
         if (!visited_set().empty()) {
-            auto costs = bellman_ford_(changed_edges_, 0);
+            auto costs = bellman_ford_(changed_edges_, zero_idx);
             assert(costs.has_value());
             assert(costs->size() == bound_visited_set().size());
             for (auto [vertex_idx, value] : *costs) {
@@ -676,7 +676,7 @@ void Graph<T>::ensure_decision_level(level_t level, bool enable_propagate) {
 }
 
 template <typename T>
-bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx) {
+bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx) {
     // This function adds an edge to the graph and returns false if the edge
     // induces a negative cycle.
     //
@@ -706,7 +706,7 @@ bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx) {
     // propagate cycles through zero node
     // (using equality here intentional because full and zero vertex propagation should be exclusive)
     if (mode() == PropagationMode::Zero) {
-        consistent = consistent && propagate_zero_(ctl, uv_idx);
+        consistent = consistent && propagate_zero_(ctl, uv_idx, zero_idx);
     }
 
     // full propagation
@@ -718,13 +718,13 @@ bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx) {
 }
 
 template <typename T>
-bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLINT
+bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx) { // NOLINT
     ++stats_.edges_propagated;
     disable_edge(uv_idx);
 
     Timer t{stats_.time_dijkstra};
-    static_cast<Impl<From> *>(this)->dijkstra_bounds(uv_idx);
-    static_cast<Impl<To> *>(this)->dijkstra_bounds(uv_idx);
+    static_cast<Impl<From> *>(this)->dijkstra_bounds(uv_idx, zero_idx);
+    static_cast<Impl<To> *>(this)->dijkstra_bounds(uv_idx, zero_idx);
     t.stop();
 
     bool ret = static_cast<Impl<From> *>(this)->template propagate_edges<false>(ctl, 0, true, true) &&
@@ -736,8 +736,8 @@ bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx) { /
 #ifdef CLINGODL_CROSSCHECK
     if (ret) {
         auto ass = ctl.assignment();
-        auto cost_from_zero = static_cast<Impl<From>*>(this)->bellman_ford_(changed_edges_, 0);
-        auto cost_to_zero = static_cast<Impl<To>*>(this)->bellman_ford_(changed_edges_, 0);
+        auto cost_from_zero = static_cast<Impl<From>*>(this)->bellman_ford_(changed_edges_, zero_idx);
+        auto cost_to_zero = static_cast<Impl<To>*>(this)->bellman_ford_(changed_edges_, zero_idx);
         if (cost_from_zero && cost_to_zero) {
             for (auto [x_idx, cost_x] : *cost_from_zero) {
                 for (auto &xy : edges_) {

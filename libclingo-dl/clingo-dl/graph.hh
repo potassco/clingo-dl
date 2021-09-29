@@ -123,7 +123,7 @@ public:
     //! Add an edge to the graph and return false if the edge induces a negative cycle.
     //!
     //! This function assumes that the graph is not conflicting.
-    [[nodiscard]] bool add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx);
+    [[nodiscard]] bool add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx);
     //! Backtracks the last decision level established with ensure_decision_level().
     void backtrack();
     //! Return the configured propagation mode.
@@ -144,7 +144,7 @@ private:
     //! Propagates edges to avoid cycles through the zero node.
     //!
     //! \note Has to be called during add_edge().
-    bool propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx);
+    bool propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx);
     //! Fully propagates the graph after adding the given edge.
     //!
     //! Afterward any of the remaining edges can be added to the graph without
