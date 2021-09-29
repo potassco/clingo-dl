@@ -18,7 +18,7 @@ function dispatch() {
       -d "{\"ref\":\"$3\",\"inputs\":{\"wip\":\"$2\"${4:+,$4}}}"
 }
 
-branch=wip
+branch=zero-bound-propagation
 wip=true
 
 case $1 in

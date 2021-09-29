@@ -930,7 +930,7 @@ bool Graph<T>::propagate_full_(Clingo::PropagateControl &ctl, edge_t xy_idx) {
                static_cast<Impl<To> *>(this)->template propagate_edges<true>(ctl, xy_idx, !forward_from, !backward_from);
 
     for (auto &x : visited_from_) {
-        vertices_[x].visited_from = false;
+        vertices_[x].visited_from = 0;
         vertices_[x].relevant_from = false;
     }
     for (auto &x : visited_to_) {
