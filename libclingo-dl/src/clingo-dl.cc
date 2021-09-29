@@ -485,7 +485,7 @@ extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_opti
         char const * group = "Clingo.DL Options";
         handle_error(clingo_options_add(options, group, "propagate",
             "Set propagation mode [no]\n"
-            "      <mode>  : {no,inverse,partial,partial+,full}[,<thread>]\n"
+            "      <mode>  : {no,inverse,partial,partial+,zero,full}[,<thread>]\n"
             "        no      : No propagation; only detect conflicts\n"
             "        inverse : Check inverse constraints\n"
             "        partial : Detect some conflicts\n"
