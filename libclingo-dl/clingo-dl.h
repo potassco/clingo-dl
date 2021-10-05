@@ -86,6 +86,9 @@ typedef bool (*clingodl_ast_callback_t)(clingo_ast_t *ast, void *data);
 
 typedef struct clingodl_theory clingodl_theory_t;
 
+//! Return the version of the theory.
+CLINGODL_VISIBILITY_DEFAULT void clingodl_version(int *major, int *minor, int *patch);
+
 //! creates the theory
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_create(clingodl_theory_t **theory);
 
