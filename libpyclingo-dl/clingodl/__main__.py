@@ -15,9 +15,9 @@ class Application(clingo.Application):
     Application class similar to clingo-dl (excluding optimization).
     '''
     def __init__(self, name):
-        self.program_name = name
-        self.version = "1.3.0"
         self.__theory = ClingoDLTheory()
+        self.program_name = name
+        self.version = ".".join(str(x) for x in self.__theory.version())
 
     def register_options(self, options):
         self.__theory.register_options(options)

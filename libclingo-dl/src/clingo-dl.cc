@@ -413,6 +413,18 @@ struct clingodl_theory {
     bool shift_constraints{true};
 };
 
+extern "C" void clingodl_version(int *major, int *minor, int *patch) {
+    if (major != nullptr) {
+        *major = CLINGODL_VERSION_MAJOR;
+    }
+    if (minor != nullptr) {
+        *minor = CLINGODL_VERSION_MINOR;
+    }
+    if (patch != nullptr) {
+        *patch = CLINGODL_VERSION_REVISION;
+    }
+}
+
 extern "C" bool clingodl_create(clingodl_theory_t **theory) {
     CLINGODL_TRY { *theory = new clingodl_theory{}; } // NOLINT
     CLINGODL_CATCH;
