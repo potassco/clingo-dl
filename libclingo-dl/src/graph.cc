@@ -461,12 +461,14 @@ struct Graph<T>::Impl : Graph {
     //! from previous calls.
     void dijkstra_bounds(edge_t uv_idx, vertex_t zero_idx) { // NOLINT
         auto u_idx = from(uv_idx);
-        // the zero node is reached with zero cost
+        // the zero node is reached with zero cost as soon as it is added to the graph
         if (u_idx == zero_idx && !bound_visited(u_idx)) {
-            bound_value(u_idx) = 0;
-            bound_path(u_idx) = invalid_edge_index;
-            bound_visited(u_idx) = true;
-            bound_visited_set().push_back(u_idx);
+            assert(!vertices_[u_idx].visited_lower && !vertices_[u_idx].visited_upper);
+            vertices_[u_idx].bound_lower = vertices_[u_idx].bound_upper = 0;
+            vertices_[u_idx].path_lower = vertices_[u_idx].path_upper = invalid_edge_index;
+            vertices_[u_idx].visited_lower = vertices_[u_idx].visited_upper = true;
+            visited_lower_.push_back(u_idx);
+            visited_upper_.push_back(u_idx);
         }
         if (!bound_visited(u_idx)) {
             return;
@@ -530,6 +532,8 @@ struct Graph<T>::Impl : Graph {
             assert(costs.has_value());
             assert(costs->size() == bound_visited_set().size());
             for (auto [vertex_idx, value] : *costs) {
+                static_cast<void>(vertex_idx);
+                static_cast<void>(value);
                 assert(bound_visited(vertex_idx));
                 assert(bound_value(vertex_idx) == value);
             }
@@ -1158,6 +1162,7 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) { // NOLINT
                 auto edges = changed_edges_;
                 edges.emplace_back(uv_idx);
                 auto &m = *static_cast<Impl<From> *>(this);
+                static_cast<void>(m);
                 assert(m.bellman_ford_(edges, uv.from).has_value());
             }
 #endif
@@ -1262,6 +1267,7 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
             auto edges = changed_edges_;
             edges.emplace_back(uv_idx);
             auto &m = *static_cast<Impl<From> *>(this);
+            static_cast<void>(m);
             assert(m.bellman_ford_(edges, uv.from).has_value());
         }
 #endif
