@@ -866,7 +866,7 @@ bool Graph<T>::propagate_simple_(Clingo::PropagateControl &ctl, edge_t uv_idx) {
         if (visited_from_.empty() || propagate_ == PropagationMode::Trivial) {
             return with_incoming_(ctl, uv.from, [&](vertex_t t_idx, edge_t ts_idx) {
                 auto &ts = edges_[ts_idx];
-                if (t_idx == uv.to && uv.weight + ts.weight < 0) {
+                if (t_idx == uv.to && uv.weight + ts.weight < 0 && !ctl.assignment().is_false(ts.lit)) {
                     clause_.emplace_back(-edges_[uv_idx].lit);
                     clause_.emplace_back(-edges_[ts_idx].lit);
                     ++stats_.false_edges_trivial;
@@ -993,7 +993,7 @@ template <typename T>
         auto &ts = edges_[ts_idx];
         if (s.visited_from < t.visited_from) {
             T weight = t.potential() - s.potential();
-            if (weight + ts.weight < 0) {
+            if (weight + ts.weight < 0 && !ctl.assignment().is_false(ts.lit)) {
                 T check = 0;
                 auto r_idx = t_idx;
                 while (u_idx != r_idx && s_idx != r_idx) {
