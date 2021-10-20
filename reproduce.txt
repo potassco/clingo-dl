@@ -1,0 +1,6 @@
+Solving the following examples does not seem to finish. There are only 33
+conflicts but the number of choices seems to grow indefinitely. The reason
+seems to be the weak propagation modes which add SAT clauses. It seems like the
+solver goes into a sat clause/backtrack/choice loop.
+
+./build/debug/bin/clingo-dl reproduce/* --propagate=zero --stats
