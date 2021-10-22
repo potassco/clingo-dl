@@ -339,6 +339,9 @@ bool parse_mode(const char *value, void *data) {
     else if ((rem = iequals_pre(value, "partial")) != nullptr) {
         mode = PropagationMode::Weak;
     }
+    else if ((rem = iequals_pre(value, "zero")) != nullptr) {
+        mode = PropagationMode::Zero;
+    }
     else if ((rem = iequals_pre(value, "full")) != nullptr) {
         mode = PropagationMode::Strong;
     }
@@ -494,12 +497,13 @@ extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_opti
         char const * group = "Clingo.DL Options";
         handle_error(clingo_options_add(options, group, "propagate",
             "Set propagation mode [no]\n"
-            "      <mode>  : {no,inverse,partial,partial+,full}[,<thread>]\n"
+            "      <mode>  : {no,inverse,partial,partial+,zero,full}[,<thread>]\n"
             "        no      : No propagation; only detect conflicts\n"
             "        inverse : Check inverse constraints\n"
-            "        partial : Detect some conflicting constraints\n"
-            "        partial+: Detect some more conflicting constraints\n"
-            "        full    : Detect all conflicting constraints\n"
+            "        partial : Detect some conflicts\n"
+            "        partial+: Detect some more conflicts\n"
+            "        zero    : Detect all immediate conflicts through zero nodes\n"
+            "        full    : Detect all immediate conflicts\n"
             "      <thread>: Restrict to thread",
             &parse_mode, &theory->config, true, "<mode>"));
         handle_error(clingo_options_add(options, group, "propagate-root",

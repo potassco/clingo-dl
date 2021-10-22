@@ -84,6 +84,9 @@ private:
     using EdgeVec = std::vector<Edge>;        //!< A vector of edges.
     using VertexVec = std::vector<Vertex>;    //!< A vector of vertices.
     using TrailVec = std::vector<TrailEntry>; //!< The trail to backtrack per decision level changes.
+    //! Trail of bound changes involving a vertex, path, and value.
+    using BoundTrailVec = std::vector<std::tuple<vertex_t, edge_t, value_t>>;
+
 public:
     Graph(ThreadStatistics &stats, EdgeVec const &edges, PropagationMode propagate);
     Graph(Graph const &other) = delete;
@@ -120,19 +123,36 @@ public:
     //! Add an edge to the graph and return false if the edge induces a negative cycle.
     //!
     //! This function assumes that the graph is not conflicting.
-    [[nodiscard]] bool add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx);
-    //! Fully propagates the graph after adding the given edge.
-    //!
-    //! Afterward any of the remaining edges can be added to the graph without
-    //! causing a conflict. The function assumes that the graph was fully
-    //! propagated before the edge was added.
-    [[nodiscard]] bool propagate(edge_t xy_idx, Clingo::PropagateControl &ctl);
+    [[nodiscard]] bool add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx);
     //! Backtracks the last decision level established with ensure_decision_level().
     void backtrack();
     //! Return the configured propagation mode.
     [[nodiscard]] PropagationMode mode() const;
 
 private:
+    //! Checks if there is a cycle after adding the given edge.
+    //!
+    //! The function does not clean up information about found shortest paths.
+    //!
+    //! \note Has to be called during add_edge().
+    bool check_cycle_(Clingo::PropagateControl &ctl, edge_t uv_idx);
+    //! Perform configured simple propagations after adding the given edge.
+    //!
+    //! \note Has to be called during add_edge() and uses temporary state
+    //! established during check_cycle_().
+    bool propagate_simple_(Clingo::PropagateControl &ctl, edge_t uv_idx);
+    //! Propagates edges to avoid cycles through the zero node.
+    //!
+    //! \note Has to be called during add_edge().
+    bool propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx);
+    //! Fully propagates the graph after adding the given edge.
+    //!
+    //! Afterward any of the remaining edges can be added to the graph without
+    //! causing a conflict. The function assumes that the graph was fully
+    //! propagated before the edge was added.
+    //!
+    //! \note Has to be called during add_edge().
+    [[nodiscard]] bool propagate_full_(Clingo::PropagateControl &ctl, edge_t xy_idx);
     //! Traverse the incoming edges of a vertex.
     //!
     //! Edges that were disabled will be removed during the traversal. The
@@ -148,13 +168,11 @@ private:
     //! Helper to add candidate edges initially and during backtracking.
     void add_candidate_edge_(edge_t uv_idx);
     //! Disable edge u -> v, if there is a shorter path u ->* v.
+    template <bool full>
     [[nodiscard]] bool propagate_edge_true_(edge_t uv_idx, edge_t xy_idx);
     //! Make edge u -> v false, if there is a negative cycle u ->* v -> u.
+    template <bool full>
     [[nodiscard]] bool propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret);
-#ifdef CLINGODL_CROSSCHECK
-    //! Make edge u -> v false, if there is a negative cycle u ->* v -> u.
-    std::optional<std::unordered_map<vertex_t, value_t>> bellman_ford_(std::vector<edge_t> const &edges, vertex_t source);
-#endif
     //! Sets the potential of a vertex and ensures that it can be backtracked.
     void set_potential_(Vertex &vtx, level_t level, value_t potential);
     //! Returns the current decision level.
@@ -163,6 +181,10 @@ private:
     HeapType costs_heap_;                    //!< Heap used throught various algorithms.
     std::vector<vertex_t> visited_from_;     //!< Vertices visited during traversal of the original graph.
     std::vector<vertex_t> visited_to_;       //!< Vertices visited during traversal of the transposed graph.
+    std::vector<vertex_t> visited_lower_;    //!< Visited vertices with lower bounds.
+    std::vector<vertex_t> visited_upper_;    //!< Visited vertices with upper bounds.
+    BoundTrailVec lower_trail_;              //!< Trail of changes to lower bounds.
+    BoundTrailVec upper_trail_;              //!< Trail of changes to upper bounds.
     EdgeVec const &edges_;                   //!< Reference to the edges.
     VertexVec vertices_;                     //!< Vertex specific information.
     std::vector<vertex_t> changed_vertices_; //!< Vertices changed in chronological order.

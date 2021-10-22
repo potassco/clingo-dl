@@ -81,13 +81,19 @@ struct Graph<T>::Vertex {
     PotentialStack potential_stack;    //!< Vector of pairs of level and potential.
     value_t cost_from{0};              //!< Costs for traversals of the original graph.
     value_t cost_to{0};                //!< Costs for traversals of the transposed graph.
-    vertex_t offset{0};                //!< Offset in the cost heap.
+    value_t bound_lower{0};            //!< The lower bound of a vertex.
+    value_t bound_upper{0};            //!< The upper bound of a vertex.
+    edge_t path_lower{0};              //!< Path pointers for determining the lower bound.
+    edge_t path_upper{0};              //!< Path pointers for determining the upper bound.
     edge_t path_from{0};               //!< Path pointers for traversals of the original graph.
     edge_t path_to{0};                 //!< Path pointers for traversals of the transposed graph.
+    vertex_t offset{0};                //!< Offset in the cost heap.
     vertex_t degree_out{0};            //!< Outgoing degree of candidate edges.
     vertex_t degree_in{0};             //!< Incoming degree of candidate edges.
     vertex_t visited_from{0};          //!< Either a flag to mark the vertex as visited or its depth first index.
     bool visited_to{false};            //!< A flag to mark the vertex as visited for traversals of the transposed graph.
+    bool visited_lower{false};         //!< A flag to mark the vertex as visited for traversals of the original graph.
+    bool visited_upper{false};         //!< A flag to mark the vertex as visited for traversals of the transposed graph.
     bool relevant_from{false};         //!< A flag to mark the vertex as visited for traversals of the original graph.
     bool relevant_to{false};           //!< A flag to mark the vertex as visited for traversals of the transposed graph.
 };
@@ -103,11 +109,15 @@ struct Graph<T>::EdgeState {
 //!< Struct holding information to backtrack a decision level.
 template <typename T>
 struct Graph<T>::TrailEntry {
-    level_t level;           //!< The corresponding decision level.
-    index_t vertex_offset;   //!< Index up to which to backtrack changed vertices.
-    index_t edge_offset;     //!< Index up to which to backtrack changed edges.
-    index_t disabled_offset; //!< Index up to which to backtrack inactive edges.
-    bool can_propagate;      //!< Whether propagation was possible on this level.
+    level_t level;                //!< The corresponding decision level.
+    index_t vertex_offset;        //!< Index up to which to backtrack changed vertices.
+    index_t edge_offset;          //!< Index up to which to backtrack changed edges.
+    index_t disabled_offset;      //!< Index up to which to backtrack inactive edges.
+    index_t visited_lower_offset; //!< Index up to which to backtrack visited lower bound vertices.
+    index_t visited_upper_offset; //!< Index up to which to backtrack visited upper bound vertices.
+    index_t lower_value_offset;   //!< Index up to which to backtrack lower bound value changes.
+    index_t upper_value_offset;   //!< Index up to which to backtrack upper bound value changes.
+    bool can_propagate;           //!< Whether propagation was possible on this level.
 };
 
 //! This struct provides functions to access the original and transposed graph
@@ -152,6 +162,26 @@ struct Graph<T>::Impl : Graph {
         }
     }
 
+    //! The bound of a vertex.
+    value_t &bound_value(vertex_t idx) {
+        if constexpr (std::is_same_v<D, From>) {
+            return vertices_[idx].bound_lower;
+        }
+        else {
+            return vertices_[idx].bound_upper;
+        }
+    }
+
+    //! The bound changes during bound propagation.
+    BoundTrailVec &bound_trail() {
+        if constexpr (std::is_same_v<D, From>) {
+            return lower_trail_;
+        }
+        else {
+            return upper_trail_;
+        }
+    }
+
     //! The end point of the given edge.
     vertex_t to(edge_t idx) {
         if constexpr (std::is_same_v<D, From>) {
@@ -192,6 +222,16 @@ struct Graph<T>::Impl : Graph {
         }
     }
 
+    //! The edge that was used to reach the given vertex when computing bounds.
+    edge_t &bound_path(vertex_t idx) {
+        if constexpr (std::is_same_v<D, From>) {
+            return vertices_[idx].path_lower;
+        }
+        else {
+            return vertices_[idx].path_upper;
+        }
+    }
+
     //! Flag indicating whether the vertex has been visited.
     //!
     //! \note This is a integer here because it is also used as a dfs index
@@ -202,6 +242,16 @@ struct Graph<T>::Impl : Graph {
         }
         else {
             return vertices_[idx].visited_to;
+        }
+    }
+
+    //! Flag indicating whether the vertex has been visited during bound traversals.
+    bool &bound_visited(vertex_t idx) {
+        if constexpr(std::is_same_v<D, From>) {
+            return vertices_[idx].visited_lower;
+        }
+        else {
+            return vertices_[idx].visited_upper;
         }
     }
 
@@ -222,6 +272,16 @@ struct Graph<T>::Impl : Graph {
         }
         else {
             return visited_to_;
+        }
+    }
+
+    //! The set of all visited vertices.
+    std::vector<vertex_t> &bound_visited_set() {
+        if constexpr (std::is_same_v<D, From>) {
+            return visited_lower_;
+        }
+        else {
+            return visited_upper_;
         }
     }
 
@@ -275,18 +335,62 @@ struct Graph<T>::Impl : Graph {
         }
     }
 
+#ifdef CLINGODL_CROSSCHECK
+    //! Compute shortests paths using the Bellman Ford algorithm.
+    std::optional<std::unordered_map<vertex_t, value_t>> bellman_ford_(std::vector<edge_t> const &edges, vertex_t source) {
+        std::unordered_map<vertex_t, T> costs;
+        costs[source] = 0;
+        vertex_t vertices = 0;
+        for (auto &vertex : vertices_) {
+            if (vertex.defined()) {
+                ++vertices;
+            }
+        }
+        for (vertex_t i = 0; i < vertices; ++i) {
+            for (auto const &uv_idx : edges) {
+                auto &uv = edges_[uv_idx];
+                auto u_cost = costs.find(from(uv_idx));
+                if (u_cost != costs.end()) {
+                    auto u_idx = to(uv_idx);
+                    auto v_cost = costs.find(u_idx);
+                    auto dist = u_cost->second + uv.weight;
+                    if (v_cost == costs.end()) {
+                        costs[u_idx] = dist;
+                    }
+                    else if (dist < v_cost->second) {
+                        v_cost->second = dist;
+                    }
+                }
+            }
+        }
+        for (auto const &uv_idx : edges) {
+            auto &uv = edges_[uv_idx];
+            auto u_cost = costs.find(from(uv_idx));
+            if (u_cost != costs.end()) {
+                auto v_cost = costs.find(to(uv_idx));
+                auto dist = u_cost->second + uv.weight;
+                if (dist < v_cost->second) {
+                    return std::nullopt;
+                }
+            }
+        }
+        return costs;
+    }
+#endif
+
     //! Compute shortests paths starting from the given vertex.
     //!
     //! This function counts relevant nodes and stops as soon as it determines
-    //! that there are no more shorted paths through relevant vertices any
+    //! that there are no more shortest paths through relevant vertices any
     //! more. A vertex is relevant if it was reached via a shortest path
     //! containing a relevant vertex. By construction, the graph always
-    //! contains a relevant vertex connected to the starting node via an edge.
+    //! contains a relevant vertex connected to the starting vertex via an
+    //! edge.
     //!
     //! The function also counts the in and out degrees of visited relevant
     //! nodes. The direction with the smaller degree can then be used to try to
     //! find negative cycles.
-    std::pair<uint32_t, uint32_t> dijkstra(vertex_t source_idx, edge_t relevant_idx) { // NOLINT
+    std::pair<uint32_t, uint32_t> dijkstra_full(vertex_t source_idx, edge_t relevant_idx) { // NOLINT
         // Note: Initially there is exactly one relevant vertex in the graph,
         // which is guaranteed to be reached by edge relevant_idx. Once this
         // vertex enters the queue, the count corresponds to the number of
@@ -350,6 +454,93 @@ struct Graph<T>::Impl : Graph {
         return {relevant_degree_out, relevant_degree_in};
     }
 
+    //! Compute shortest paths starting from the zero node.
+    //!
+    //! This function is conceptually similar to dijkstra_full() but computes
+    //! paths starting from a zero node. Like this, it can reuse existing paths
+    //! from previous calls.
+    void dijkstra_bounds(edge_t uv_idx, vertex_t zero_idx) { // NOLINT
+        auto u_idx = from(uv_idx);
+        // the zero node is reached with zero cost as soon as it is added to the graph
+        if (u_idx == zero_idx && !bound_visited(u_idx)) {
+            assert(!vertices_[u_idx].visited_lower && !vertices_[u_idx].visited_upper);
+            vertices_[u_idx].bound_lower = vertices_[u_idx].bound_upper = 0;
+            vertices_[u_idx].path_lower = vertices_[u_idx].path_upper = invalid_edge_index;
+            vertices_[u_idx].visited_lower = vertices_[u_idx].visited_upper = true;
+            visited_lower_.push_back(u_idx);
+            visited_upper_.push_back(u_idx);
+        }
+        if (!bound_visited(u_idx)) {
+            return;
+        }
+        assert(visited_set().empty() && costs_heap_.empty());
+        auto v_idx = to(uv_idx);
+        auto bound_uv = bound_value(u_idx) + edges_[uv_idx].weight;
+        if (!bound_visited(v_idx) || bound_uv < bound_value(v_idx)) {
+            cost(v_idx) = 0;
+            costs_heap_.push(*this, v_idx);
+            visited(v_idx) = true;
+            visited_set().push_back(v_idx);
+            if (bound_visited(v_idx)) {
+                bound_trail().emplace_back(std::make_tuple(v_idx, bound_path(v_idx), bound_value(v_idx)));
+            }
+            bound_value(v_idx) = bound_uv;
+            bound_path(v_idx) = uv_idx;
+        }
+        std::vector<value_t> value_set;
+        while (!costs_heap_.empty()) {
+            auto s_idx = costs_heap_.pop(*this);
+            for (auto &st_idx : out(s_idx)) {
+                // Note: maybe use a separate counter
+                ++propagation_cost();
+                auto &st = edges_[st_idx];
+                auto t_idx = to(st_idx);
+                // NOTE: We have to make sure that weights are positive for the
+                // algorithm to run correctly. We can use the potentials to do
+                // this. Explicitely using st.from and st.to is intended here.
+                auto c = cost(s_idx) + vertices_[st.from].potential() + st.weight - vertices_[st.to].potential();
+                auto bound_st = bound_value(s_idx) + st.weight;
+                assert(vertices_[st.from].potential() + st.weight - vertices_[st.to].potential() >= 0);
+                if ((!visited(t_idx) || less(c, false, t_idx)) && (!bound_visited(t_idx) || bound_st < bound_value(t_idx))) {
+                    cost(t_idx) = c;
+                    if (!visited(t_idx)) {
+                        visited(t_idx) = true;
+                        visited_set().push_back(t_idx);
+                        if (bound_visited(t_idx)) {
+                            bound_trail().emplace_back(std::make_tuple(t_idx, bound_path(t_idx), bound_value(t_idx)));
+                        }
+                        costs_heap_.push(*this, t_idx);
+                    }
+                    else {
+                        costs_heap_.decrease(*this, t_idx);
+                    }
+                    bound_path(t_idx) = st_idx;
+                    bound_value(t_idx) = bound_st;
+                }
+            }
+        }
+        for (auto &vertex_idx : visited_set()) {
+            if (!bound_visited(vertex_idx)) {
+                bound_visited(vertex_idx) = true;
+                bound_visited_set().push_back(vertex_idx);
+            }
+            visited(vertex_idx) = false;
+        }
+#ifdef CLINGODL_CROSSCHECK
+        if (!visited_set().empty()) {
+            auto costs = bellman_ford_(changed_edges_, zero_idx);
+            assert(costs.has_value());
+            assert(costs->size() == bound_visited_set().size());
+            for (auto [vertex_idx, value] : *costs) {
+                static_cast<void>(vertex_idx);
+                static_cast<void>(value);
+                assert(bound_visited(vertex_idx));
+                assert(bound_value(vertex_idx) == value);
+            }
+        }
+#endif
+    }
+
 #ifdef CLINGODL_CROSSCHECK
     //! Count relevant incoming/outgoing edges.
     std::pair<uint32_t, uint32_t> count_relevant_() {
@@ -373,21 +564,22 @@ struct Graph<T>::Impl : Graph {
     }
 #endif
 
-    //! Traverse incoming/outgoing edges and disable true edges and propagate
+    //! Traverse incoming/outgoing edges and disables true edges and propagates
     //! false edges.
+    template <bool full>
     bool propagate_edges(Clingo::PropagateControl &ctl, edge_t xy_idx, bool forward, bool backward) { // NOLINT
         if (!forward && !backward) {
             return true;
         }
         for (auto &vertex : visited_set()) {
-            if (relevant(vertex)) {
+            if (!full || relevant(vertex)) {
                 if (forward) {
                     auto &in = candidate_incoming(vertex);
                     in.resize(
                         std::remove_if(
                             in.begin(), in.end(),
                             [&](edge_t uv_idx) {
-                                if (!edge_states_[uv_idx].enabled || propagate_edge_true_(uv_idx, xy_idx)) {
+                                if (!edge_states_[uv_idx].enabled || propagate_edge_true_<full>(uv_idx, xy_idx)) {
                                     remove_incoming(uv_idx);
                                     return true;
                                 }
@@ -405,7 +597,7 @@ struct Graph<T>::Impl : Graph {
                                 if (!ret) {
                                     return false;
                                 }
-                                if (!edge_states_[uv_idx].enabled || propagate_edge_false_(ctl, uv_idx, xy_idx, ret)) {
+                                if (!edge_states_[uv_idx].enabled || propagate_edge_false_<full>(ctl, uv_idx, xy_idx, ret)) {
                                     remove_outgoing(uv_idx);
                                     return true;
                                 }
@@ -479,67 +671,16 @@ void Graph<T>::ensure_decision_level(level_t level, bool enable_propagate) {
                                   numeric_cast<index_t>(changed_vertices_.size()),
                                   numeric_cast<index_t>(changed_edges_.size()),
                                   numeric_cast<index_t>(disabled_edges_.size()),
+                                  numeric_cast<index_t>(visited_lower_.size()),
+                                  numeric_cast<index_t>(visited_upper_.size()),
+                                  numeric_cast<index_t>(lower_trail_.size()),
+                                  numeric_cast<index_t>(upper_trail_.size()),
                                   can_propagate() && enable_propagate});
     }
 }
 
 template <typename T>
-bool Graph<T>::propagate(edge_t xy_idx, Clingo::PropagateControl &ctl) {
-    // The function is best understood considering the following example graph:
-    //
-    //   v ->* x -> y ->* u
-    //   ^---------------/
-    //
-    // We calculate relevant shortest paths from x ->* u.
-    // A shorted path is relevant if it contains edge x -> y.
-    //
-    // Similarly, we calculate relevant shorted paths v *<- y for the transposed graph.
-    // Again, a shorted path is relevant if it contains y <- x.
-    //
-    // There is a negative cycle, if cost(x ->* u) + cost(v *<- y) - cost(x -> y) + cost(u -> v) is negative.
-    ++stats_.edges_propagated;
-    disable_edge(xy_idx);
-    auto &xy = edges_[xy_idx];
-    auto &x = vertices_[xy.from];
-    auto &y = vertices_[xy.to];
-    x.relevant_to = true;
-    y.relevant_from = true;
-    vertex_t num_relevant_out_from{0};
-    vertex_t num_relevant_in_from{0};
-    vertex_t num_relevant_out_to{0};
-    vertex_t num_relevant_in_to{0};
-    {
-        Timer t{stats_.time_dijkstra};
-        std::tie(num_relevant_out_from, num_relevant_in_from) = static_cast<Impl<From>*>(this)->dijkstra(xy.from, xy_idx);
-        std::tie(num_relevant_out_to, num_relevant_in_to) = static_cast<Impl<To>*>(this)->dijkstra(xy.to, xy_idx);
-    }
-#ifdef CLINGODL_CROSSCHECK
-    // check if the counts of relevant incoming/outgoing vertices are correct
-    assert(std::make_pair(num_relevant_in_from, num_relevant_out_from) == static_cast<Impl<From> *>(this)->count_relevant_());
-    assert(std::make_pair(num_relevant_out_to, num_relevant_in_to) == static_cast<Impl<To> *>(this)->count_relevant_());
-#endif
-
-    bool forward_from = num_relevant_in_from < num_relevant_out_to;
-    bool backward_from = num_relevant_out_from < num_relevant_in_to;
-
-    bool ret = static_cast<Impl<From> *>(this)->propagate_edges(ctl, xy_idx, forward_from, backward_from) &&
-               static_cast<Impl<To> *>(this)->propagate_edges(ctl, xy_idx, !forward_from, !backward_from);
-
-    for (auto &x : visited_from_) {
-        vertices_[x].visited_from = false;
-        vertices_[x].relevant_from = false;
-    }
-    for (auto &x : visited_to_) {
-        vertices_[x].visited_to = false;
-        vertices_[x].relevant_to = false;
-    }
-    visited_from_.clear();
-    visited_to_.clear();
-    return ret;
-}
-
-template <typename T>
-bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLINT
+bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx) {
     // This function adds an edge to the graph and returns false if the edge
     // induces a negative cycle.
     //
@@ -555,11 +696,82 @@ bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLIN
 #endif
     assert(visited_from_.empty());
     assert(costs_heap_.empty());
-    level_t level = current_decision_level_();
-    auto &uv = edges_[uv_idx];
+
+    // cycle check and simple propagation
+    auto consistent = check_cycle_(ctl, uv_idx) && propagate_simple_(ctl, uv_idx);
+
+    // reset visited flags
+    for (auto &x : visited_from_) {
+        vertices_[x].visited_from = 0;
+    }
+    visited_from_.clear();
+    costs_heap_.clear();
+
+    // propagate cycles through zero node
+    // (using equality here intentional because full and zero vertex propagation should be exclusive)
+    if (mode() == PropagationMode::Zero) {
+        consistent = consistent && propagate_zero_(ctl, uv_idx, zero_idx);
+    }
+
+    // full propagation
+    if (can_propagate()) {
+        consistent = consistent && propagate_full_(ctl, uv_idx);
+    }
+
+    return consistent;
+}
+
+template <typename T>
+bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx) { // NOLINT
+    ++stats_.edges_propagated;
+    disable_edge(uv_idx);
+
+    Timer t{stats_.time_dijkstra};
+    static_cast<Impl<From> *>(this)->dijkstra_bounds(uv_idx, zero_idx);
+    static_cast<Impl<To> *>(this)->dijkstra_bounds(uv_idx, zero_idx);
+    t.stop();
+
+    bool ret = static_cast<Impl<From> *>(this)->template propagate_edges<false>(ctl, 0, true, true) &&
+               static_cast<Impl<To> *>(this)->template propagate_edges<false>(ctl, 0, true, true);
+
+    visited_from_.clear();
+    visited_to_.clear();
+
+#ifdef CLINGODL_CROSSCHECK
+    if (ret) {
+        auto ass = ctl.assignment();
+        auto cost_from_zero = static_cast<Impl<From>*>(this)->bellman_ford_(changed_edges_, zero_idx);
+        auto cost_to_zero = static_cast<Impl<To>*>(this)->bellman_ford_(changed_edges_, zero_idx);
+        if (cost_from_zero && cost_to_zero) {
+            for (auto [x_idx, cost_x] : *cost_from_zero) {
+                for (auto &xy : edges_) {
+                    if (xy.from != x_idx) {
+                        continue;
+                    }
+                    auto it_y = cost_to_zero->find(xy.to);
+                    if (it_y == cost_to_zero->end()) {
+                        continue;
+                    }
+                    auto cost_y = it_y->second;
+                    assert (cost_x + cost_y + xy.weight >= 0 || ass.is_false(xy.lit));
+                }
+            }
+        }
+    }
+
+#endif
+
+    return ret;
+}
+
+template <typename T>
+bool Graph<T>::check_cycle_(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLINT
     // NOTE: would be more efficient if relevant would return statically false here
     //       for the compiler to make comparison cheaper
+
     auto &m = *static_cast<Impl<From> *>(this);
+    level_t level = current_decision_level_();
+    auto &uv = edges_[uv_idx];
 
     // initialize the vertices of the edge to add
     auto &u = vertices_[uv.from];
@@ -612,7 +824,7 @@ bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLIN
         }
     }
 
-    bool consistent = true;
+    // there no negative cycle
     if (!u.visited_from) {
         // add the edge to the graph
         u.outgoing.emplace_back(uv_idx);
@@ -620,37 +832,41 @@ bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLIN
         changed_edges_.emplace_back(uv_idx);
 #ifdef CLINGODL_CROSSCHECK
         // check that the graph does not have a cycle
-        assert(bellman_ford_(changed_edges_, uv.from).has_value());
+        assert(m.bellman_ford_(changed_edges_, uv.from).has_value());
 #endif
-    }
-    else {
-        // gather the edges in the negative cycle
-        clause_.clear();
-        clause_.emplace_back(-edges_[v.path_from].lit);
-        auto next_idx = edges_[v.path_from].from;
-#ifdef CLINGODL_CROSSCHECK
-        T weight = edges_[v.path_from].weight;
-#endif
-        while (uv.to != next_idx) {
-            auto &vertex = vertices_[next_idx];
-            auto &edge = edges_[vertex.path_from];
-            clause_.emplace_back(-edge.lit);
-            next_idx = edge.from;
-#ifdef CLINGODL_CROSSCHECK
-            weight += edge.weight;
-#endif
-        }
-#ifdef CLINGODL_CROSSCHECK
-        assert(weight < 0);
-#endif
-        consistent = ctl.add_clause(clause_) && ctl.propagate();
+        return true;
     }
 
-    if (propagate_ >= PropagationMode::Trivial && consistent) {
+    // gather the edges in the negative cycle
+    clause_.clear();
+    clause_.emplace_back(-edges_[v.path_from].lit);
+    auto next_idx = edges_[v.path_from].from;
+#ifdef CLINGODL_CROSSCHECK
+    T weight = edges_[v.path_from].weight;
+#endif
+    while (uv.to != next_idx) {
+        auto &vertex = vertices_[next_idx];
+        auto &edge = edges_[vertex.path_from];
+        clause_.emplace_back(-edge.lit);
+        next_idx = edge.from;
+#ifdef CLINGODL_CROSSCHECK
+        weight += edge.weight;
+#endif
+    }
+#ifdef CLINGODL_CROSSCHECK
+    assert(weight < 0);
+#endif
+    return ctl.add_clause(clause_) && ctl.propagate();
+}
+
+template <typename T>
+bool Graph<T>::propagate_simple_(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLINT
+    if (propagate_ >= PropagationMode::Trivial) {
+        auto &uv = edges_[uv_idx];
         if (visited_from_.empty() || propagate_ == PropagationMode::Trivial) {
-            consistent = with_incoming_(ctl, uv.from, [&](vertex_t t_idx, edge_t ts_idx) {
+            return with_incoming_(ctl, uv.from, [&](vertex_t t_idx, edge_t ts_idx) {
                 auto &ts = edges_[ts_idx];
-                if (t_idx == uv.to && uv.weight + ts.weight < 0) {
+                if (t_idx == uv.to && uv.weight + ts.weight < 0 && !ctl.assignment().is_false(ts.lit)) {
                     clause_.emplace_back(-edges_[uv_idx].lit);
                     clause_.emplace_back(-edges_[ts_idx].lit);
                     ++stats_.false_edges_trivial;
@@ -659,26 +875,75 @@ bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLIN
                 return false;
             });
         }
-        else if (propagate_ >= PropagationMode::Weak) {
-            consistent = cheap_propagate_(ctl, uv.from, uv.from);
-            if (propagate_ >= PropagationMode::WeakPlus && consistent) {
+        if (propagate_ >= PropagationMode::Weak) {
+            if (!cheap_propagate_(ctl, uv.from, uv.from)) {
+                return false;
+            }
+            if (propagate_ >= PropagationMode::WeakPlus) {
                 for (auto &s_idx : visited_from_) {
                     if (!cheap_propagate_(ctl, uv.from, s_idx)) {
-                        consistent = false;
-                        break;
+                        return false;
                     }
                 }
             }
         }
     }
-    // reset visited flags
+    return true;
+}
+
+template <typename T>
+bool Graph<T>::propagate_full_(Clingo::PropagateControl &ctl, edge_t xy_idx) {
+    // The function is best understood considering the following example graph:
+    //
+    //   v ->* x -> y ->* u
+    //   ^---------------/
+    //
+    // We calculate relevant shortest paths from x ->* u.
+    // A shortesd path is relevant if it contains edge x -> y.
+    //
+    // Similarly, we calculate relevant shortest paths v *<- y for the transposed graph.
+    // Again, a shortest path is relevant if it contains y <- x.
+    //
+    // There is a negative cycle, if cost(x ->* u) + cost(v *<- y) - cost(x -> y) + cost(u -> v) is negative.
+    ++stats_.edges_propagated;
+    disable_edge(xy_idx);
+    auto &xy = edges_[xy_idx];
+    auto &x = vertices_[xy.from];
+    auto &y = vertices_[xy.to];
+    x.relevant_to = true;
+    y.relevant_from = true;
+    vertex_t num_relevant_out_from{0};
+    vertex_t num_relevant_in_from{0};
+    vertex_t num_relevant_out_to{0};
+    vertex_t num_relevant_in_to{0};
+    {
+        Timer t{stats_.time_dijkstra};
+        std::tie(num_relevant_out_from, num_relevant_in_from) = static_cast<Impl<From>*>(this)->dijkstra_full(xy.from, xy_idx);
+        std::tie(num_relevant_out_to, num_relevant_in_to) = static_cast<Impl<To>*>(this)->dijkstra_full(xy.to, xy_idx);
+    }
+#ifdef CLINGODL_CROSSCHECK
+    // check if the counts of relevant incoming/outgoing vertices are correct
+    assert(std::make_pair(num_relevant_in_from, num_relevant_out_from) == static_cast<Impl<From> *>(this)->count_relevant_());
+    assert(std::make_pair(num_relevant_out_to, num_relevant_in_to) == static_cast<Impl<To> *>(this)->count_relevant_());
+#endif
+
+    bool forward_from = num_relevant_in_from < num_relevant_out_to;
+    bool backward_from = num_relevant_out_from < num_relevant_in_to;
+
+    bool ret = static_cast<Impl<From> *>(this)->template propagate_edges<true>(ctl, xy_idx, forward_from, backward_from) &&
+               static_cast<Impl<To> *>(this)->template propagate_edges<true>(ctl, xy_idx, !forward_from, !backward_from);
+
     for (auto &x : visited_from_) {
         vertices_[x].visited_from = 0;
+        vertices_[x].relevant_from = false;
+    }
+    for (auto &x : visited_to_) {
+        vertices_[x].visited_to = false;
+        vertices_[x].relevant_to = false;
     }
     visited_from_.clear();
-    costs_heap_.clear();
-
-    return consistent;
+    visited_to_.clear();
+    return ret;
 }
 
 template <typename T>
@@ -728,7 +993,7 @@ template <typename T>
         auto &ts = edges_[ts_idx];
         if (s.visited_from < t.visited_from) {
             T weight = t.potential() - s.potential();
-            if (weight + ts.weight < 0) {
+            if (weight + ts.weight < 0 && !ctl.assignment().is_false(ts.lit)) {
                 T check = 0;
                 auto r_idx = t_idx;
                 while (u_idx != r_idx && s_idx != r_idx) {
@@ -757,23 +1022,41 @@ template <typename T>
 
 template <typename T>
 void Graph<T>::backtrack() {
-    auto vo = changed_trail_.back().vertex_offset;
-    auto eo = changed_trail_.back().edge_offset;
-    auto io = changed_trail_.back().disabled_offset;
-    for (auto it = changed_vertices_.rbegin(), ie = changed_vertices_.rend() - vo; it != ie; ++it) {
+    auto entry = changed_trail_.back();
+    for (auto it = changed_vertices_.rbegin(), ie = changed_vertices_.rend() - entry.vertex_offset; it != ie; ++it) {
         vertices_[*it].potential_stack.pop_back();
     }
-    for (auto it = changed_edges_.rbegin(), ie = changed_edges_.rend() - eo; it != ie; ++it) {
+    for (auto it = changed_edges_.rbegin(), ie = changed_edges_.rend() - entry.edge_offset; it != ie; ++it) {
         auto &edge = edges_[*it];
         vertices_[edge.from].outgoing.pop_back();
         vertices_[edge.to].incoming.pop_back();
     }
-    for (auto it = disabled_edges_.begin() + io, ie = disabled_edges_.end(); it != ie; ++it) {
+    for (auto it = disabled_edges_.begin() + entry.disabled_offset, ie = disabled_edges_.end(); it != ie; ++it) {
         add_candidate_edge_(*it);
     }
-    changed_vertices_.resize(vo);
-    changed_edges_.resize(eo);
-    disabled_edges_.resize(io);
+    for (auto it = visited_lower_.begin() + entry.visited_lower_offset, ie = visited_lower_.end(); it != ie; ++it) {
+        vertices_[*it].visited_lower = false;
+    }
+    for (auto it = visited_upper_.begin() + entry.visited_upper_offset, ie = visited_upper_.end(); it != ie; ++it) {
+        vertices_[*it].visited_upper = false;
+    }
+    for (auto it = lower_trail_.rbegin(), ie = lower_trail_.rend() - entry.lower_value_offset; it != ie; ++it) {
+        auto &[vertex_idx, edge_idx, value] = *it;
+        vertices_[vertex_idx].path_lower = edge_idx;
+        vertices_[vertex_idx].bound_lower = value;
+    }
+    for (auto it = upper_trail_.rbegin(), ie = upper_trail_.rend() - entry.upper_value_offset; it != ie; ++it) {
+        auto &[vertex_idx, edge_idx, value] = *it;
+        vertices_[vertex_idx].path_upper = edge_idx;
+        vertices_[vertex_idx].bound_upper = value;
+    }
+    changed_vertices_.resize(entry.vertex_offset);
+    changed_edges_.resize(entry.edge_offset);
+    disabled_edges_.resize(entry.disabled_offset);
+    visited_lower_.resize(entry.visited_lower_offset);
+    visited_upper_.resize(entry.visited_upper_offset);
+    lower_trail_.resize(entry.lower_value_offset);
+    upper_trail_.resize(entry.upper_value_offset);
     changed_trail_.pop_back();
 }
 
@@ -815,7 +1098,8 @@ void Graph<T>::add_candidate_edge_(edge_t uv_idx) {
 }
 
 template <typename T>
-bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
+template <bool full>
+bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) { // NOLINT
     // The function is best understood considering the following example graph:
     //
     //   u ->* x -> y ->* v
@@ -824,37 +1108,63 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
     // Using the intermidiate costs calculated in propagate(), we get the
     // length of the shortest path u ->* v. If this path is shorter than
     // u -> v, then we disable the edge.
+    //
+    // The case for propagation through the zero node is a bit simpler because
+    // we do not have to consider edge x -> y but the zero node instead:
+    //
+    //   u ->* 0 ->* v
+    //   \-----------^
+    //
     auto &uv = edges_[uv_idx];
     auto &u = vertices_[uv.from];
     auto &v = vertices_[uv.to];
-    assert(u.relevant_to || v.relevant_from);
+    bool relevant = false;
+    if constexpr(full) {
+        assert(u.relevant_to || v.relevant_from);
+        relevant = u.relevant_to && v.relevant_from;
+    }
+    else {
+        assert(u.visited_upper || v.visited_lower);
+        relevant = u.visited_upper && v.visited_lower;
+    }
 
-    if (u.relevant_to && v.relevant_from) {
+    if (relevant) {
         auto &xy = edges_[xy_idx];
         auto &x = vertices_[xy.from];
         auto &y = vertices_[xy.to];
 
-        auto cost_uy = u.cost_to + y.potential() - u.potential();
-        auto cost_xv = v.cost_from + v.potential() - x.potential();
-        auto cost_uv = cost_uy + cost_xv - xy.weight;
+        value_t cost_uv{0};
+        if constexpr(full) {
+            auto cost_uy = u.cost_to + y.potential() - u.potential();
+            auto cost_xv = v.cost_from + v.potential() - x.potential();
+            cost_uv = cost_uy + cost_xv - xy.weight;
 #ifdef CLINGODL_CROSSCHECK
-        auto bf_costs_from_u = bellman_ford_(changed_edges_, uv.from);
-        auto bf_costs_from_x = bellman_ford_(changed_edges_, xy.from);
-        auto bf_cost_uy = bf_costs_from_u->find(xy.to);
-        auto bf_cost_xv = bf_costs_from_x->find(uv.to);
-        static_cast<void>(bf_cost_uy);
-        static_cast<void>(bf_cost_xv);
-        assert(bf_cost_uy != bf_costs_from_u->end());
-        assert(bf_cost_xv != bf_costs_from_u->end());
-        assert(bf_cost_uy->second == cost_uy);
-        assert(bf_cost_xv->second == cost_xv);
+            auto &m = *static_cast<Impl<From> *>(this);
+            auto bf_costs_from_u = m.bellman_ford_(changed_edges_, uv.from);
+            auto bf_costs_from_x = m.bellman_ford_(changed_edges_, xy.from);
+            auto bf_cost_uy = bf_costs_from_u->find(xy.to);
+            auto bf_cost_xv = bf_costs_from_x->find(uv.to);
+            static_cast<void>(bf_cost_uy);
+            static_cast<void>(bf_cost_xv);
+            assert(bf_cost_uy != bf_costs_from_u->end());
+            assert(bf_cost_xv != bf_costs_from_u->end());
+            assert(bf_cost_uy->second == cost_uy);
+            assert(bf_cost_xv->second == cost_xv);
 #endif
+        }
+        else {
+            cost_uv = u.bound_upper + v.bound_lower;
+        }
         if (cost_uv <= uv.weight) {
 #ifdef CLINGODL_CROSSCHECK
             // make sure that the graph does not have a negative cycle even if it contains the edge
-            auto edges = changed_edges_;
-            edges.emplace_back(uv_idx);
-            assert(bellman_ford_(edges, uv.from).has_value());
+            if constexpr(full) {
+                auto edges = changed_edges_;
+                edges.emplace_back(uv_idx);
+                auto &m = *static_cast<Impl<From> *>(this);
+                static_cast<void>(m);
+                assert(m.bellman_ford_(edges, uv.from).has_value());
+            }
 #endif
             ++stats_.true_edges;
             disable_edge(uv_idx);
@@ -865,55 +1175,81 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) {
 }
 
 template <typename T>
+template <bool full>
 bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret) { // NOLINT
     // The function is best understood considering the following example graph:
     //
     //   v ->* x -> y ->* u
     //   ^----------------/
     //
-    // Using the intermidiate costs calculated in propagate(), we get the
+    // Using the intermediate costs calculated in propagate(), we get the
     // length of the shortest path v ->* u. If this path extended with u -> v
     // has a negative length, then the edge has to be false.
+    //
+    // The case for propagation through the zero node is a bit simpler because
+    // we do not have to consider edge x -> y but the zero node instead:
+    //
+    //   v ->* 0 ->* u
+    //   ^-----------/
+    //
     auto &uv = edges_[uv_idx];
     auto &u = vertices_[uv.from];
     auto &v = vertices_[uv.to];
-    assert(v.relevant_to || u.relevant_from);
+    bool relevant = true;
+    if constexpr(full) {
+        assert(v.relevant_to || u.relevant_from);
+        relevant = v.relevant_to && u.relevant_from;
+    }
+    else {
+        assert(v.visited_upper || u.visited_lower);
+        relevant = v.visited_upper && u.visited_lower;
+    }
 
-    if (v.relevant_to && u.relevant_from) {
+    if (relevant) {
         auto &xy = edges_[xy_idx];
         auto &x = vertices_[xy.from];
         auto &y = vertices_[xy.to];
 
-        auto cost_vy = v.cost_to + y.potential() - v.potential();
-        auto cost_xu = u.cost_from + u.potential() - x.potential();
-        auto cost_vu = cost_vy + cost_xu - xy.weight;
+        value_t cost_vu{0};
+        if constexpr(full) {
+            auto cost_vy = v.cost_to + y.potential() - v.potential();
+            auto cost_xu = u.cost_from + u.potential() - x.potential();
+            cost_vu = cost_vy + cost_xu - xy.weight;
+        }
+        else {
+            cost_vu = v.bound_upper + u.bound_lower;
+        }
+
         if (cost_vu + uv.weight < 0) {
             ++stats_.false_edges;
             if (!ctl.assignment().is_false(uv.lit)) {
 #ifdef CLINGODL_CROSSCHECK
-                value_t sum = uv.weight - xy.weight;
+                value_t sum = uv.weight;
+                if constexpr(full) {
+                    sum -= xy.weight;
+                }
 #endif
                 clause_.clear();
                 clause_.push_back(-uv.lit);
                 // forward
-                for (auto next_edge_idx = u.path_from; next_edge_idx != invalid_edge_index;) {
+                for (auto next_edge_idx = full ? u.path_from : u.path_lower; next_edge_idx != invalid_edge_index;) {
                     auto &next_edge = edges_[next_edge_idx];
                     auto &next_vertex = vertices_[next_edge.from];
                     clause_.push_back(-next_edge.lit);
 #ifdef CLINGODL_CROSSCHECK
                     sum += next_edge.weight;
 #endif
-                    next_edge_idx = next_vertex.path_from;
+                    next_edge_idx = full ? next_vertex.path_from : next_vertex.path_lower;
                 }
                 // backward
-                for (auto next_edge_idx = v.path_to; next_edge_idx != invalid_edge_index;) {
+                for (auto next_edge_idx = full ? v.path_to : v.path_upper; next_edge_idx != invalid_edge_index;) {
                     auto &next_edge = edges_[next_edge_idx];
                     auto &next_vertex = vertices_[next_edge.to];
                     clause_.push_back(-next_edge.lit);
 #ifdef CLINGODL_CROSSCHECK
                     sum += next_edge.weight;
 #endif
-                    next_edge_idx = next_vertex.path_to;
+                    next_edge_idx = full ? next_vertex.path_to : next_vertex.path_upper;
                 }
 #ifdef CLINGODL_CROSSCHECK
                 assert(sum < 0 && sum == cost_vu + uv.weight);
@@ -927,55 +1263,17 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
         }
 #ifdef CLINGODL_CROSSCHECK
         // make sure that the graph does not have a negative cycle even if it contains the edge
-        auto edges = changed_edges_;
-        edges.emplace_back(uv_idx);
-        assert(bellman_ford_(edges, uv.from).has_value());
+        if constexpr(full) {
+            auto edges = changed_edges_;
+            edges.emplace_back(uv_idx);
+            auto &m = *static_cast<Impl<From> *>(this);
+            static_cast<void>(m);
+            assert(m.bellman_ford_(edges, uv.from).has_value());
+        }
 #endif
     }
     return false;
 }
-
-#ifdef CLINGODL_CROSSCHECK
-template <typename T>
-std::optional<std::unordered_map<vertex_t, T>> Graph<T>::bellman_ford_(std::vector<vertex_t> const &edges, vertex_t source) {
-    std::unordered_map<vertex_t, T> costs;
-    costs[source] = 0;
-    vertex_t vertices = 0;
-    for (auto &vertex : vertices_) {
-        if (vertex.defined()) {
-            ++vertices;
-        }
-    }
-    for (vertex_t i = 0; i < vertices; ++i) {
-        for (auto const &uv_idx : edges) {
-            auto &uv = edges_[uv_idx];
-            auto u_cost = costs.find(uv.from);
-            if (u_cost != costs.end()) {
-                auto v_cost = costs.find(uv.to);
-                auto dist = u_cost->second + uv.weight;
-                if (v_cost == costs.end()) {
-                    costs[uv.to] = dist;
-                }
-                else if (dist < v_cost->second) {
-                    v_cost->second = dist;
-                }
-            }
-        }
-    }
-    for (auto const &uv_idx : edges) {
-        auto &uv = edges_[uv_idx];
-        auto u_cost = costs.find(uv.from);
-        if (u_cost != costs.end()) {
-            auto v_cost = costs.find(uv.to);
-            auto dist = u_cost->second + uv.weight;
-            if (dist < v_cost->second) {
-                return std::nullopt;
-            }
-        }
-    }
-    return costs;
-}
-#endif
 
 template <typename T>
 void Graph<T>::set_potential_(Vertex &vtx, level_t level, T potential) {

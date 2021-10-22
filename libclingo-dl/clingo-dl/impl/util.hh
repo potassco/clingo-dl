@@ -107,7 +107,18 @@ void ensure_index(C &c, size_t index) {
 inline Timer::Timer(Duration &elapsed)
     : elapsed_(elapsed)
     , start_(std::chrono::steady_clock::now()) {}
-inline Timer::~Timer() { elapsed_ += std::chrono::steady_clock::now() - start_; }
+
+inline void Timer::stop() {
+    if (!stopped_) {
+        elapsed_ += std::chrono::steady_clock::now() - start_;
+        stopped_ = true;
+    }
+}
+
+inline Timer::~Timer() {
+    stop();
+}
+
 
 template <int N>
 template <class M>

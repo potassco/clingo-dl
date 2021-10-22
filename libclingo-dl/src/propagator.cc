@@ -465,7 +465,7 @@ void DLPropagator<T>::add_edge_(Clingo::PropagateInit &init, vertex_t u_id, vert
     lit_to_edges_.emplace(lit, id);
     for (int i = 0; i < init.number_of_threads(); ++i) {
         init.add_watch(lit, i);
-        if (conf_.get_propagate_mode(i) >= PropagationMode::Strong || conf_.get_propagate_root(i) > 0 || conf_.get_propagate_budget(i) > 0) {
+        if (conf_.get_propagate_mode(i) >= PropagationMode::Zero || conf_.get_propagate_root(i) > 0 || conf_.get_propagate_budget(i) > 0) {
             disable_edges_ = true;
             init.add_watch(-lit, i);
         }
@@ -728,8 +728,8 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
     ThreadState &state = states_[thread_id];
     Timer timer{state.stats.time_propagate};
     auto level = ass.decision_level();
-    bool enable_propagate = state.graph.mode() >= PropagationMode::Strong || level < state.propagate_root || state.propagate_budget > 0;
-    state.graph.ensure_decision_level(level, enable_propagate);
+    bool propagate = state.graph.mode() >= PropagationMode::Strong || level < state.propagate_root;
+    state.graph.ensure_decision_level(level, propagate || state.propagate_budget > 0);
 
     // re-enable removed watches
     if (state.graph.can_propagate()) {
@@ -778,23 +778,17 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
 
     // process edges in the todo queue
     sort_edges(conf_.get_sort_mode(thread_id), state);
-    for (auto edge : state.todo_edges) {
-        if (state.graph.edge_is_enabled(edge)) {
-            // check for conflicts
-            if (!state.graph.add_edge(ctl, edge)) {
-                return;
-            }
-
-            // propagate edges
-            bool propagate = (state.graph.mode() >= PropagationMode::Strong) ||
-                (level < state.propagate_root) || (
-                    state.propagate_budget > 0 &&
-                    state.graph.can_propagate() &&
-                    state.stats.propagate_cost_add + state.propagate_budget > state.stats.propagate_cost_from + state.stats.propagate_cost_to);
-            if (!propagate) {
+    for (auto edge_idx : state.todo_edges) {
+        if (state.graph.edge_is_enabled(edge_idx)) {
+            // disable propagation once budget exceeded
+            bool has_budget = state.propagate_budget > 0 && state.stats.propagate_cost_add + state.propagate_budget > state.stats.propagate_cost_from + state.stats.propagate_cost_to;
+            if (!propagate && !has_budget) {
                 state.graph.disable_propagate();
             }
-            else if (!state.graph.propagate(edge, ctl)) {
+            auto &edge = edges_[edge_idx];
+            auto &info = vertex_info_[edge.from];
+            // check for conflicts
+            if (!state.graph.add_edge(ctl, edge_idx, info.cc)) {
                 return;
             }
         }

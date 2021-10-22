@@ -16,7 +16,7 @@ def get_build_number(channels, version):
     Get the next build number.
     '''
     try:
-        pkgs = json.loads(subprocess.check_output(['conda', 'search', '--json', '-c', channels[-1], NAME]))
+        pkgs = json.loads(subprocess.check_output(['conda', 'search', '--json', '-c', channels[0], NAME]))
     except subprocess.CalledProcessError:
         pkgs = {NAME: []}
 
@@ -41,7 +41,7 @@ def run():
         channels = ['potassco']
     else:
         label = "dev"
-        channels = ['potassco', 'potassco/label/dev']
+        channels = ['potassco/label/dev', 'potassco']
 
     version = None
     with open('libclingo-dl/clingo-dl.h') as fh:

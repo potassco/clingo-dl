@@ -81,11 +81,13 @@ public:
     Timer(Timer &&other) = delete;
     Timer &operator=(Timer const &other) = delete;
     Timer &operator=(Timer &&other) = delete;
+    void stop();
     ~Timer();
 
 private:
-    Duration &elapsed_; //!< The duration to increment.
-    TimePoint start_;   //!< The time when the timer was started.
+    Duration &elapsed_;   //!< The duration to increment.
+    TimePoint start_;     //!< The time when the timer was started.
+    bool stopped_{false}; //!< Whether the timer has been stopped.
 };
 
 //! Heap class designed for DL propagation with N children per node.

@@ -2,6 +2,7 @@
 
 ## clingo-dl 1.3.0
   * extended optimization algorithm
+  * add propagation mode to propagete through zero nodes
   * large code refactoring
 
 ## clingo-dl 1.2.0
