@@ -13,6 +13,3 @@ seq((T2,ST2),(T1,ST1),Time2) :- assign(T1,ST1,M), assign(T2,ST2,M), T1<T2, execu
 
 &diff{0-(T,M)} <= 0 :- task(T), machine(M), bound(B).
 &diff{(T,M)-0} <= B :- task(T), machine(M), bound(B).
-
-&show_assignment{}.
-#show.

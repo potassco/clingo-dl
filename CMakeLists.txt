@@ -14,7 +14,7 @@ endif()
 
 # Enable folders in IDEs like Visual Studio
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 
@@ -24,6 +24,7 @@ include(CMakeDependentOption)
 option(CLINGODL_MANAGE_RPATH "set rpath if not installed into system directory" ON)
 option(CLINGODL_BUILD_TESTS "build tests" OFF)
 option(CLINGODL_BUILD_SHARED "build clingo-dl library shared" ON)
+option(CLINGODL_CROSSCHECK "enable additional state checking" OFF)
 set(PYCLINGODL_ENABLE "auto" CACHE STRING "build with python support: OFF, auto, require, pip
 auto: enable python support if python is available
 require: enable python support and fails if python is not available
@@ -38,6 +39,7 @@ set(PYCLINGODL_INSTALL_DIR "" CACHE STRING "path where to install python module"
 
 mark_as_advanced(CLINGODL_BUILD_STATIC)
 mark_as_advanced(CLINGODL_BUILD_SHARED)
+mark_as_advanced(CLINGODL_CROSSCHECK)
 mark_as_advanced(PYCLINGODL_PIP_PATH)
 mark_as_advanced(PYCLINGODL_SUFFIX)
 mark_as_advanced(PYCLINGODL_INSTALL_DIR)
@@ -55,7 +57,9 @@ if (POLICY CMP0063 AND CLINGODL_BUILD_SHARED)
     set(CMAKE_C_VISIBILITY_PRESET hidden)
 endif()
 
-enable_testing()
+if (CLINGODL_BUILD_TESTS)
+    enable_testing()
+endif()
 
 if (CLINGODL_MANAGE_RPATH)
     set(CMAKE_SKIP_BUILD_RPATH FALSE)
@@ -139,6 +143,9 @@ if (PYCLINGODL_ENABLE STREQUAL "pip")
         target_link_libraries(libclingo INTERFACE "${_PYCLINGODL_PIP_PATH}/import__clingo.lib")
     elseif (APPLE)
         target_link_options(libclingo INTERFACE "-undefined" "dynamic_lookup")
+    endif()
+    if (CLINGODL_BUILD_TESTS)
+        add_subdirectory(app/lib)
     endif()
     add_subdirectory(libclingo-dl)
     add_subdirectory(libpyclingo-dl)

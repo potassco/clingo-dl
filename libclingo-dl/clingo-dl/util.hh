@@ -1,26 +1,26 @@
 // {{{ MIT License
 //
-// // Copyright 2018 Roland Kaminski, Philipp Wanko, Max Ostrowski
+// Copyright Roland Kaminski, Philipp Wanko, and Max Ostrowski
 //
-// // Permission is hereby granted, free of charge, to any person obtaining a copy
-// // of this software and associated documentation files (the "Software"), to
-// // deal in the Software without restriction, including without limitation the
-// // rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-// // sell copies of the Software, and to permit persons to whom the Software is
-// // furnished to do so, subject to the following conditions:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to
+// deal in the Software without restriction, including without limitation the
+// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+// sell copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// // The above copyright notice and this permission notice shall be included in
-// // all copies or substantial portions of the Software.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-// // IN THE SOFTWARE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+// IN THE SOFTWARE.
 //
-// // }}}
+// }}}
 
 #ifndef CLINGODL_UTIL_HH
 #define CLINGODL_UTIL_HH
@@ -31,181 +31,111 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include <cassert>
 
 namespace std {
 
+//! Specialization to compute hashes for pairs.
 template<>
 struct hash<std::pair<int, int>> {
-    size_t operator()(std::pair<int, int> const &p) const {
-        return static_cast<size_t>(p.first) + (static_cast<size_t>(p.second) >> 32);
-    }
+    size_t operator()(std::pair<int, int> const &p) const;
 };
 
 } // namespace std
 
-namespace Detail {
+namespace ClingoDL {
 
-template <int X>
-using int_type = std::integral_constant<int, X>;
+//! A cast for integrals that causes an assertion if the target type cannot
+//! represent the number.
 template <class T, class S>
-inline void nc_check(S s, int_type<0>) { // same sign
-    (void)s;
-    assert((std::is_same<T, S>::value) || (s >= std::numeric_limits<T>::min() && s <= std::numeric_limits<T>::max()));
-}
-template <class T, class S>
-inline void nc_check(S s, int_type<-1>) { // Signed -> Unsigned
-    (void)s;
-    assert(s >= 0 && static_cast<S>(static_cast<T>(s)) == s);
-}
-template <class T, class S>
-inline void nc_check(S s, int_type<1>) { // Unsigned -> Signed
-    (void)s;
-    assert(!(s > std::numeric_limits<T>::max()));
-}
+inline T numeric_cast(S s);
 
-} // namespace Detail
-
-template <class T, class S>
-inline T numeric_cast(S s) {
-    constexpr int sv = int(std::numeric_limits<T>::is_signed) - int(std::numeric_limits<S>::is_signed);
-    ::Detail::nc_check<T>(s, ::Detail::int_type<sv>());
-    return static_cast<T>(s);
-}
-
+//! Helper to print unordered maps.
 template <class K, class V>
 std::ostream &operator<<(std::ostream &out, std::unordered_map<K, V> const &map);
+//! Helper to print vectors.
 template <class T>
 std::ostream &operator<<(std::ostream &out, std::vector<T> const &vec);
+//! Helper to print pairs.
 template <class K, class V>
 std::ostream &operator<<(std::ostream &out, std::pair<K, V> const &pair);
 
-template <class T>
-std::ostream &operator<<(std::ostream &out, std::vector<T> const &vec) {
-    out << "{";
-    for (auto &x : vec) {
-        out << " " << x;
-    }
-    out << " }";
-    return out;
-}
-
-template <class K, class V>
-std::ostream &operator<<(std::ostream &out, std::unordered_map<K, V> const &map) {
-    using T = std::pair<K, V>;
-    std::vector<T> vec;
-    vec.assign(map.begin(), map.end());
-    std::sort(vec.begin(), vec.end(), [](T const &a, T const &b) { return a.first < b.first; });
-    out << vec;
-    return out;
-}
-
-template <class K, class V>
-std::ostream &operator<<(std::ostream &out, std::pair<K, V> const &pair) {
-    out << "( " << pair.first << " " << pair.second << " )";
-    return out;
-}
-
+//! Helper to ensure that a resizable container can hold the given index.
 template <class C>
-void ensure_index(C &c, size_t index) {
-    if (index >= c.size()) {
-        c.resize(index + 1);
-    }
-}
+void ensure_index(C &c, size_t index);
 
+//! Duration used by the Timer class.
 using Duration = std::chrono::duration<double>;
 
+//! Simple timer class to measure durations.
 class Timer {
+private:
+    //! Data type for time points.
+    using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
+
 public:
-    Timer(Duration &elapsed)
-        : elapsed_(elapsed)
-        , start_(std::chrono::steady_clock::now()) {}
-    ~Timer() { elapsed_ += std::chrono::steady_clock::now() - start_; }
+    //! The constructor expects a reference to a duration which is incremented
+    //! by the lifetime of the timer.
+    Timer(Duration &elapsed);
+    Timer(Timer const &other) = delete;
+    Timer(Timer &&other) = delete;
+    Timer &operator=(Timer const &other) = delete;
+    Timer &operator=(Timer &&other) = delete;
+    void stop();
+    ~Timer();
 
 private:
-    Duration &elapsed_;
-    std::chrono::time_point<std::chrono::steady_clock> start_;
+    Duration &elapsed_;   //!< The duration to increment.
+    TimePoint start_;     //!< The time when the timer was started.
+    bool stopped_{false}; //!< Whether the timer has been stopped.
 };
 
+//! Heap class designed for DL propagation with N children per node.
+//!
+//! The heap stores indices and each member function takes a struct as argument
+//! to get its current cost and set it's offset/index in the heap.
 template <int N>
 class Heap {
 public:
+    //! We use 32bit integers for indexing.
+    using index_type = uint32_t;
+    //! We use 32bit integers for sizes.
+    using size_type = uint32_t;
+    //! Add an element to the heap.
     template <class M>
-    void push(M &m, int item) {
-        auto i = m.offset(item) = static_cast<int>(heap_.size());
-        heap_.push_back(item);
-        decrease(m, i);
-    }
+    void push(M &m, index_type item);
+    //! Remove the element with the lowest cost.
     template <class M>
-    int pop(M &m) {
-        assert(!heap_.empty());
-        auto ret = heap_[0];
-        if (heap_.size() > 1) {
-            heap_[0] = heap_.back();
-            m.offset(heap_[0]) = 0;
-            heap_.pop_back();
-            increase(m, 0);
-        }
-        else {
-            heap_.pop_back();
-        }
-        return ret;
-    }
-
+    index_type pop(M &m);
+    //! Update an element after it's cost has been decreased.
     template <class M>
-    void decrease(M &m, int i) {
-        while (i > 0) {
-            int p = parent_(i);
-            if (m.cost(heap_[p]) > m.cost(heap_[i])) {
-                swap_(m, i, p);
-                i = p;
-            }
-            else {
-                break;
-            }
-        }
-    }
+    void decrease(M &m, index_type item);
+    //! Update an element after it's cost has been increased.
     template <class M>
-    void increase(M &m, int i) {
-        for (int p = i, j = children_(p), s = numeric_cast<int>(heap_.size()); j < s; j = children_(p)) {
-            int min = j;
-            for (int k = j + 1; k < j + N; ++k) {
-                if (k < s && less_(m, k, min)) {
-                    min = k;
-                }
-            }
-            if (less_(m, min, p)) {
-                swap_(m, min, p);
-                p = min;
-            }
-            else {
-                return;
-            }
-        }
-    }
-    int size() { return heap_.size(); }
-    bool empty() { return heap_.empty(); }
-    void clear() { heap_.clear(); }
+    void increase(M &m, index_type item);
+    //! Get the number of elements in the heap.
+    size_type size();
+    //! Test if the heap is empty.
+    bool empty();
+    //! Remove all elements from the heap.
+    void clear();
 
 private:
+    //! Swap to elements in the heap.
     template <class M>
-    void swap_(M &m, int i, int j) {
-        m.offset(heap_[j]) = i;
-        m.offset(heap_[i]) = j;
-        std::swap(heap_[i], heap_[j]);
-    }
-    int parent_(int offset) { return (offset - 1) / N; }
-    int children_(int offset) { return N * offset + 1; }
+    void swap_(M &m, index_type i, index_type j);
+    //! Get the parent index of an element.
+    index_type parent_(index_type offset);
+    //! Get the index of the left most child of an element in the heap.
+    index_type children_(index_type offset);
+    //! Compare two elements by costs preferring relevant elements if the costs
+    //! are equal.
     template <class M>
-    bool less_(M &m, int a, int b) {
-        a = heap_[a], b = heap_[b];
-        auto ca = m.cost(a), cb = m.cost(b);
-        return ca < cb || (ca == cb && m.relevant(a) < m.relevant(b));
-    }
+    bool less_(M &m, index_type a, index_type b);
 
-private:
-    std::vector<int> heap_;
+    //! The vector storing the elements.
+    std::vector<index_type> heap_;
 };
-
 
 // Some of the functions below could also be implemented using (much faster)
 // compiler specific built-ins. For more information check the following links:
@@ -213,186 +143,70 @@ private:
 // - https://wiki.sei.cmu.edu/confluence/display/c/INT32-C.+Ensure+that+operations+on+signed+integers+do+not+result+in+overflow
 
 //! Safely add a and b throwing an exception in case of overflow/underflow.
-template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0> 
-Int safe_add(Int a, Int b) {
-    if (b > 0) {
-        if (a > std::numeric_limits<Int>::max() - b) {
-            throw std::overflow_error("integer overflow");
-        }
-    }
-    else if (b < 0) {
-        if (a < std::numeric_limits<Int>::min() - b) {
-            throw std::underflow_error("integer underflow");
-        }
-    }
-    return a + b;
-}
+template <typename Int, std::enable_if_t<std::is_integral_v<Int>, int> = 0>
+Int safe_add(Int a, Int b);
 
-template <typename Float, typename std::enable_if<std::is_floating_point<Float>::value, int>::type = 0>
-Float safe_add(Float a, Float b) {
-	return a + b; 
-}
+//! Add floating point numbers without specific overflow checking.
+template <typename Float, std::enable_if_t<std::is_floating_point_v<Float>, int> = 0>
+Float safe_add(Float a, Float b);
 
 //! Safely subtract a and b throwing an exception in case of
 //! overflow/underflow.
-template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0> 
-Int safe_sub(Int a, Int b) {
-    if (b > 0) {
-        if (a < std::numeric_limits<Int>::min() + b) {
-            throw std::underflow_error("integer underflow");
-        }
-    }
-    else if (b < 0) {
-        if (a > std::numeric_limits<Int>::max() + b) {
-            throw std::overflow_error("integer overflow");
-        }
-    }
-    return a - b;
-}
+template <typename Int, std::enable_if_t<std::is_integral_v<Int>, int> = 0>
+Int safe_sub(Int a, Int b);
 
-template <typename Float, typename std::enable_if<std::is_floating_point<Float>::value, int>::type = 0>
-Float safe_sub(Float a, Float b) {
-	return a - b; 
-}
+//! Subtract floating point numbers without specific overflow checking.
+template <typename Float, std::enable_if_t<std::is_floating_point_v<Float>, int> = 0>
+Float safe_sub(Float a, Float b);
 
 //! Safely multiply a and b throwing an exception in case of
 //! overflow/underflow.
-template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0> 
-Int safe_mul(Int a, Int b) {
-    if (a > 0) {
-        if (b > 0) {
-            if (a > (std::numeric_limits<Int>::max() / b)) {
-                throw std::overflow_error("integer overflow");
-            }
-        }
-        else if (b < (std::numeric_limits<Int>::min() / a)) {
-            throw std::underflow_error("integer underflow");
-        }
-    } else {
-        if (b > 0) {
-            if (a < (std::numeric_limits<Int>::min() / b)) {
-                throw std::underflow_error("integer underflow");
-            }
-        } else if (a < 0 && b < (std::numeric_limits<Int>::max() / a)) {
-            throw std::overflow_error("integer overflow");
-        }
-    }
-    return a * b;
-}
+template <typename Int, std::enable_if_t<std::is_integral_v<Int>, int> = 0>
+Int safe_mul(Int a, Int b);
 
-template <typename Float, typename std::enable_if<std::is_floating_point<Float>::value, int>::type = 0>
-Float safe_mul(Float a, Float b) {
-	return a * b; 
-}
+//! Multiply floating point numbers without specific overflow checking.
+template <typename Float, std::enable_if_t<std::is_floating_point_v<Float>, int> = 0>
+Float safe_mul(Float a, Float b);
 
 //! Safely divide a and b throwing an exception in case of overflow/underflow.
-template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0> 
-Int safe_div(Int a, Int b) {
-    if (a == std::numeric_limits<Int>::min() && b == -1) {
-        throw std::overflow_error("integer overflow");
-    }
-    if (b == 0) {
-        if (a < 0) {
-            throw std::underflow_error("integer underflow");
-        }
-        throw std::overflow_error("integer overflow");
-    }
-    return a / b;
-}
+template <typename Int, std::enable_if_t<std::is_integral_v<Int>, int> = 0>
+Int safe_div(Int a, Int b);
 
-template <typename Float, typename std::enable_if<std::is_floating_point<Float>::value, int>::type = 0>
-Float safe_div(Float a, Float b) {
-	return a / b; 
-}
-
+//! Divide floating point numbers without specific overflow checking.
+template <typename Float, std::enable_if_t<std::is_floating_point_v<Float>, int> = 0>
+Float safe_div(Float a, Float b);
 
 //! Safely calculate the modulo of a and b throwing an exception in case of
 //! overflow/underflow.
-template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0> 
-Int safe_mod(Int a, Int b) {
-    if (a == std::numeric_limits<Int>::min() && b == -1) {
-        throw std::overflow_error("integer overflow");
-    }
-    if (b == 0) {
-        if (a < 0) {
-            throw std::underflow_error("integer underflow");
-        }
-        throw std::overflow_error("integer overflow");
-    }
-    return a % b;
-}
+template <typename Int, std::enable_if_t<std::is_integral_v<Int>, int> = 0>
+Int safe_mod(Int a, Int b);
 
-template <typename Float, typename std::enable_if<std::is_floating_point<Float>::value, int>::type = 0>
-Float safe_mod(Float a, Float b) {
-	return fmod(a,b); 
-}
+//! Compute the modulo for floating point numbers without specific overflow checking.
+template <typename Float, std::enable_if_t<std::is_floating_point_v<Float>, int> = 0>
+Float safe_mod(Float a, Float b);
 
 //! Safely invert a throwing an exception in case of an underflow.
-template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0> 
-Int safe_inv(Int a) {
-    if (a == std::numeric_limits<Int>::min()) {
-        throw std::overflow_error("integer overflow");
-    }
-    return -a;
-}
+template <typename Int, std::enable_if_t<std::is_integral_v<Int>, int> = 0>
+Int safe_inv(Int a);
 
-template <typename Float, typename std::enable_if<std::is_floating_point<Float>::value, int>::type = 0>
-Float safe_inv(Float a) {
-	return -a; 
-}
+//! Invert a floating point number without specific overflow checking.
+template <typename Float, std::enable_if_t<std::is_floating_point_v<Float>, int> = 0>
+Float safe_inv(Float a);
 
-template <typename Int, typename std::enable_if<std::is_integral<Int>::value, int>::type = 0> 
-Int safe_pow(Int a, Int b) {
-    if (a == 0) {
-        throw std::overflow_error("integer overflow");
-    }
-    auto ret = std::pow(static_cast<double>(a), b);
-    if (ret > std::numeric_limits<Int>::max()) {
-        throw std::overflow_error("integer overflow");
-    }
-    if (ret < std::numeric_limits<Int>::min()) {
-        throw std::underflow_error("integer underflow");
-    }
-    return static_cast<Int>(ret);
-}
+//! Safely exponentiate a and b throwing an exception in case of
+//! overflow/underflow.
+template <typename Int, std::enable_if_t<std::is_integral_v<Int>, int> = 0>
+Int safe_pow(Int a, Int b);
 
-template <typename Float, typename std::enable_if<std::is_floating_point<Float>::value, int>::type = 0>
-Float safe_pow(Float a, Float b) {
-	return std::pow(a,b); 
-}
+//! Exponentiate floating point numbers without specific overflow checking.
+template <typename Float, std::enable_if_t<std::is_floating_point_v<Float>, int> = 0>
+Float safe_pow(Float a, Float b);
 
-//! Expects quoted string with protected characters and
-//! removes quotes and protection
-inline std::string unquote(char const* str) {
-    std::string res;
-    bool slash = false;
-    for (char const *it = *str == '"' ? str + 1 : str; *it != '\0'; ++it) {
-        if (slash) {
-            switch (*it) {
-                case 'n': {
-                    res.push_back('\n');
-                    break;
-                }
-                case '\\': {
-                    res.push_back('\\');
-                    break;
-                }
-                case '"': {
-                    res.push_back('"');
-                    break;
-                }
-                default: {
-                    assert(false);
-                    break;
-                }
-            }
-            slash = false;
-        }
-        else if (*it == '"' && *(it + 1) == '\0') { break; }
-        else if (*it == '\\') { slash = true; }
-        else { res.push_back(*it); }
-    }
-    return res;
-}
+//! Restores quoted characters in the given string.
+std::string unquote(char const* str);
+
+} // namespace ClingoDL
+
+#include <clingo-dl/impl/util.hh>
 
 #endif // CLINGODL_UTIL_HH

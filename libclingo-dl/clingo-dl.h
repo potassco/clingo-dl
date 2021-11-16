@@ -1,26 +1,26 @@
 // {{{ MIT License
 //
-// // Copyright 2018 Roland Kaminski, Philipp Wanko, Max Ostrowski
+// Copyright Roland Kaminski, Philipp Wanko, and Max Ostrowski
 //
-// // Permission is hereby granted, free of charge, to any person obtaining a copy
-// // of this software and associated documentation files (the "Software"), to
-// // deal in the Software without restriction, including without limitation the
-// // rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-// // sell copies of the Software, and to permit persons to whom the Software is
-// // furnished to do so, subject to the following conditions:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to
+// deal in the Software without restriction, including without limitation the
+// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+// sell copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// // The above copyright notice and this permission notice shall be included in
-// // all copies or substantial portions of the Software.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-// // IN THE SOFTWARE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+// IN THE SOFTWARE.
 //
-// // }}}
+// }}}
 
 #ifndef CLINGODL_H
 #define CLINGODL_H
@@ -28,11 +28,11 @@
 //! Major version number.
 #define CLINGODL_VERSION_MAJOR 1
 //! Minor version number.
-#define CLINGODL_VERSION_MINOR 2
+#define CLINGODL_VERSION_MINOR 3
 //! Revision number.
-#define CLINGODL_VERSION_REVISION 1
+#define CLINGODL_VERSION_REVISION 0
 //! String representation of version.
-#define CLINGODL_VERSION "1.2.1"
+#define CLINGODL_VERSION "1.3.0"
 
 #ifdef __cplusplus
 extern "C" {
@@ -85,6 +85,9 @@ typedef struct clingodl_value {
 typedef bool (*clingodl_ast_callback_t)(clingo_ast_t *ast, void *data);
 
 typedef struct clingodl_theory clingodl_theory_t;
+
+//! Return the version of the theory.
+CLINGODL_VISIBILITY_DEFAULT void clingodl_version(int *major, int *minor, int *patch);
 
 //! creates the theory
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_create(clingodl_theory_t **theory);

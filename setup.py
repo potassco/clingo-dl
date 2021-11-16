@@ -12,7 +12,7 @@ if not site.ENABLE_USER_SITE and "--user" in sys.argv[1:]:
 clingopath = abspath(dirname(clingo.__file__))
 
 setup(
-    version = '1.2.1',
+    version = '1.3.0',
     name = 'clingo-dl',
     description = 'CFFI-based bindings to the clingo-dl solver.',
     long_description = dedent('''\
@@ -28,7 +28,7 @@ setup(
     author_email = 'kaminski@cs.uni-potsdam.de',
     license = 'MIT',
     url = 'https://github.com/potassco/clingo-dl',
-    install_requires=[ 'cffi', 'clingo-cffi' ],
+    install_requires=[ 'cffi', 'clingo' ],
     cmake_args=[ '-DCLINGODL_MANAGE_RPATH=OFF',
                  '-DPYCLINGODL_ENABLE=pip',
                  '-DPYCLINGODL_INSTALL_DIR=libpyclingo-dl',

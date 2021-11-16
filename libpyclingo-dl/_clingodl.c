@@ -572,55 +572,55 @@ static void (*_cffi_call_python_org)(struct _cffi_externpy_s *, char *);
 /************************************************************/
 
 static void *_cffi_types[] = {
-/*  0 */ _CFFI_OP(_CFFI_OP_FUNCTION, 68), // _Bool()(clingo_ast_t *, void *)
-/*  1 */ _CFFI_OP(_CFFI_OP_POINTER, 71), // clingo_ast_t *
-/*  2 */ _CFFI_OP(_CFFI_OP_POINTER, 81), // void *
+/*  0 */ _CFFI_OP(_CFFI_OP_FUNCTION, 73), // _Bool()(clingo_ast_t *, void *)
+/*  1 */ _CFFI_OP(_CFFI_OP_POINTER, 76), // clingo_ast_t *
+/*  2 */ _CFFI_OP(_CFFI_OP_POINTER, 86), // void *
 /*  3 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
-/*  4 */ _CFFI_OP(_CFFI_OP_FUNCTION, 68), // _Bool()(clingodl_theory_t * *)
+/*  4 */ _CFFI_OP(_CFFI_OP_FUNCTION, 73), // _Bool()(clingodl_theory_t * *)
 /*  5 */ _CFFI_OP(_CFFI_OP_POINTER, 8), // clingodl_theory_t * *
 /*  6 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
-/*  7 */ _CFFI_OP(_CFFI_OP_FUNCTION, 68), // _Bool()(clingodl_theory_t *)
-/*  8 */ _CFFI_OP(_CFFI_OP_POINTER, 76), // clingodl_theory_t *
+/*  7 */ _CFFI_OP(_CFFI_OP_FUNCTION, 73), // _Bool()(clingodl_theory_t *)
+/*  8 */ _CFFI_OP(_CFFI_OP_POINTER, 81), // clingodl_theory_t *
 /*  9 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
-/* 10 */ _CFFI_OP(_CFFI_OP_FUNCTION, 68), // _Bool()(clingodl_theory_t *, char const *, char const *)
+/* 10 */ _CFFI_OP(_CFFI_OP_FUNCTION, 73), // _Bool()(clingodl_theory_t *, char const *, char const *)
 /* 11 */ _CFFI_OP(_CFFI_OP_NOOP, 8),
-/* 12 */ _CFFI_OP(_CFFI_OP_POINTER, 69), // char const *
+/* 12 */ _CFFI_OP(_CFFI_OP_POINTER, 74), // char const *
 /* 13 */ _CFFI_OP(_CFFI_OP_NOOP, 12),
 /* 14 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
-/* 15 */ _CFFI_OP(_CFFI_OP_FUNCTION, 68), // _Bool()(clingodl_theory_t *, clingo_ast_t *, _Bool(*)(clingo_ast_t *, void *), void *)
+/* 15 */ _CFFI_OP(_CFFI_OP_FUNCTION, 73), // _Bool()(clingodl_theory_t *, clingo_ast_t *, _Bool(*)(clingo_ast_t *, void *), void *)
 /* 16 */ _CFFI_OP(_CFFI_OP_NOOP, 8),
 /* 17 */ _CFFI_OP(_CFFI_OP_NOOP, 1),
 /* 18 */ _CFFI_OP(_CFFI_OP_POINTER, 0), // _Bool(*)(clingo_ast_t *, void *)
 /* 19 */ _CFFI_OP(_CFFI_OP_NOOP, 2),
 /* 20 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
-/* 21 */ _CFFI_OP(_CFFI_OP_FUNCTION, 68), // _Bool()(clingodl_theory_t *, clingo_control_t *)
+/* 21 */ _CFFI_OP(_CFFI_OP_FUNCTION, 73), // _Bool()(clingodl_theory_t *, clingo_control_t *)
 /* 22 */ _CFFI_OP(_CFFI_OP_NOOP, 8),
-/* 23 */ _CFFI_OP(_CFFI_OP_POINTER, 72), // clingo_control_t *
+/* 23 */ _CFFI_OP(_CFFI_OP_POINTER, 77), // clingo_control_t *
 /* 24 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
-/* 25 */ _CFFI_OP(_CFFI_OP_FUNCTION, 68), // _Bool()(clingodl_theory_t *, clingo_model_t *)
+/* 25 */ _CFFI_OP(_CFFI_OP_FUNCTION, 73), // _Bool()(clingodl_theory_t *, clingo_model_t *)
 /* 26 */ _CFFI_OP(_CFFI_OP_NOOP, 8),
-/* 27 */ _CFFI_OP(_CFFI_OP_POINTER, 73), // clingo_model_t *
+/* 27 */ _CFFI_OP(_CFFI_OP_POINTER, 78), // clingo_model_t *
 /* 28 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
-/* 29 */ _CFFI_OP(_CFFI_OP_FUNCTION, 68), // _Bool()(clingodl_theory_t *, clingo_options_t *)
+/* 29 */ _CFFI_OP(_CFFI_OP_FUNCTION, 73), // _Bool()(clingodl_theory_t *, clingo_options_t *)
 /* 30 */ _CFFI_OP(_CFFI_OP_NOOP, 8),
-/* 31 */ _CFFI_OP(_CFFI_OP_POINTER, 74), // clingo_options_t *
+/* 31 */ _CFFI_OP(_CFFI_OP_POINTER, 79), // clingo_options_t *
 /* 32 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
-/* 33 */ _CFFI_OP(_CFFI_OP_FUNCTION, 68), // _Bool()(clingodl_theory_t *, clingo_statistics_t *, clingo_statistics_t *)
+/* 33 */ _CFFI_OP(_CFFI_OP_FUNCTION, 73), // _Bool()(clingodl_theory_t *, clingo_statistics_t *, clingo_statistics_t *)
 /* 34 */ _CFFI_OP(_CFFI_OP_NOOP, 8),
-/* 35 */ _CFFI_OP(_CFFI_OP_POINTER, 75), // clingo_statistics_t *
+/* 35 */ _CFFI_OP(_CFFI_OP_POINTER, 80), // clingo_statistics_t *
 /* 36 */ _CFFI_OP(_CFFI_OP_NOOP, 35),
 /* 37 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
-/* 38 */ _CFFI_OP(_CFFI_OP_FUNCTION, 68), // _Bool()(clingodl_theory_t *, uint32_t, size_t *)
+/* 38 */ _CFFI_OP(_CFFI_OP_FUNCTION, 73), // _Bool()(clingodl_theory_t *, uint32_t, size_t *)
 /* 39 */ _CFFI_OP(_CFFI_OP_NOOP, 8),
 /* 40 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 22), // uint32_t
 /* 41 */ _CFFI_OP(_CFFI_OP_POINTER, 46), // size_t *
 /* 42 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
-/* 43 */ _CFFI_OP(_CFFI_OP_FUNCTION, 68), // _Bool()(clingodl_theory_t *, uint32_t, size_t)
+/* 43 */ _CFFI_OP(_CFFI_OP_FUNCTION, 73), // _Bool()(clingodl_theory_t *, uint32_t, size_t)
 /* 44 */ _CFFI_OP(_CFFI_OP_NOOP, 8),
 /* 45 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 22),
 /* 46 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 28), // size_t
 /* 47 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
-/* 48 */ _CFFI_OP(_CFFI_OP_FUNCTION, 68), // _Bool()(clingodl_theory_t *, uint64_t, size_t *)
+/* 48 */ _CFFI_OP(_CFFI_OP_FUNCTION, 73), // _Bool()(clingodl_theory_t *, uint64_t, size_t *)
 /* 49 */ _CFFI_OP(_CFFI_OP_NOOP, 8),
 /* 50 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 24), // uint64_t
 /* 51 */ _CFFI_OP(_CFFI_OP_NOOP, 41),
@@ -629,31 +629,36 @@ static void *_cffi_types[] = {
 /* 54 */ _CFFI_OP(_CFFI_OP_NOOP, 8),
 /* 55 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 28),
 /* 56 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
-/* 57 */ _CFFI_OP(_CFFI_OP_FUNCTION, 81), // void()(clingodl_theory_t *, uint32_t, size_t *)
+/* 57 */ _CFFI_OP(_CFFI_OP_FUNCTION, 86), // void()(clingodl_theory_t *, uint32_t, size_t *)
 /* 58 */ _CFFI_OP(_CFFI_OP_NOOP, 8),
 /* 59 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 22),
 /* 60 */ _CFFI_OP(_CFFI_OP_NOOP, 41),
 /* 61 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
-/* 62 */ _CFFI_OP(_CFFI_OP_FUNCTION, 81), // void()(clingodl_theory_t *, uint32_t, size_t, clingodl_value_t *)
+/* 62 */ _CFFI_OP(_CFFI_OP_FUNCTION, 86), // void()(clingodl_theory_t *, uint32_t, size_t, clingodl_value_t *)
 /* 63 */ _CFFI_OP(_CFFI_OP_NOOP, 8),
 /* 64 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 22),
 /* 65 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 28),
-/* 66 */ _CFFI_OP(_CFFI_OP_POINTER, 77), // clingodl_value_t *
+/* 66 */ _CFFI_OP(_CFFI_OP_POINTER, 82), // clingodl_value_t *
 /* 67 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
-/* 68 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 1), // _Bool
-/* 69 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 2), // char
-/* 70 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 1), // clingo_ast_statement_t
-/* 71 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 0), // clingo_ast_t
-/* 72 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 2), // clingo_control_t
-/* 73 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 3), // clingo_model_t
-/* 74 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 4), // clingo_options_t
-/* 75 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 5), // clingo_statistics_t
-/* 76 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 6), // clingodl_theory_t
-/* 77 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 7), // clingodl_value_t
-/* 78 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 14), // double
-/* 79 */ _CFFI_OP(_CFFI_OP_ENUM, 0), // enum clingodl_value_type
-/* 80 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 7), // int
-/* 81 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 0), // void
+/* 68 */ _CFFI_OP(_CFFI_OP_FUNCTION, 86), // void()(int *, int *, int *)
+/* 69 */ _CFFI_OP(_CFFI_OP_POINTER, 85), // int *
+/* 70 */ _CFFI_OP(_CFFI_OP_NOOP, 69),
+/* 71 */ _CFFI_OP(_CFFI_OP_NOOP, 69),
+/* 72 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
+/* 73 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 1), // _Bool
+/* 74 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 2), // char
+/* 75 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 1), // clingo_ast_statement_t
+/* 76 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 0), // clingo_ast_t
+/* 77 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 2), // clingo_control_t
+/* 78 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 3), // clingo_model_t
+/* 79 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 4), // clingo_options_t
+/* 80 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 5), // clingo_statistics_t
+/* 81 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 6), // clingodl_theory_t
+/* 82 */ _CFFI_OP(_CFFI_OP_STRUCT_UNION, 7), // clingodl_value_t
+/* 83 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 14), // double
+/* 84 */ _CFFI_OP(_CFFI_OP_ENUM, 0), // enum clingodl_value_type
+/* 85 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 7), // int
+/* 86 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 0), // void
 };
 
 static int _cffi_const_clingodl_value_type_int(unsigned long long *o)
@@ -1554,6 +1559,68 @@ _cffi_f_clingodl_validate_options(PyObject *self, PyObject *arg0)
 #  define _cffi_f_clingodl_validate_options _cffi_d_clingodl_validate_options
 #endif
 
+static void _cffi_d_clingodl_version(int * x0, int * x1, int * x2)
+{
+  clingodl_version(x0, x1, x2);
+}
+#ifndef PYPY_VERSION
+static PyObject *
+_cffi_f_clingodl_version(PyObject *self, PyObject *args)
+{
+  int * x0;
+  int * x1;
+  int * x2;
+  Py_ssize_t datasize;
+  struct _cffi_freeme_s *large_args_free = NULL;
+  PyObject *arg0;
+  PyObject *arg1;
+  PyObject *arg2;
+
+  if (!PyArg_UnpackTuple(args, "clingodl_version", 3, 3, &arg0, &arg1, &arg2))
+    return NULL;
+
+  datasize = _cffi_prepare_pointer_call_argument(
+      _cffi_type(69), arg0, (char **)&x0);
+  if (datasize != 0) {
+    x0 = ((size_t)datasize) <= 640 ? (int *)alloca((size_t)datasize) : NULL;
+    if (_cffi_convert_array_argument(_cffi_type(69), arg0, (char **)&x0,
+            datasize, &large_args_free) < 0)
+      return NULL;
+  }
+
+  datasize = _cffi_prepare_pointer_call_argument(
+      _cffi_type(69), arg1, (char **)&x1);
+  if (datasize != 0) {
+    x1 = ((size_t)datasize) <= 640 ? (int *)alloca((size_t)datasize) : NULL;
+    if (_cffi_convert_array_argument(_cffi_type(69), arg1, (char **)&x1,
+            datasize, &large_args_free) < 0)
+      return NULL;
+  }
+
+  datasize = _cffi_prepare_pointer_call_argument(
+      _cffi_type(69), arg2, (char **)&x2);
+  if (datasize != 0) {
+    x2 = ((size_t)datasize) <= 640 ? (int *)alloca((size_t)datasize) : NULL;
+    if (_cffi_convert_array_argument(_cffi_type(69), arg2, (char **)&x2,
+            datasize, &large_args_free) < 0)
+      return NULL;
+  }
+
+  Py_BEGIN_ALLOW_THREADS
+  _cffi_restore_errno();
+  { clingodl_version(x0, x1, x2); }
+  _cffi_save_errno();
+  Py_END_ALLOW_THREADS
+
+  (void)self; /* unused */
+  if (large_args_free != NULL) _cffi_free_array_arguments(large_args_free);
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+#else
+#  define _cffi_f_clingodl_version _cffi_d_clingodl_version
+#endif
+
 _CFFI_UNUSED_FN
 static void _cffi_checkfld__clingodl_value_t(clingodl_value_t *p)
 {
@@ -1586,60 +1653,61 @@ static const struct _cffi_global_s _cffi_globals[] = {
   { "clingodl_value_type_double", (void *)_cffi_const_clingodl_value_type_double, _CFFI_OP(_CFFI_OP_ENUM, -1), (void *)0 },
   { "clingodl_value_type_int", (void *)_cffi_const_clingodl_value_type_int, _CFFI_OP(_CFFI_OP_ENUM, -1), (void *)0 },
   { "clingodl_value_type_symbol", (void *)_cffi_const_clingodl_value_type_symbol, _CFFI_OP(_CFFI_OP_ENUM, -1), (void *)0 },
+  { "clingodl_version", (void *)_cffi_f_clingodl_version, _CFFI_OP(_CFFI_OP_CPYTHON_BLTN_V, 68), (void *)_cffi_d_clingodl_version },
   { "pyclingodl_rewrite", (void *)&_cffi_externpy__pyclingodl_rewrite, _CFFI_OP(_CFFI_OP_EXTERN_PYTHON, 18), (void *)pyclingodl_rewrite },
 };
 
 static const struct _cffi_field_s _cffi_fields[] = {
   { "type", offsetof(clingodl_value_t, type),
             sizeof(((clingodl_value_t *)0)->type),
-            _CFFI_OP(_CFFI_OP_NOOP, 80) },
+            _CFFI_OP(_CFFI_OP_NOOP, 85) },
   { "int_number", offsetof(clingodl_value_t, int_number),
                   sizeof(((clingodl_value_t *)0)->int_number),
-                  _CFFI_OP(_CFFI_OP_NOOP, 80) },
+                  _CFFI_OP(_CFFI_OP_NOOP, 85) },
   { "double_number", offsetof(clingodl_value_t, double_number),
                      sizeof(((clingodl_value_t *)0)->double_number),
-                     _CFFI_OP(_CFFI_OP_NOOP, 78) },
+                     _CFFI_OP(_CFFI_OP_NOOP, 83) },
   { "symbol", offsetof(clingodl_value_t, symbol),
               sizeof(((clingodl_value_t *)0)->symbol),
               _CFFI_OP(_CFFI_OP_NOOP, 50) },
 };
 
 static const struct _cffi_struct_union_s _cffi_struct_unions[] = {
-  { "clingo_ast", 71, _CFFI_F_OPAQUE,
+  { "clingo_ast", 76, _CFFI_F_OPAQUE,
     (size_t)-1, -1, -1, 0 /* opaque */ },
-  { "clingo_ast_statement", 70, _CFFI_F_OPAQUE,
+  { "clingo_ast_statement", 75, _CFFI_F_OPAQUE,
     (size_t)-1, -1, -1, 0 /* opaque */ },
-  { "clingo_control", 72, _CFFI_F_OPAQUE,
+  { "clingo_control", 77, _CFFI_F_OPAQUE,
     (size_t)-1, -1, -1, 0 /* opaque */ },
-  { "clingo_model", 73, _CFFI_F_OPAQUE,
+  { "clingo_model", 78, _CFFI_F_OPAQUE,
     (size_t)-1, -1, -1, 0 /* opaque */ },
-  { "clingo_options", 74, _CFFI_F_OPAQUE,
+  { "clingo_options", 79, _CFFI_F_OPAQUE,
     (size_t)-1, -1, -1, 0 /* opaque */ },
-  { "clingo_statistics", 75, _CFFI_F_OPAQUE,
+  { "clingo_statistics", 80, _CFFI_F_OPAQUE,
     (size_t)-1, -1, -1, 0 /* opaque */ },
-  { "clingodl_theory", 76, _CFFI_F_OPAQUE,
+  { "clingodl_theory", 81, _CFFI_F_OPAQUE,
     (size_t)-1, -1, -1, 0 /* opaque */ },
-  { "clingodl_value", 77, 0,
+  { "clingodl_value", 82, 0,
     sizeof(clingodl_value_t), offsetof(struct _cffi_align__clingodl_value_t, y), 0, 4 },
 };
 
 static const struct _cffi_enum_s _cffi_enums[] = {
-  { "clingodl_value_type", 79, _cffi_prim_int(sizeof(enum clingodl_value_type), ((enum clingodl_value_type)-1) <= 0),
+  { "clingodl_value_type", 84, _cffi_prim_int(sizeof(enum clingodl_value_type), ((enum clingodl_value_type)-1) <= 0),
     "clingodl_value_type_int,clingodl_value_type_double,clingodl_value_type_symbol" },
 };
 
 static const struct _cffi_typename_s _cffi_typenames[] = {
-  { "clingo_ast_statement_t", 70 },
-  { "clingo_ast_t", 71 },
-  { "clingo_control_t", 72 },
-  { "clingo_model_t", 73 },
-  { "clingo_options_t", 74 },
-  { "clingo_statistics_t", 75 },
+  { "clingo_ast_statement_t", 75 },
+  { "clingo_ast_t", 76 },
+  { "clingo_control_t", 77 },
+  { "clingo_model_t", 78 },
+  { "clingo_options_t", 79 },
+  { "clingo_statistics_t", 80 },
   { "clingo_symbol_t", 50 },
   { "clingodl_ast_callback_t", 18 },
-  { "clingodl_theory_t", 76 },
-  { "clingodl_value_t", 77 },
-  { "clingodl_value_type_t", 80 },
+  { "clingodl_theory_t", 81 },
+  { "clingodl_value_t", 82 },
+  { "clingodl_value_type_t", 85 },
 };
 
 static const struct _cffi_type_context_s _cffi_type_context = {
@@ -1649,12 +1717,12 @@ static const struct _cffi_type_context_s _cffi_type_context = {
   _cffi_struct_unions,
   _cffi_enums,
   _cffi_typenames,
-  20,  /* num_globals */
+  21,  /* num_globals */
   8,  /* num_struct_unions */
   1,  /* num_enums */
   11,  /* num_typenames */
   NULL,  /* no includes */
-  82,  /* num_types */
+  87,  /* num_types */
   1,  /* flags */
 };
 
