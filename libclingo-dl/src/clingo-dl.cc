@@ -410,7 +410,7 @@ struct clingodl_theory {
     std::unique_ptr<PropagatorFacade> clingodl{nullptr};
     PropagatorConfig config;
     bool rdl;
-    bool shift_constraints{true};
+    bool shift_constraints{false};
 };
 
 extern "C" void clingodl_version(int *major, int *minor, int *patch) {
@@ -534,7 +534,12 @@ extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_opti
             "        potential         : Sort by relative potential\n"
             "        potential-reversed: Sort by relative negative potential",
             &parse_sort, &theory->config, true, "<arg>"));
-        handle_error(clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers", &theory->rdl));
+        handle_error(clingo_options_add_flag(options, group, "rdl",
+            "Enable support for real numbers [no]",
+            &theory->rdl));
+        handle_error(clingo_options_add_flag(options, group, "shift-constraints",
+            "Shift constraints into head of integrity constraints [no]",
+            &theory->shift_constraints));
     }
     CLINGODL_CATCH;
 }
