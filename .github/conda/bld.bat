@@ -1,12 +1,13 @@
 mkdir build
 
-cmake -G "%CMAKE_GENERATOR%" -H. -Bbuild ^
-    -DCMAKE_CXX_COMPILER="%CXX%" ^
-    -DPython_ROOT_DIR="%PREFIX%" ^
-    -DCMAKE_INSTALL_PREFIX="%PREFIX%" ^
-    -DCMAKE_INSTALL_BINDIR="." ^
+cmake -G "Ninja" -H. -Bbuild ^
     -DCLINGODL_MANAGE_RPATH=Off ^
-    -DPYCLINGODL_ENABLE="require"
+    -DCMAKE_BUILD_TYPE=Release ^
+    -DCMAKE_CXX_COMPILER="%CXX%" ^
+    -DCMAKE_INSTALL_BINDIR="." ^
+    -DCMAKE_INSTALL_PREFIX="%PREFIX%" ^
+    -DPYCLINGODL_ENABLE="require" ^
+    -DPython_ROOT_DIR="%PREFIX%"
 
-cmake --build build --config Release
-cmake --build build --config Release --target install
+cmake --build build
+cmake --build build --target install
