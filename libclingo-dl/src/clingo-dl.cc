@@ -484,6 +484,12 @@ extern "C" bool clingodl_configure(clingodl_theory_t *theory, char const *key, c
         if (strcmp(key, "rdl") == 0) {
             return check_parse("rdl", parse_bool(value, &theory->rdl));
         }
+        if (strcmp(key, "shift-constraints") == 0) {
+            return check_parse("shift-constraints", parse_bool(value, &theory->shift_constraints));
+        }
+        if (strcmp(key, "compute-components") == 0) {
+            return check_parse("compute-components", parse_bool(value, &theory->config.calculate_cc));
+        }
         std::ostringstream msg;
         msg << "invalid configuration key '" << key << "'";
         clingo_set_error(clingo_error_runtime, msg.str().c_str());
@@ -540,6 +546,9 @@ extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_opti
         handle_error(clingo_options_add_flag(options, group, "shift-constraints",
             "Shift constraints into head of integrity constraints [no]",
             &theory->shift_constraints));
+        handle_error(clingo_options_add_flag(options, group, "compute-components",
+            "Compute connected components [yes]",
+            &theory->config.calculate_cc));
     }
     CLINGODL_CATCH;
 }

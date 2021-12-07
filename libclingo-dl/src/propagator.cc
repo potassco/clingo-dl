@@ -154,25 +154,20 @@ template <typename T>
 auto DLPropagator<T>::lower_bound(Clingo::id_t thread_id, vertex_t index) const -> value_t {
     assert(has_lower_bound(thread_id, index));
     auto &state = states_[thread_id];
-    T adjust = 0;
-    for (auto vertex : zero_vertices_) {
-        adjust = std::max(state.graph.has_value(vertex) ? state.graph.get_value(vertex) : 0, adjust);
-    }
+    auto zero_vertex = zero_vertices_[vertex_info_[index].cc];
+    T adjust = state.graph.has_value(zero_vertex) ? state.graph.get_value(zero_vertex) : 0;
     return state.graph.get_value(index) - adjust;
 }
 
 template <typename T>
 void DLPropagator<T>::extend_model(Clingo::Model &model) {
     auto &state = states_[model.thread_id()];
-    T adjust = 0;
-    for (auto vertex : zero_vertices_) {
-        adjust = std::max(state.graph.has_value(vertex) ? state.graph.get_value(vertex) : 0, adjust);
-    }
-
     Clingo::SymbolVector vec;
     for (vertex_t idx = 0; idx < numeric_cast<vertex_t>(vertex_info_.size()); ++idx) {
         if (!is_zero_(idx) && state.graph.has_value(idx)) {
             Clingo::SymbolVector params;
+            auto zero_vertex = zero_vertices_[vertex_info_[idx].cc];
+            T adjust = state.graph.has_value(zero_vertex) ? state.graph.get_value(zero_vertex) : 0;
             params.emplace_back(vertex_info_[idx].symbol);
             params.emplace_back(to_symbol<T>(state.graph.get_value(idx) - adjust));
             vec.emplace_back(Function("dl", params));
@@ -499,6 +494,11 @@ void DLPropagator<T>::cc_calculate_(AdjacencyMap &outgoing, AdjacencyMap &incomi
         if (cc_visited_(start_vertex)) {
             continue;
         }
+        if (!conf_.calculate_cc) {
+            vertex_info_[start_vertex].set_visited(cc, true);
+            continue;
+        }
+
         vertex_info_[start_vertex].set_visited(cc, true);
         vertex_stack.emplace_back(start_vertex);
         while (!vertex_stack.empty()) {

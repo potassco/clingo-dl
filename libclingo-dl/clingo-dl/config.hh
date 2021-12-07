@@ -63,6 +63,8 @@ static constexpr uint64_t PROPAGATE_ROOT{0};
 static constexpr uint64_t PROPAGATE_BUDGET{0};
 //! Default value for PropagatorConfig::propagate_mode.
 static constexpr PropagationMode PROPAGATE_MODE{PropagationMode::Check};
+//! Default value for PropagatorConfig::calculate_cc.
+static constexpr bool CALCULATE_CC{true};
 
 //! Struct to configure per thread options.
 struct ThreadConfig {
@@ -92,6 +94,8 @@ struct PropagatorConfig {
     PropagationMode propagate_mode{PROPAGATE_MODE};
     //! Per thread configuration.
     std::vector<ThreadConfig> thread_config;
+    //! Enable component optimization.
+    bool calculate_cc{CALCULATE_CC};
 
     //! Get per thread propagate_root if present or global value.
     [[nodiscard]] uint64_t get_propagate_root(Clingo::id_t thread_id) const {
