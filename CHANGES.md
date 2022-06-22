@@ -1,5 +1,10 @@
 # Changes
 
+## clingo-dl 1.4.0
+  * add support for ASPIF parsing
+  * improve shifting of zero node
+  * update to clingo 5.6.0
+
 ## clingo-dl 1.3.0
   * extended optimization algorithm
   * add propagation mode to propagete through zero nodes
