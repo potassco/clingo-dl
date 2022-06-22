@@ -91,6 +91,7 @@ case "$action" in
         ;;
     release)
         wip=false
+        branch="${@:$OPTIND+1:1}"
         # .github/workflows/manylinux.yml
         # can be enabled once we switch to the debian based manylinux images
         #dispatch 5434066 "$wip" "$branch" '"image":"manylinux2014_ppc64le"'
