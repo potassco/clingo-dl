@@ -35,12 +35,12 @@ Rewriter::Rewriter(clingodl_theory_t *theory, clingo_program_builder_t *builder)
 , builder_{builder} {
 }
 
-void Rewriter::rewrite(Clingo::StringSpan files) {
-    Clingo::Detail::handle_error(clingo_ast_parse_files(files.begin(), files.size(), rewrite_, this, nullptr, nullptr, 0));
+void Rewriter::rewrite(Clingo::Control &ctl, Clingo::StringSpan files) {
+    Clingo::Detail::handle_error(clingo_ast_parse_files(files.begin(), files.size(), rewrite_, this, ctl.to_c(), nullptr, nullptr, 0));
 }
 
-void Rewriter::rewrite(char const *str) {
-    Clingo::Detail::handle_error(clingo_ast_parse_string(str, rewrite_, this, nullptr, nullptr, 0));
+void Rewriter::rewrite(Clingo::Control &ctl, char const *str) {
+    Clingo::Detail::handle_error(clingo_ast_parse_string(str, rewrite_, this, ctl.to_c(), nullptr, nullptr, 0));
 }
 
 bool Rewriter::add_(clingo_ast_t *stm, void *data) {
@@ -62,7 +62,7 @@ Optimizer::Optimizer(OptimizerConfig const &opt_cfg, Clingo::SolveEventHandler &
 void Optimizer::solve(Clingo::Control& ctl) {
     Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
         Rewriter rewriter{theory_, builder.to_c()};
-        rewriter.rewrite(
+        rewriter.rewrite(ctl,
             // add a fixed bound
             "#program __ub(s,b)."
             "&diff { s-0 } <= b."

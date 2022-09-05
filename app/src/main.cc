@@ -69,7 +69,7 @@ public:
 
         Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
             Rewriter rewriter{theory_, builder.to_c()};
-            rewriter.rewrite(files);
+            rewriter.rewrite(ctl, files);
         });
 
         ctl.ground({{"base", {}}});
