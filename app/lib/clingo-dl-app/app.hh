@@ -39,9 +39,9 @@ class Rewriter {
 public:
     Rewriter(clingodl_theory_t *theory, clingo_program_builder_t *builder);
     //! Rewrite the given files.
-    void rewrite(Clingo::StringSpan files);
+    void rewrite(Clingo::Control &ctl, Clingo::StringSpan files);
     //! Rewrite the given program.
-    void rewrite(char const *str);
+    void rewrite(Clingo::Control &ctl, char const *str);
 
 private:
     //! C callback to add a statement using the builder.

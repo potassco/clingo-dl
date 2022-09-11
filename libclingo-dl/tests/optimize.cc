@@ -64,7 +64,7 @@ private:
 void parse_program(clingodl_theory_t *theory, Clingo::Control &ctl, const char *str) {
     Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
         Rewriter rewriter{theory, builder.to_c()};
-        rewriter.rewrite(str);
+        rewriter.rewrite(ctl, str);
     });
 }
 
