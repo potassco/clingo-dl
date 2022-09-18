@@ -91,22 +91,13 @@ case "$action" in
         ;;
     release)
         wip=false
-        branch="${@:$OPTIND+1:1}"
-        # .github/workflows/manylinux.yml
-        # can be enabled once we switch to the debian based manylinux images
-        #dispatch 5434066 "$wip" "$branch" '"image":"manylinux2014_ppc64le"'
-        dispatch 5434066 "$wip" "$branch" '"image":"manylinux2014_aarch64"'
         ;&
     dev)
         branch="${@:$OPTIND+1:1}"
+        # .github/workflows/cibuildwheel.yml
+        dispatch 35176815 "$wip" "$branch"
         # .github/workflows/conda-dev.yml
         dispatch 5434065 "$wip" "$branch"
-        # .github/workflows/manylinux.yml
-        dispatch 5434066 "$wip" "$branch"
-        # .github/workflows/pipsource.yml
-        dispatch 5434068 "$wip" "$branch"
-        # .github/workflows/pipwinmac-wip.yml
-        dispatch 5434067 "$wip" "$branch"
         # .github/workflows/ppa-dev.yml
         dispatch 5434064 "$wip" "$branch"
         ;;

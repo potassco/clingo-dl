@@ -9,5 +9,6 @@ recursive-include libclingo-dl *
 include libpyclingo-dl/*.c
 include libpyclingo-dl/CMakeLists.txt
 recursive-include libpyclingo-dl/clingodl *.py *.typed
+include third_party/CMakeLists.txt
 prune _skbuild
 global-exclude *.py[cod]
