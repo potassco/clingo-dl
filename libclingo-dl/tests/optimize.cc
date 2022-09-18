@@ -98,11 +98,12 @@ TEST_CASE("optimize", "[clingo-dl]") { // NOLINT
     SECTION("sat") {
         for (auto factor : {1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0}) {
             Clingo::Control ctl{{"1"}};
+            Clingo::SymbolVector ret{assign(a, 100), assign(b, -50)}; // NOLINT
             REQUIRE(optimize(
                 ctl, b, factor,
                 "&diff { a - 0 } >=  100.\n"
                 "&diff { b - 0 } >= -100.\n"
-                "&diff { a - b } <=  150.\n") == Clingo::SymbolVector{assign(a, 100), assign(b, -50)});
+                "&diff { a - b } <=  150.\n") == ret);
             REQUIRE(ctl.statistics()["user_step"]["DifferenceLogic"].has_subkey("Optimization"));
             REQUIRE(ctl.statistics()["user_step"]["DifferenceLogic"]["Optimization"].value() == -50);
         }

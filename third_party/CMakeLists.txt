@@ -1,0 +1,10 @@
+set(CMAKE_CXX_CLANG_TIDY "")
+
+if (CLINGODL_BUILD_TESTS AND NOT TARGET Catch2::Catch2WithMain)
+    if (CLINGODL_USE_LOCAL_CATCH)
+        set(CATCH_BUILD_STATIC_LIBRARY ON CACHE INTERNAL "" FORCE)
+        add_subdirectory(catch) 
+    else()
+        find_package(Catch2 2.13 REQUIRED)
+    endif()
+endif()

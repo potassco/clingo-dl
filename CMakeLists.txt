@@ -27,6 +27,9 @@ option(CLINGODL_MANAGE_RPATH "set rpath if not installed into system directory" 
 option(CLINGODL_BUILD_TESTS "build tests" OFF)
 option(CLINGODL_BUILD_SHARED "build clingo-dl library shared" ON)
 option(CLINGODL_CROSSCHECK "enable additional state checking" OFF)
+option(CLINGODL_USE_LOCAL_CATCH
+"Advanced option to build against bundled or installed catch."
+ON)
 set(PYCLINGODL_ENABLE "auto" CACHE STRING "build with python support: OFF, auto, require, pip
 auto: enable python support if python is available
 require: enable python support and fails if python is not available
@@ -131,6 +134,7 @@ if (PYCLINGODL_ENABLE)
     endif()
 endif()
 
+add_subdirectory(third_party)
 if (PYCLINGODL_ENABLE STREQUAL "pip")
     if (NOT CLINGODL_BUILD_SHARED)
         message(FATAL_ERROR "building against the pip package requires CLINGODL_BUILD_SHARED.")

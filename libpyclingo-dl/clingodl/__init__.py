@@ -7,6 +7,7 @@ from ._clingodl import lib as _lib, ffi as _ffi
 
 __all__ = ['ClingoDLTheory']
 
+
 class ClingoDLTheory(Theory):
     '''
     The DL theory.
