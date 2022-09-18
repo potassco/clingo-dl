@@ -1,7 +1,6 @@
 # [[[source: .
 set(ide_source_group "Source Files")
 set(source-group
-    "${CMAKE_CURRENT_SOURCE_DIR}/main.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/optimize.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/parsing.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/solve.cc")

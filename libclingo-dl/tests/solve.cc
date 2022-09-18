@@ -26,7 +26,7 @@
 #include <clingo-dl.h>
 #include <clingo-dl/propagator.hh>
 #include <clingo-dl-app/app.hh>
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 
 namespace ClingoDL {
 

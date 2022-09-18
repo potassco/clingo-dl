@@ -24,7 +24,7 @@
 
 #include <clingo.hh>
 #include <clingo-dl/parsing.hh>
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 #include <sstream>
 #include <map>
 
