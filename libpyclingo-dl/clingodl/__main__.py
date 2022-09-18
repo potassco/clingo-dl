@@ -26,15 +26,26 @@ class ClingoDLApp(Application):
         self.__theory = ClingoDLTheory()
         self.program_name = name
         self.version = ".".join(str(x) for x in self.__theory.version())
+        self._enable_python  = Flag()
 
     def register_options(self, options: ApplicationOptions):
+        """
+        Register clingo-dl related options.
+        """
+        options.add_flag("Basic Options", "enable-python", "Enable Python script tags", self._enable_python)
         self.__theory.register_options(options)
 
     def validate_options(self) -> bool:
+        """
+        Validate options.
+        """
         self.__theory.validate_options()
         return True
 
     def print_model(self, model: Model, printer: Callable[[], None]):
+        """
+        Print assignment along with model.
+        """
         # print model
         symbols = model.symbols(shown=True)
         sys.stdout.write(" ".join(str(symbol) for symbol in sorted(symbols) if not self.__hidden(symbol)))
@@ -53,6 +64,12 @@ class ClingoDLApp(Application):
         sys.stdout.flush()
 
     def main(self, control: Control, files: Sequence[str]):
+        """
+        Run clingo-dl application.
+        """
+        if self._enable_python:
+            enable_python()
+
         self.__theory.register(control)
 
         with ast.ProgramBuilder(control) as bld:
@@ -64,12 +81,21 @@ class ClingoDLApp(Application):
         control.solve(on_model=self.__on_model, on_statistics=self.__on_statistics)
 
     def __on_model(self, model: Model):
+        """
+        Pass model to theory.
+        """
         self.__theory.on_model(model)
 
     def __on_statistics(self, step: StatisticsMap, accu: StatisticsMap):
+        """
+        Pass statistics to theory.
+        """
         self.__theory.on_statistics(step, accu)
 
     def __hidden(self, symbol: Symbol):
+        """
+        Classify symbols starting with "__" as hidden.
+        """
         return symbol.type == SymbolType.Function and symbol.name.startswith("__")
 
 
