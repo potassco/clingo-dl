@@ -127,10 +127,13 @@ ppa:
     build_depends:
         - 'dh-python'
     create_depends: []
+    exclude_patterns:
+        - 'third_party/catch'
     sync_patterns:
         - 'app'
         - 'cmake'
         - 'lib*'
+        - 'third_party'
         - 'CMakeLists.txt'
         - 'README.md'
         - 'INSTALL.md'
