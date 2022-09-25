@@ -11,7 +11,6 @@ all: configure
 test: all
 	@cmake --build "build/$(BUILD_TYPE)" --target "test"
 
-
 %: configure
 	@cmake --build "build/$(BUILD_TYPE)" --target "$@"
 
