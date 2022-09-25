@@ -13,3 +13,4 @@ MANIFEST
 *.pyc
 .mypy_cache/
 .conda-environment
+.cache

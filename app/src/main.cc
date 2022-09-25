@@ -139,7 +139,7 @@ private:
 } // namespace CLingoDL
 
 //! Run the clingo-dl application.
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) { // NOLINT(bugprone-exception-escape)
     ClingoDL::App app;
     return Clingo::clingo_main(app, {argv + 1, static_cast<size_t>(argc - 1)});
 }

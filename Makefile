@@ -1,8 +1,6 @@
 BUILD_TYPE:=debug
 CLINGO_DIR:=${HOME}/.local/opt/potassco/$(BUILD_TYPE)/lib/cmake/Clingo
-CLANG_TIDY_WARNINGS:=clang-analyzer-*,readability-*,modernize-*,cppcoreguidelines-*,performance-*,bugprone-*,-modernize-use-trailing-return-type,-readability-magic-numbers,-cppcoreguidelines-pro-bounds-array-to-pointer-decay,-cppcoreguidelines-pro-type-union-access,-cppcoreguidelines-pro-type-vararg,-readability-identifier-length,-readability-function-cognitive-complexity,-bugprone-easily-swappable-parameters,-readability-suspicious-call-argument
-CLANG_TIDY_ERRORS:=
-CLANG_TIDY:=clang-tidy;--extra-arg-before=-stdlib=libc++;-header-filter=.*hh;-checks=$(CLANG_TIDY_WARNINGS);-warnings-as-errors=$(CLANG_TIDY_ERRORS)
+CLANG_TIDY:=clang-tidy;--config-file;$(CURDIR)/.clang-tidy
 CXXFLAGS=-Wall -Wextra -Wpedantic -Werror
 
 .PHONY: all configure compdb
