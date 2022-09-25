@@ -753,6 +753,8 @@ bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx, ver
                         continue;
                     }
                     auto cost_y = it_y->second;
+                    static_cast<void>(cost_y);
+                    static_cast<void>(ass);
                     assert (cost_x + cost_y + xy.weight >= 0 || ass.is_false(xy.lit));
                 }
             }
