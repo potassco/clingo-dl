@@ -25,6 +25,8 @@
 #include <clingo-dl.h>
 #include <clingo-dl/propagator.hh>
 
+#include <clingo.h>
+#include <clingo.hh>
 #include <sstream>
 
 #define CLINGODL_TRY try // NOLINT
@@ -69,6 +71,16 @@ bool check(clingo_propagate_control_t* i, void* data) {
     CLINGODL_TRY {
         Clingo::PropagateControl in(i);
         static_cast<DLPropagator<T>*>(data)->check(in);
+    }
+    CLINGODL_CATCH;
+}
+
+//! C decide callback for the DL heuristic.
+template <typename T>
+bool decide(clingo_id_t thread_id, clingo_assignment_t const *assignment, clingo_literal_t fallback, void *data, clingo_literal_t *decision) {
+    CLINGODL_TRY {
+        Clingo::Assignment ass(assignment);
+        *decision = static_cast<DLPropagator<T>*>(data)->decide(thread_id, ass, fallback);
     }
     CLINGODL_CATCH;
 }
@@ -128,7 +140,7 @@ public:
             propagate<T>,
             undo<T>,
             check<T>,
-            nullptr
+            conf.decision_mode != DecisionMode::Disabled ? decide<T> : nullptr
         };
         handle_error(clingo_control_register_propagator(control, &prop, &prop_, false));
     }
@@ -376,6 +388,24 @@ bool parse_sort(const char *value, void *data) {
         [sort](ThreadConfig &config) { config.sort_mode = sort; });
 }
 
+//! Parse the decision mode.
+//!
+//! Return false if there is a parse error.
+bool parse_decide(const char *value, void *data) {
+    DecisionMode mode = DecisionMode::Disabled;
+    if (iequals(value, "no")) {
+        mode = DecisionMode::Disabled;
+    }
+    else if (iequals(value, "min")) {
+        mode = DecisionMode::MinConflict;
+    }
+    else if (iequals(value, "max")) {
+        mode = DecisionMode::MaxConflict;
+    }
+    static_cast<PropagatorConfig*>(data)->decision_mode = mode;
+    return true;
+}
+
 //! Parse a Boolean and store it in data.
 //!
 //! Return false if there is a parse error.
@@ -484,6 +514,9 @@ extern "C" bool clingodl_configure(clingodl_theory_t *theory, char const *key, c
         if (strcmp(key, "rdl") == 0) {
             return check_parse("rdl", parse_bool(value, &theory->rdl));
         }
+        if (strcmp(key, "dl-heuristic") == 0) {
+            return check_parse("dl-heuristic", parse_decide(value, &theory->config));
+        }
         if (strcmp(key, "shift-constraints") == 0) {
             return check_parse("shift-constraints", parse_bool(value, &theory->shift_constraints));
         }
@@ -540,6 +573,13 @@ extern "C" bool clingodl_register_options(clingodl_theory_t *theory, clingo_opti
             "        potential         : Sort by relative potential\n"
             "        potential-reversed: Sort by relative negative potential",
             &parse_sort, &theory->config, true, "<arg>"));
+        handle_error(clingo_options_add(options, group, "dl-heuristic",
+            "Decision heuristic for difference constraints\n"
+            "      <arg>: {none, min, max}\n"
+            "        no : Use default decision heuristic\n"
+            "        min: Try to minimize conflicts\n"
+            "        max: Try to maximize conflicts",
+            &parse_decide, &theory->config, false, "<arg>"));
         handle_error(clingo_options_add_flag(options, group, "rdl",
             "Enable support for real numbers [no]",
             &theory->rdl));

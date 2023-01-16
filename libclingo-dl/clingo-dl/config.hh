@@ -51,8 +51,17 @@ enum class SortMode {
     PotentialRev = 4  //! Sort edges by potential in descending order.
 };
 
+//! Enumeration to configure sorting of edges before propagation.
+enum class DecisionMode {
+    Disabled     = 0, //! Do not modify decision heuristic.
+    MinConflict  = 1, //! Try to minimize conflicts.
+    MaxConflict  = 2, //! Try to maximize conflicts.
+};
+
 //! Default value for PropagatorConfig::sort_mode.
 static constexpr SortMode SORT_EDGES{SortMode::Weight};
+//! Default value for PropagatorConfig::decision_mode.
+static constexpr DecisionMode DECISON_MODE{DecisionMode::Disabled};
 //! Default value for PropagatorConfig::mutex_size.
 static constexpr uint64_t MUTEX_SIZE{0};
 //! Default value for PropagatorConfig::mutex_cutoff.
@@ -82,6 +91,8 @@ struct ThreadConfig {
 struct PropagatorConfig {
     //! Configure sorting of edges before propagation.
     SortMode sort_mode{SORT_EDGES};
+    //! Configure sorting of edges before propagation.
+    DecisionMode decision_mode{DECISON_MODE};
     //! Maximum size of mutexes to add during preprocessing.
     uint64_t mutex_size{MUTEX_SIZE};
     //! Maximum budget to calculate a mutex.

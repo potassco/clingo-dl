@@ -104,6 +104,8 @@ public:
     //!
     //! Disabled edges are ignored during full propagation.
     [[nodiscard]] bool edge_is_enabled(edge_t edge_idx) const;
+    //! Check if the edge is negative w.r.t. the current assginment of potentials.
+    [[nodiscard]] bool edge_is_negative(edge_t edge_idx) const;
     //! This disables an edge.
     //!
     //! Any edge whose literal became true or false is disabled. See also

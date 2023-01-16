@@ -35,6 +35,8 @@ using vertex_t = uint32_t;
 using VertexIndexVec = std::vector<vertex_t>;
 //! Type for edge indices in the theory.
 using edge_t = uint32_t;
+//! Import id_t from Clingo namespace.
+using Clingo::id_t;
 //! Import literal_t from Clingo namespace.
 using Clingo::literal_t;
 //! Type for decision levels.
