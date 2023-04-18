@@ -57,7 +57,7 @@ struct Statistics {
 
 //! A propagator for difference constraints.
 template <typename T>
-class DLPropagator : public Clingo::Propagator {
+class DLPropagator : public Clingo::Heuristic {
 public:
     using value_t = T;
 
@@ -92,6 +92,9 @@ public:
     //! Check a propagation fixed point.
     void check(Clingo::PropagateControl &ctl) override;
 
+    // heuristic interface
+    //! Customize the decision heuristic.
+    literal_t decide(id_t thread_id, Clingo::Assignment const &assign, literal_t fallback) override;
 private:
     struct VertexInfo;
     struct ThreadState;

@@ -654,6 +654,16 @@ bool Graph<T>::edge_is_enabled(edge_t edge_idx) const {
 }
 
 template <typename T>
+bool Graph<T>::edge_is_negative(edge_t edge_idx) const {
+    auto const &st = edges_[edge_idx];
+    auto const &u = vertices_[st.from];
+    auto const &v = vertices_[st.to];
+    auto up = u.defined() ? u.potential() : 0;
+    auto vp = v.defined() ? v.potential() : 0;
+    return up + st.weight - vp < 0;
+}
+
+template <typename T>
 bool Graph<T>::can_propagate() const {
     return changed_trail_.empty() || changed_trail_.back().can_propagate;
 }

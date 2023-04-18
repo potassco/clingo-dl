@@ -790,6 +790,25 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
     }
 }
 
+template <typename T>
+literal_t DLPropagator<T>::decide(id_t thread_id, Clingo::Assignment const &assign, literal_t fallback) {
+    static_cast<void>(assign);
+    if (conf_.decision_mode == DecisionMode::Disabled) {
+        return fallback;
+    }
+    bool phase = conf_.decision_mode == DecisionMode::MinConflict;
+    ThreadState &state = states_[thread_id];
+    auto it = lit_to_edges_.find(fallback);
+    if (it != lit_to_edges_.end() && state.graph.edge_is_negative(it->second) == phase) {
+        return -fallback;
+    }
+    it = lit_to_edges_.find(-fallback);
+    if (it != lit_to_edges_.end() && state.graph.edge_is_negative(it->second) != phase) {
+        return -fallback;
+    }
+    return fallback;
+}
+
 template class DLPropagator<int>;
 template class DLPropagator<double>;
 
