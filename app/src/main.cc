@@ -29,6 +29,10 @@
 #include <fstream>
 #include <limits>
 
+#ifdef CLINGODL_PROFILE
+#include <gperftools/profiler.h>
+#endif
+
 namespace ClingoDL {
 
 using Clingo::Detail::handle_error;
@@ -73,12 +77,18 @@ public:
         });
 
         ctl.ground({{"base", {}}});
+#ifdef CLINGODL_PROFILE
+        ProfilerStart("clingodl.solve.prof");
+#endif
         if (!opt_cfg_.active) {
             ctl.solve(Clingo::SymbolicLiteralSpan{}, this, false, false).get();
         }
         else {
             Optimizer{opt_cfg_, *this, theory_}.solve(ctl);
         }
+#ifdef CLINGODL_PROFILE
+        ProfilerStop();
+#endif
     }
     //! Parse the variable to minimize and an optional initial bound.
     bool parse_bound(char const *value) {

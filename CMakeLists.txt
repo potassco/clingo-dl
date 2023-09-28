@@ -30,6 +30,7 @@ option(CLINGODL_CROSSCHECK "enable additional state checking" OFF)
 option(CLINGODL_USE_LOCAL_CATCH
 "Advanced option to build against bundled or installed catch."
 ON)
+option(CLINGODL_PROFILE "profile clingo-dl" OFF)
 set(PYCLINGODL_ENABLE "auto" CACHE STRING "build with python support: OFF, auto, require, pip
 auto: enable python support if python is available
 require: enable python support and fails if python is not available

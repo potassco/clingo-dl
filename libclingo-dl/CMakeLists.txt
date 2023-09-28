@@ -97,6 +97,12 @@ if (NOT clingodl_build_interface)
         FOLDER lib)
 endif()
 
+if (CLINGODL_PROFILE)
+    find_package(Gperftools REQUIRED)
+    target_compile_definitions(libclingo-dl PUBLIC CLINGODL_PROFILE)
+    target_link_libraries(libclingo-dl PUBLIC Gperftools::Profiler)
+endif()
+
 if (CLINGODL_BUILD_TESTS)
     # NOTE: we build statically without hiding symbols
     add_library(libclingo-dl_t STATIC ${header} ${source})
