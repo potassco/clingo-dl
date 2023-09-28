@@ -137,7 +137,7 @@ struct PropagatorConfig {
     //! Helper to access per thread or global properties.
     template <class T, class P> [[nodiscard]] auto get_prop(Clingo::id_t thread_id, T &&def, P &&prop) const -> T {
         if (thread_id < thread_config.size() && thread_config[thread_id].*prop) {
-            return *(thread_config[thread_id].*prop);
+            return *(thread_config[thread_id].*prop); // NOLINT(bugprone-unchecked-optional-access)
         }
         return def;
     }

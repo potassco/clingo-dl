@@ -344,17 +344,17 @@ auto parse_mutex(const char *value, void *data) -> bool {
 auto parse_mode(const char *value, void *data) -> bool {
     PropagationMode mode = PropagationMode::Check;
     char const *rem = nullptr;
-    if ((rem = iequals_pre(value, "no")) != nullptr) {
+    if (rem = iequals_pre(value, "no"); rem != nullptr) {
         mode = PropagationMode::Check;
-    } else if ((rem = iequals_pre(value, "inverse")) != nullptr) {
+    } else if (rem = iequals_pre(value, "inverse"); rem != nullptr) {
         mode = PropagationMode::Trivial;
-    } else if ((rem = iequals_pre(value, "partial+")) != nullptr) {
+    } else if (rem = iequals_pre(value, "partial+"); rem != nullptr) {
         mode = PropagationMode::WeakPlus;
-    } else if ((rem = iequals_pre(value, "partial")) != nullptr) {
+    } else if (rem = iequals_pre(value, "partial"); rem != nullptr) {
         mode = PropagationMode::Weak;
-    } else if ((rem = iequals_pre(value, "zero")) != nullptr) {
+    } else if (rem = iequals_pre(value, "zero"); rem != nullptr) {
         mode = PropagationMode::Zero;
-    } else if ((rem = iequals_pre(value, "full")) != nullptr) {
+    } else if (rem = iequals_pre(value, "full"); rem != nullptr) {
         mode = PropagationMode::Strong;
     }
     return rem != nullptr && set_config(
@@ -368,15 +368,15 @@ auto parse_mode(const char *value, void *data) -> bool {
 auto parse_sort(const char *value, void *data) -> bool {
     SortMode sort = SortMode::Weight;
     char const *rem = nullptr;
-    if ((rem = iequals_pre(value, "no")) != nullptr) {
+    if (rem = iequals_pre(value, "no"); rem != nullptr) {
         sort = SortMode::No;
-    } else if ((rem = iequals_pre(value, "weight-reversed")) != nullptr) {
+    } else if (rem = iequals_pre(value, "weight-reversed"); rem != nullptr) {
         sort = SortMode::WeightRev;
-    } else if ((rem = iequals_pre(value, "weight")) != nullptr) {
+    } else if (rem = iequals_pre(value, "weight"); rem != nullptr) {
         sort = SortMode::Weight;
-    } else if ((rem = iequals_pre(value, "potential-reversed")) != nullptr) {
+    } else if (rem = iequals_pre(value, "potential-reversed"); rem != nullptr) {
         sort = SortMode::PotentialRev;
-    } else if ((rem = iequals_pre(value, "potential")) != nullptr) {
+    } else if (rem = iequals_pre(value, "potential"); rem != nullptr) {
         sort = SortMode::Potential;
     }
     return rem != nullptr && set_config(
