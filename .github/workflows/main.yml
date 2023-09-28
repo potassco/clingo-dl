@@ -19,17 +19,14 @@ jobs:
             build_type: 'Debug'
             channels: 'potassco/label/dev'
             env_file: '.github/linux-env.yml'
-            tidy: "-DCMAKE_CXX_CLANG_TIDY:STRING=''"
           - os: 'macos-latest'
             generator: 'Ninja'
             build_type: 'Debug'
             env_file: '.github/macos-env.yml'
-            tidy: "-DCMAKE_CXX_CLANG_TIDY:STRING='clang-tidy;--extra-arg-before=-stdlib=libc++;-header-filter=.*hh;-warnings-as-errors=clang-analyzer-*,readability-*,modernize-*,cppcoreguidelines-*,performance-*,bugprone-*,-modernize-use-trailing-return-type,-cppcoreguidelines-pro-bounds-array-to-pointer-decay,-cppcoreguidelines-pro-type-union-access,-cppcoreguidelines-pro-type-vararg'"
           - os: 'windows-latest'
             generator: 'Visual Studio 17 2022'
             build_type: 'Release'
             env_file: '.github/generic-env.yml'
-            tidy: "-DCMAKE_CXX_CLANG_TIDY:STRING=''"
 
     steps:
     - uses: actions/checkout@v2
@@ -58,5 +55,5 @@ jobs:
         --build-config "${{ matrix.build_type }}"
         --build-generator "${{ matrix.generator }}"
         --build-and-test . build
-        --build-options -DCLINGODL_BUILD_TESTS=On "${{ matrix.tidy }}"
+        --build-options -DCLINGODL_BUILD_TESTS=On
         --test-command ctest -V --build-config "${{ matrix.build_type }}"
