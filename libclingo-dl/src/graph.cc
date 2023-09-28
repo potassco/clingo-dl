@@ -29,50 +29,43 @@ namespace ClingoDL {
 namespace {
 
 //!< Tag for traversals of the original graph.
-struct From { };
+struct From {};
 //!< Tag for traversals of the transposed graph.
-struct To { };
+struct To {};
 
 //! An index different from all valid edge indices.
 constexpr auto invalid_edge_index = std::numeric_limits<vertex_t>::max();
 
 } // namespace
 
-void ThreadStatistics::reset() {
-    *this = ThreadStatistics{};
-}
+void ThreadStatistics::reset() { *this = ThreadStatistics{}; }
 
 void ThreadStatistics::accu(ThreadStatistics const &x) {
-    time_propagate        += x.time_propagate;
-    time_undo             += x.time_undo;
-    time_dijkstra         += x.time_dijkstra;
-    true_edges            += x.true_edges;
-    false_edges           += x.false_edges;
-    false_edges_trivial   += x.false_edges_trivial;
-    false_edges_weak      += x.false_edges_weak;
+    time_propagate += x.time_propagate;
+    time_undo += x.time_undo;
+    time_dijkstra += x.time_dijkstra;
+    true_edges += x.true_edges;
+    false_edges += x.false_edges;
+    false_edges_trivial += x.false_edges_trivial;
+    false_edges_weak += x.false_edges_weak;
     false_edges_weak_plus += x.false_edges_weak_plus;
-    propagate_cost_add    += x.propagate_cost_add;
-    propagate_cost_from   += x.propagate_cost_from;
-    propagate_cost_to     += x.propagate_cost_to;
-    edges_added           += x.edges_added;
-    edges_skipped         += x.edges_skipped;
-    edges_propagated      += x.edges_propagated;
+    propagate_cost_add += x.propagate_cost_add;
+    propagate_cost_from += x.propagate_cost_from;
+    propagate_cost_to += x.propagate_cost_to;
+    edges_added += x.edges_added;
+    edges_skipped += x.edges_skipped;
+    edges_propagated += x.edges_propagated;
 }
 
 //!< Thread specific information for vertices.
-template <typename T>
-struct Graph<T>::Vertex {
+template <typename T> struct Graph<T>::Vertex {
     using value_t = T;
     using PotentialStack = std::vector<std::pair<vertex_t, value_t>>;
 
     //! Return true if the vertex has a value assigned.
-    [[nodiscard]] bool defined() const {
-        return !potential_stack.empty();
-    }
+    [[nodiscard]] auto defined() const -> bool { return !potential_stack.empty(); }
     //! Return the current value associated with the vertex.
-    [[nodiscard]] value_t potential() const {
-        return potential_stack.back().second;
-    }
+    [[nodiscard]] auto potential() const -> value_t { return potential_stack.back().second; }
 
     VertexIndexVec outgoing;           //!< Outgoing edges from this vertex that are true.
     VertexIndexVec incoming;           //!< Incoming edges to this vertex that are true.
@@ -99,16 +92,14 @@ struct Graph<T>::Vertex {
 };
 
 //!< Thread specific information for edges.
-template <typename T>
-struct Graph<T>::EdgeState {
+template <typename T> struct Graph<T>::EdgeState {
     uint8_t removed_outgoing : 1; //!< Flag to mark edges as removed from the candidate_outgoing vector.
     uint8_t removed_incoming : 1; //!< Flag to mark edges as removed from the candidate_incoming vector.
     uint8_t enabled : 1;          //!< Flag to mark the edge as enabled.
 };
 
 //!< Struct holding information to backtrack a decision level.
-template <typename T>
-struct Graph<T>::TrailEntry {
+template <typename T> struct Graph<T>::TrailEntry {
     level_t level;                //!< The corresponding decision level.
     index_t vertex_offset;        //!< Index up to which to backtrack changed vertices.
     index_t edge_offset;          //!< Index up to which to backtrack changed edges.
@@ -129,105 +120,93 @@ struct Graph<T>::TrailEntry {
 //! \note The same effect could be achieved by providing a lot of private
 //! template member functions. This implementation has the advantage that the
 //! complexity is hidden in the implementation.
-template <typename T>
-template <typename D>
-struct Graph<T>::Impl : Graph {
+template <typename T> template <typename D> struct Graph<T>::Impl : Graph {
     using index_t = HeapType::index_type;
 
     //! The index of the vertex in the heap vector.
-    index_t &offset(vertex_t idx) {
-        return vertices_[idx].offset;
-    }
+    auto offset(vertex_t idx) -> index_t & { return vertices_[idx].offset; }
 
     //! Compare two vertices by cost/relevant.
-    bool less(vertex_t a, vertex_t b) {
+    auto less(vertex_t a, vertex_t b) -> bool {
         auto ca = cost(a);
         auto cb = cost(b);
         return ca < cb || (ca == cb && relevant(a) < relevant(b));
     }
 
     //! Compare a cost with a vertex.
-    bool less(value_t ca, bool ra, vertex_t b) {
+    auto less(value_t ca, bool ra, vertex_t b) -> bool {
         auto cb = cost(b);
         return ca < cb || (ca == cb && ra < relevant(b));
     }
 
     //! The cost of the vertex.
-    value_t &cost(vertex_t idx) {
+    auto cost(vertex_t idx) -> value_t & {
         if constexpr (std::is_same_v<D, From>) {
             return vertices_[idx].cost_from;
-        }
-        else {
+        } else {
             return vertices_[idx].cost_to;
         }
     }
 
     //! The bound of a vertex.
-    value_t &bound_value(vertex_t idx) {
+    auto bound_value(vertex_t idx) -> value_t & {
         if constexpr (std::is_same_v<D, From>) {
             return vertices_[idx].bound_lower;
-        }
-        else {
+        } else {
             return vertices_[idx].bound_upper;
         }
     }
 
     //! The bound changes during bound propagation.
-    BoundTrailVec &bound_trail() {
+    auto bound_trail() -> BoundTrailVec & {
         if constexpr (std::is_same_v<D, From>) {
             return lower_trail_;
-        }
-        else {
+        } else {
             return upper_trail_;
         }
     }
 
     //! The end point of the given edge.
-    vertex_t to(edge_t idx) {
+    auto to(edge_t idx) -> vertex_t {
         if constexpr (std::is_same_v<D, From>) {
             return edges_[idx].to;
-        }
-        else {
+        } else {
             return edges_[idx].from;
         }
     }
 
     //! The starting point of the given edge.
-    vertex_t from(edge_t idx) {
+    auto from(edge_t idx) -> vertex_t {
         if constexpr (std::is_same_v<D, From>) {
             return edges_[idx].from;
-        }
-        else {
+        } else {
             return edges_[idx].to;
         }
     }
 
     //! The outgoing vertices of the given vertex.
-    std::vector<vertex_t> &out(vertex_t idx) {
+    auto out(vertex_t idx) -> std::vector<vertex_t> & {
         if constexpr (std::is_same_v<D, From>) {
             return vertices_[idx].outgoing;
-        }
-        else {
+        } else {
             return vertices_[idx].incoming;
         }
     }
 
     //! The edge that was used to reach the given vertex.
-    edge_t &path(vertex_t idx) {
+    auto path(vertex_t idx) -> edge_t & {
         if constexpr (std::is_same_v<D, From>) {
             return vertices_[idx].path_from;
-        }
-        else {
+        } else {
             return vertices_[idx].path_to;
         }
     }
 
     //! The edge that was used to reach the given vertex when computing bounds.
-    edge_t &bound_path(vertex_t idx) {
+    auto bound_path(vertex_t idx) -> edge_t & {
         if constexpr (std::is_same_v<D, From>) {
             return vertices_[idx].path_lower;
-        }
-        else {
+        } else {
             return vertices_[idx].path_upper;
         }
     }
@@ -236,71 +215,64 @@ struct Graph<T>::Impl : Graph {
     //!
     //! \note This is a integer here because it is also used as a dfs index
     //! when adding edges.
-    std::conditional_t<std::is_same_v<D, From>, vertex_t, bool> &visited(vertex_t idx) {
-        if constexpr(std::is_same_v<D, From>) {
+    auto visited(vertex_t idx) -> std::conditional_t<std::is_same_v<D, From>, vertex_t, bool> & {
+        if constexpr (std::is_same_v<D, From>) {
             return vertices_[idx].visited_from;
-        }
-        else {
+        } else {
             return vertices_[idx].visited_to;
         }
     }
 
     //! Flag indicating whether the vertex has been visited during bound traversals.
-    bool &bound_visited(vertex_t idx) {
-        if constexpr(std::is_same_v<D, From>) {
+    auto bound_visited(vertex_t idx) -> bool & {
+        if constexpr (std::is_same_v<D, From>) {
             return vertices_[idx].visited_lower;
-        }
-        else {
+        } else {
             return vertices_[idx].visited_upper;
         }
     }
 
     //! Whether the vertex is relevant for propagation.
-    bool &relevant(vertex_t idx) {
+    auto relevant(vertex_t idx) -> bool & {
         if constexpr (std::is_same_v<D, From>) {
             return vertices_[idx].relevant_from;
-        }
-        else {
+        } else {
             return vertices_[idx].relevant_to;
         }
     }
 
     //! The set of all visited vertices.
-    std::vector<vertex_t> &visited_set() {
+    auto visited_set() -> std::vector<vertex_t> & {
         if constexpr (std::is_same_v<D, From>) {
             return visited_from_;
-        }
-        else {
+        } else {
             return visited_to_;
         }
     }
 
     //! The set of all visited vertices.
-    std::vector<vertex_t> &bound_visited_set() {
+    auto bound_visited_set() -> std::vector<vertex_t> & {
         if constexpr (std::is_same_v<D, From>) {
             return visited_lower_;
-        }
-        else {
+        } else {
             return visited_upper_;
         }
     }
 
     //! Outgoing candidate edges that are not false.
-    std::vector<vertex_t> &candidate_outgoing(vertex_t idx) {
+    auto candidate_outgoing(vertex_t idx) -> std::vector<vertex_t> & {
         if constexpr (std::is_same_v<D, From>) {
             return vertices_[idx].candidate_outgoing;
-        }
-        else {
+        } else {
             return vertices_[idx].candidate_incoming;
         }
     }
 
     //! Incoming candidate edges that are not false.
-    std::vector<vertex_t> &candidate_incoming(vertex_t idx) {
+    auto candidate_incoming(vertex_t idx) -> std::vector<vertex_t> & {
         if constexpr (std::is_same_v<D, From>) {
             return vertices_[idx].candidate_incoming;
-        }
-        else {
+        } else {
             return vertices_[idx].candidate_outgoing;
         }
     }
@@ -309,8 +281,7 @@ struct Graph<T>::Impl : Graph {
     void remove_incoming(edge_t idx) {
         if constexpr (std::is_same_v<D, From>) {
             edge_states_[idx].removed_incoming = true;
-        }
-        else {
+        } else {
             edge_states_[idx].removed_outgoing = true;
         }
     }
@@ -319,25 +290,24 @@ struct Graph<T>::Impl : Graph {
     void remove_outgoing(edge_t idx) {
         if constexpr (std::is_same_v<D, From>) {
             edge_states_[idx].removed_outgoing = true;
-        }
-        else {
+        } else {
             edge_states_[idx].removed_incoming = true;
         }
     }
 
     //! The cost to propagate the edge.
-    uint64_t &propagation_cost() {
+    auto propagation_cost() -> uint64_t & {
         if constexpr (std::is_same_v<D, From>) {
             return stats_.propagate_cost_from;
-        }
-        else {
+        } else {
             return stats_.propagate_cost_to;
         }
     }
 
 #ifdef CLINGODL_CROSSCHECK
     //! Compute shortests paths using the Bellman Ford algorithm.
-    std::optional<std::unordered_map<vertex_t, value_t>> bellman_ford_(std::vector<edge_t> const &edges, vertex_t source) {
+    std::optional<std::unordered_map<vertex_t, value_t>> bellman_ford_(std::vector<edge_t> const &edges,
+                                                                       vertex_t source) {
         std::unordered_map<vertex_t, T> costs;
         costs[source] = 0;
         vertex_t vertices = 0;
@@ -356,8 +326,7 @@ struct Graph<T>::Impl : Graph {
                     auto dist = u_cost->second + uv.weight;
                     if (v_cost == costs.end()) {
                         costs[u_idx] = dist;
-                    }
-                    else if (dist < v_cost->second) {
+                    } else if (dist < v_cost->second) {
                         v_cost->second = dist;
                     }
                 }
@@ -434,8 +403,7 @@ struct Graph<T>::Impl : Graph {
                         visited(v_idx) = true;
                         relevant(v_idx) = relevant_u || uv_idx == relevant_idx;
                         costs_heap_.push(*this, v_idx);
-                    }
-                    else {
+                    } else {
                         // vertex v became or lost relevance
                         if (relevant_u != relevant_v) {
                             relevant(v_idx) = relevant_u;
@@ -501,7 +469,8 @@ struct Graph<T>::Impl : Graph {
                 auto c = cost(s_idx) + vertices_[st.from].potential() + st.weight - vertices_[st.to].potential();
                 auto bound_st = bound_value(s_idx) + st.weight;
                 assert(vertices_[st.from].potential() + st.weight - vertices_[st.to].potential() >= 0);
-                if ((!visited(t_idx) || less(c, false, t_idx)) && (!bound_visited(t_idx) || bound_st < bound_value(t_idx))) {
+                if ((!visited(t_idx) || less(c, false, t_idx)) &&
+                    (!bound_visited(t_idx) || bound_st < bound_value(t_idx))) {
                     cost(t_idx) = c;
                     if (!visited(t_idx)) {
                         visited(t_idx) = true;
@@ -510,8 +479,7 @@ struct Graph<T>::Impl : Graph {
                             bound_trail().emplace_back(std::make_tuple(t_idx, bound_path(t_idx), bound_value(t_idx)));
                         }
                         costs_heap_.push(*this, t_idx);
-                    }
-                    else {
+                    } else {
                         costs_heap_.decrease(*this, t_idx);
                     }
                     bound_path(t_idx) = st_idx;
@@ -575,35 +543,33 @@ struct Graph<T>::Impl : Graph {
             if (!full || relevant(vertex)) {
                 if (forward) {
                     auto &in = candidate_incoming(vertex);
-                    in.resize(
-                        std::remove_if(
-                            in.begin(), in.end(),
-                            [&](edge_t uv_idx) {
-                                if (!edge_states_[uv_idx].enabled || propagate_edge_true_<full>(uv_idx, xy_idx)) {
-                                    remove_incoming(uv_idx);
-                                    return true;
-                                }
-                                return false;
-                            }) -
-                        in.begin());
+                    in.resize(std::remove_if(in.begin(), in.end(),
+                                             [&](edge_t uv_idx) {
+                                                 if (!edge_states_[uv_idx].enabled ||
+                                                     propagate_edge_true_<full>(uv_idx, xy_idx)) {
+                                                     remove_incoming(uv_idx);
+                                                     return true;
+                                                 }
+                                                 return false;
+                                             }) -
+                              in.begin());
                 }
                 if (backward) {
                     bool ret = true;
                     auto &out = candidate_outgoing(vertex);
-                    out.resize(
-                        std::remove_if(
-                            out.begin(), out.end(),
-                            [&](edge_t uv_idx) {
-                                if (!ret) {
-                                    return false;
-                                }
-                                if (!edge_states_[uv_idx].enabled || propagate_edge_false_<full>(ctl, uv_idx, xy_idx, ret)) {
-                                    remove_outgoing(uv_idx);
-                                    return true;
-                                }
-                                return false;
-                            }) -
-                        out.begin());
+                    out.resize(std::remove_if(out.begin(), out.end(),
+                                              [&](edge_t uv_idx) {
+                                                  if (!ret) {
+                                                      return false;
+                                                  }
+                                                  if (!edge_states_[uv_idx].enabled ||
+                                                      propagate_edge_false_<full>(ctl, uv_idx, xy_idx, ret)) {
+                                                      remove_outgoing(uv_idx);
+                                                      return true;
+                                                  }
+                                                  return false;
+                                              }) -
+                               out.begin());
                     if (!ret) {
                         return false;
                     }
@@ -616,9 +582,7 @@ struct Graph<T>::Impl : Graph {
 
 template <typename T>
 Graph<T>::Graph(ThreadStatistics &stats, EdgeVec const &edges, PropagationMode propagate)
-: edges_{edges}
-, stats_{stats}
-, propagate_{propagate} {
+    : edges_{edges}, stats_{stats}, propagate_{propagate} {
     edge_states_.resize(edges_.size(), {1, 1, 0});
     for (edge_t i = 0; i < numeric_cast<edge_t>(edges_.size()); ++i) {
         ensure_index(vertices_, std::max(edges_[i].from, edges_[i].to));
@@ -626,35 +590,26 @@ Graph<T>::Graph(ThreadStatistics &stats, EdgeVec const &edges, PropagationMode p
     }
 }
 
-template <typename T>
-Graph<T>::~Graph() = default;
+template <typename T> Graph<T>::~Graph() = default;
 
-template <typename T>
-Graph<T>::Graph(Graph &&other) noexcept = default;
+template <typename T> Graph<T>::Graph(Graph &&other) noexcept = default;
 
-template <typename T>
-bool Graph<T>::empty() const {
-    return vertices_.empty();
-}
+template <typename T> auto Graph<T>::empty() const -> bool { return vertices_.empty(); }
 
-template <typename T>
-bool Graph<T>::has_value(vertex_t idx) const {
+template <typename T> auto Graph<T>::has_value(vertex_t idx) const -> bool {
     return idx < vertices_.size() && vertices_[idx].defined();
 }
 
-template <typename T>
-T Graph<T>::get_value(vertex_t idx) const {
+template <typename T> auto Graph<T>::get_value(vertex_t idx) const -> T {
     assert(has_value(idx));
     return -vertices_[idx].potential();
 }
 
-template <typename T>
-bool Graph<T>::edge_is_enabled(edge_t edge_idx) const {
+template <typename T> auto Graph<T>::edge_is_enabled(edge_t edge_idx) const -> bool {
     return edge_states_[edge_idx].enabled;
 }
 
-template <typename T>
-bool Graph<T>::edge_is_negative(edge_t edge_idx) const {
+template <typename T> auto Graph<T>::edge_is_negative(edge_t edge_idx) const -> bool {
     auto const &st = edges_[edge_idx];
     auto const &u = vertices_[st.from];
     auto const &v = vertices_[st.to];
@@ -663,34 +618,24 @@ bool Graph<T>::edge_is_negative(edge_t edge_idx) const {
     return up + st.weight - vp < 0;
 }
 
-template <typename T>
-bool Graph<T>::can_propagate() const {
+template <typename T> auto Graph<T>::can_propagate() const -> bool {
     return changed_trail_.empty() || changed_trail_.back().can_propagate;
 }
 
-template <typename T>
-void Graph<T>::disable_propagate() {
-    changed_trail_.back().can_propagate = false;
-}
+template <typename T> void Graph<T>::disable_propagate() { changed_trail_.back().can_propagate = false; }
 
-template <typename T>
-void Graph<T>::ensure_decision_level(level_t level, bool enable_propagate) {
+template <typename T> void Graph<T>::ensure_decision_level(level_t level, bool enable_propagate) {
     // initialize the trail
     if (changed_trail_.empty() || current_decision_level_() < level) {
-        changed_trail_.push_back({level,
-                                  numeric_cast<index_t>(changed_vertices_.size()),
-                                  numeric_cast<index_t>(changed_edges_.size()),
-                                  numeric_cast<index_t>(disabled_edges_.size()),
-                                  numeric_cast<index_t>(visited_lower_.size()),
-                                  numeric_cast<index_t>(visited_upper_.size()),
-                                  numeric_cast<index_t>(lower_trail_.size()),
-                                  numeric_cast<index_t>(upper_trail_.size()),
-                                  can_propagate() && enable_propagate});
+        changed_trail_.push_back(
+            {level, numeric_cast<index_t>(changed_vertices_.size()), numeric_cast<index_t>(changed_edges_.size()),
+             numeric_cast<index_t>(disabled_edges_.size()), numeric_cast<index_t>(visited_lower_.size()),
+             numeric_cast<index_t>(visited_upper_.size()), numeric_cast<index_t>(lower_trail_.size()),
+             numeric_cast<index_t>(upper_trail_.size()), can_propagate() && enable_propagate});
     }
 }
 
-template <typename T>
-bool Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx) {
+template <typename T> auto Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx) -> bool {
     // This function adds an edge to the graph and returns false if the edge
     // induces a negative cycle.
     //
@@ -750,8 +695,8 @@ bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx, ver
 #ifdef CLINGODL_CROSSCHECK
     if (ret) {
         auto ass = ctl.assignment();
-        auto cost_from_zero = static_cast<Impl<From>*>(this)->bellman_ford_(changed_edges_, zero_idx);
-        auto cost_to_zero = static_cast<Impl<To>*>(this)->bellman_ford_(changed_edges_, zero_idx);
+        auto cost_from_zero = static_cast<Impl<From> *>(this)->bellman_ford_(changed_edges_, zero_idx);
+        auto cost_to_zero = static_cast<Impl<To> *>(this)->bellman_ford_(changed_edges_, zero_idx);
         if (cost_from_zero && cost_to_zero) {
             for (auto [x_idx, cost_x] : *cost_from_zero) {
                 for (auto &xy : edges_) {
@@ -765,7 +710,7 @@ bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx, ver
                     auto cost_y = it_y->second;
                     static_cast<void>(cost_y);
                     static_cast<void>(ass);
-                    assert (cost_x + cost_y + xy.weight >= 0 || ass.is_false(xy.lit));
+                    assert(cost_x + cost_y + xy.weight >= 0 || ass.is_false(xy.lit));
                 }
             }
         }
@@ -776,8 +721,7 @@ bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx, ver
     return ret;
 }
 
-template <typename T>
-bool Graph<T>::check_cycle_(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLINT
+template <typename T> bool Graph<T>::check_cycle_(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLINT
     // NOTE: would be more efficient if relevant would return statically false here
     //       for the compiler to make comparison cheaper
 
@@ -801,8 +745,7 @@ bool Graph<T>::check_cycle_(Clingo::PropagateControl &ctl, edge_t uv_idx) { // N
         visited_from_.emplace_back(uv.to);
         v.visited_from = 1;
         v.path_from = uv_idx;
-    }
-    else {
+    } else {
         ++stats_.edges_skipped;
     }
 
@@ -828,8 +771,7 @@ bool Graph<T>::check_cycle_(Clingo::PropagateControl &ctl, edge_t uv_idx) { // N
                     t.visited_from = 1;
                     visited_from_.emplace_back(st.to);
                     costs_heap_.push(m, st.to);
-                }
-                else {
+                } else {
                     costs_heap_.decrease(m, st.to);
                 }
             }
@@ -871,8 +813,7 @@ bool Graph<T>::check_cycle_(Clingo::PropagateControl &ctl, edge_t uv_idx) { // N
     return ctl.add_clause(clause_) && ctl.propagate();
 }
 
-template <typename T>
-bool Graph<T>::propagate_simple_(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLINT
+template <typename T> bool Graph<T>::propagate_simple_(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLINT
     if (propagate_ >= PropagationMode::Trivial) {
         auto &uv = edges_[uv_idx];
         if (visited_from_.empty() || propagate_ == PropagationMode::Trivial) {
@@ -903,8 +844,7 @@ bool Graph<T>::propagate_simple_(Clingo::PropagateControl &ctl, edge_t uv_idx) {
     return true;
 }
 
-template <typename T>
-bool Graph<T>::propagate_full_(Clingo::PropagateControl &ctl, edge_t xy_idx) {
+template <typename T> auto Graph<T>::propagate_full_(Clingo::PropagateControl &ctl, edge_t xy_idx) -> bool {
     // The function is best understood considering the following example graph:
     //
     //   v ->* x -> y ->* u
@@ -930,20 +870,23 @@ bool Graph<T>::propagate_full_(Clingo::PropagateControl &ctl, edge_t xy_idx) {
     vertex_t num_relevant_in_to{0};
     {
         Timer t{stats_.time_dijkstra};
-        std::tie(num_relevant_out_from, num_relevant_in_from) = static_cast<Impl<From>*>(this)->dijkstra_full(xy.from, xy_idx);
-        std::tie(num_relevant_out_to, num_relevant_in_to) = static_cast<Impl<To>*>(this)->dijkstra_full(xy.to, xy_idx);
+        std::tie(num_relevant_out_from, num_relevant_in_from) =
+            static_cast<Impl<From> *>(this)->dijkstra_full(xy.from, xy_idx);
+        std::tie(num_relevant_out_to, num_relevant_in_to) = static_cast<Impl<To> *>(this)->dijkstra_full(xy.to, xy_idx);
     }
 #ifdef CLINGODL_CROSSCHECK
     // check if the counts of relevant incoming/outgoing vertices are correct
-    assert(std::make_pair(num_relevant_in_from, num_relevant_out_from) == static_cast<Impl<From> *>(this)->count_relevant_());
+    assert(std::make_pair(num_relevant_in_from, num_relevant_out_from) ==
+           static_cast<Impl<From> *>(this)->count_relevant_());
     assert(std::make_pair(num_relevant_out_to, num_relevant_in_to) == static_cast<Impl<To> *>(this)->count_relevant_());
 #endif
 
     bool forward_from = num_relevant_in_from < num_relevant_out_to;
     bool backward_from = num_relevant_out_from < num_relevant_in_to;
 
-    bool ret = static_cast<Impl<From> *>(this)->template propagate_edges<true>(ctl, xy_idx, forward_from, backward_from) &&
-               static_cast<Impl<To> *>(this)->template propagate_edges<true>(ctl, xy_idx, !forward_from, !backward_from);
+    bool ret =
+        static_cast<Impl<From> *>(this)->template propagate_edges<true>(ctl, xy_idx, forward_from, backward_from) &&
+        static_cast<Impl<To> *>(this)->template propagate_edges<true>(ctl, xy_idx, !forward_from, !backward_from);
 
     for (auto &x : visited_from_) {
         vertices_[x].visited_from = 0;
@@ -960,7 +903,7 @@ bool Graph<T>::propagate_full_(Clingo::PropagateControl &ctl, edge_t xy_idx) {
 
 template <typename T>
 template <class F>
-bool Graph<T>::with_incoming_(Clingo::PropagateControl &ctl, vertex_t s_idx, F f) {
+auto Graph<T>::with_incoming_(Clingo::PropagateControl &ctl, vertex_t s_idx, F f) -> bool {
     auto &s = vertices_[s_idx];
     auto &in = s.candidate_incoming;
     auto jt = in.begin();
@@ -982,7 +925,7 @@ bool Graph<T>::with_incoming_(Clingo::PropagateControl &ctl, vertex_t s_idx, F f
             // add constraint for the negative cycle
             if (!(ctl.add_clause(clause_) && ctl.propagate())) {
                 // erease edges marked as removed
-                in.erase(jt, it+1);
+                in.erase(jt, it + 1);
                 return false;
             }
             continue;
@@ -994,7 +937,7 @@ bool Graph<T>::with_incoming_(Clingo::PropagateControl &ctl, vertex_t s_idx, F f
 }
 
 template <typename T>
-[[nodiscard]] bool Graph<T>::cheap_propagate_(Clingo::PropagateControl &ctl, vertex_t u_idx, vertex_t s_idx) {
+[[nodiscard]] auto Graph<T>::cheap_propagate_(Clingo::PropagateControl &ctl, vertex_t u_idx, vertex_t s_idx) -> bool {
     // we check for the following case:
     //   u ->* s ->* t
     //         ^----/
@@ -1018,8 +961,7 @@ template <typename T>
                 if (r_idx == s_idx) {
                     if (u_idx == s_idx) {
                         ++stats_.false_edges_weak;
-                    }
-                    else {
+                    } else {
                         ++stats_.false_edges_weak_plus;
                     }
                     assert(weight == check);
@@ -1032,8 +974,7 @@ template <typename T>
     });
 }
 
-template <typename T>
-void Graph<T>::backtrack() {
+template <typename T> void Graph<T>::backtrack() {
     auto entry = changed_trail_.back();
     for (auto it = changed_vertices_.rbegin(), ie = changed_vertices_.rend() - entry.vertex_offset; it != ie; ++it) {
         vertices_[*it].potential_stack.pop_back();
@@ -1072,8 +1013,7 @@ void Graph<T>::backtrack() {
     changed_trail_.pop_back();
 }
 
-template <typename T>
-void Graph<T>::disable_edge(edge_t uv_idx) {
+template <typename T> void Graph<T>::disable_edge(edge_t uv_idx) {
     auto &uv = edges_[uv_idx];
     auto &u = vertices_[uv.from];
     auto &v = vertices_[uv.to];
@@ -1084,13 +1024,9 @@ void Graph<T>::disable_edge(edge_t uv_idx) {
     edge_states_[uv_idx].enabled = false;
 }
 
-template <typename T>
-PropagationMode Graph<T>::mode() const {
-    return propagate_;
-}
+template <typename T> auto Graph<T>::mode() const -> PropagationMode { return propagate_; }
 
-template <typename T>
-void Graph<T>::add_candidate_edge_(edge_t uv_idx) {
+template <typename T> void Graph<T>::add_candidate_edge_(edge_t uv_idx) {
     auto &uv = edges_[uv_idx];
     auto &uv_state = edge_states_[uv_idx];
     auto &u = vertices_[uv.from];
@@ -1109,9 +1045,7 @@ void Graph<T>::add_candidate_edge_(edge_t uv_idx) {
     }
 }
 
-template <typename T>
-template <bool full>
-bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) { // NOLINT
+template <typename T> template <bool full> bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) { // NOLINT
     // The function is best understood considering the following example graph:
     //
     //   u ->* x -> y ->* v
@@ -1131,11 +1065,10 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) { // NOLINT
     auto &u = vertices_[uv.from];
     auto &v = vertices_[uv.to];
     bool relevant = false;
-    if constexpr(full) {
+    if constexpr (full) {
         assert(u.relevant_to || v.relevant_from);
         relevant = u.relevant_to && v.relevant_from;
-    }
-    else {
+    } else {
         assert(u.visited_upper || v.visited_lower);
         relevant = u.visited_upper && v.visited_lower;
     }
@@ -1146,7 +1079,7 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) { // NOLINT
         auto &y = vertices_[xy.to];
 
         value_t cost_uv{0};
-        if constexpr(full) {
+        if constexpr (full) {
             auto cost_uy = u.cost_to + y.potential() - u.potential();
             auto cost_xv = v.cost_from + v.potential() - x.potential();
             cost_uv = cost_uy + cost_xv - xy.weight;
@@ -1163,14 +1096,13 @@ bool Graph<T>::propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) { // NOLINT
             assert(bf_cost_uy->second == cost_uy);
             assert(bf_cost_xv->second == cost_xv);
 #endif
-        }
-        else {
+        } else {
             cost_uv = u.bound_upper + v.bound_lower;
         }
         if (cost_uv <= uv.weight) {
 #ifdef CLINGODL_CROSSCHECK
             // make sure that the graph does not have a negative cycle even if it contains the edge
-            if constexpr(full) {
+            if constexpr (full) {
                 auto edges = changed_edges_;
                 edges.emplace_back(uv_idx);
                 auto &m = *static_cast<Impl<From> *>(this);
@@ -1208,11 +1140,10 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
     auto &u = vertices_[uv.from];
     auto &v = vertices_[uv.to];
     bool relevant = true;
-    if constexpr(full) {
+    if constexpr (full) {
         assert(v.relevant_to || u.relevant_from);
         relevant = v.relevant_to && u.relevant_from;
-    }
-    else {
+    } else {
         assert(v.visited_upper || u.visited_lower);
         relevant = v.visited_upper && u.visited_lower;
     }
@@ -1223,12 +1154,11 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
         auto &y = vertices_[xy.to];
 
         value_t cost_vu{0};
-        if constexpr(full) {
+        if constexpr (full) {
             auto cost_vy = v.cost_to + y.potential() - v.potential();
             auto cost_xu = u.cost_from + u.potential() - x.potential();
             cost_vu = cost_vy + cost_xu - xy.weight;
-        }
-        else {
+        } else {
             cost_vu = v.bound_upper + u.bound_lower;
         }
 
@@ -1237,7 +1167,7 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
             if (!ctl.assignment().is_false(uv.lit)) {
 #ifdef CLINGODL_CROSSCHECK
                 value_t sum = uv.weight;
-                if constexpr(full) {
+                if constexpr (full) {
                     sum -= xy.weight;
                 }
 #endif
@@ -1275,7 +1205,7 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
         }
 #ifdef CLINGODL_CROSSCHECK
         // make sure that the graph does not have a negative cycle even if it contains the edge
-        if constexpr(full) {
+        if constexpr (full) {
             auto edges = changed_edges_;
             edges.emplace_back(uv_idx);
             auto &m = *static_cast<Impl<From> *>(this);
@@ -1287,19 +1217,16 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
     return false;
 }
 
-template <typename T>
-void Graph<T>::set_potential_(Vertex &vtx, level_t level, T potential) {
+template <typename T> void Graph<T>::set_potential_(Vertex &vtx, level_t level, T potential) {
     if (!vtx.defined() || vtx.potential_stack.back().first < level) {
         vtx.potential_stack.emplace_back(level, potential);
         changed_vertices_.emplace_back(numeric_cast<vertex_t>(&vtx - vertices_.data()));
-    }
-    else {
+    } else {
         vtx.potential_stack.back().second = potential;
     }
 }
 
-template <typename T>
-level_t Graph<T>::current_decision_level_() {
+template <typename T> auto Graph<T>::current_decision_level_() -> level_t {
     assert(!changed_trail_.empty());
     return changed_trail_.back().level;
 }

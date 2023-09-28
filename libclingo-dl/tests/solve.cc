@@ -22,11 +22,11 @@
 //
 // }}}
 
-#include <clingo.hh>
+#include <catch2/catch_test_macros.hpp>
+#include <clingo-dl-app/app.hh>
 #include <clingo-dl.h>
 #include <clingo-dl/propagator.hh>
-#include <clingo-dl-app/app.hh>
-#include <catch2/catch_test_macros.hpp>
+#include <clingo.hh>
 
 namespace ClingoDL {
 
@@ -91,70 +91,66 @@ bound(104).
 )";
 
 //! Create a symbol for sequence atoms of task/machine pairs.
-Clingo::Symbol seq(int a, int b, int c, int d, int e) {
-    return Clingo::Function("seq", {
-        Clingo::Function("", {Clingo::Number(a), Clingo::Number(b)}),
-        Clingo::Function("", {Clingo::Number(c), Clingo::Number(d)}),
-        Clingo::Number(e)
-    });
+auto seq(int a, int b, int c, int d, int e) -> Clingo::Symbol {
+    return Clingo::Function("seq", {Clingo::Function("", {Clingo::Number(a), Clingo::Number(b)}),
+                                    Clingo::Function("", {Clingo::Number(c), Clingo::Number(d)}), Clingo::Number(e)});
 }
 
 //! A DL assignment for task/machine pairs.
-A ass(int a, int b, int c) {
-    return A(Clingo::Function("", {Clingo::Number(a), Clingo::Number(b)}), c);
-}
+auto ass(int a, int b, int c) -> A { return A(Clingo::Function("", {Clingo::Number(a), Clingo::Number(b)}), c); }
 
 //! Solutions to the task assignment problem.
 RV const SOLS = {SP{{
-    ass(1, 1, 100), ass(1, 2, 0),  ass(1, 3, 34),  ass(1, 4, 95),  // NOLINT
-    ass(2, 1, 95),  ass(2, 2, 72), ass(2, 3, 104), ass(2, 4, 0),   // NOLINT
-    ass(3, 1, 34),  ass(3, 2, 0),  ass(3, 3, 72),  ass(3, 4, 104)  // NOLINT
-    }, {
-    seq(1, 2, 1, 1, 34), seq(1, 2, 1, 3, 34), seq(1, 2, 1, 4, 34), // NOLINT
-    seq(1, 2, 2, 2, 34), seq(1, 2, 3, 1, 34), seq(1, 3, 1, 1, 61), // NOLINT
-    seq(1, 3, 1, 4, 61), seq(1, 3, 2, 1, 61), seq(1, 3, 3, 4, 61), // NOLINT
-    seq(1, 4, 1, 1, 2),  seq(1, 4, 2, 3, 2),                       // NOLINT
-    seq(2, 1, 2, 3, 9),  seq(2, 1, 3, 4, 9),  seq(2, 2, 2, 1, 15), // NOLINT
-    seq(2, 2, 2, 3, 15), seq(2, 4, 1, 1, 70), seq(2, 4, 2, 1, 70), // NOLINT
-    seq(2, 4, 2, 2, 70), seq(2, 4, 2, 3, 70), seq(2, 4, 3, 3, 70), // NOLINT
-    seq(3, 1, 2, 2, 38), seq(3, 1, 3, 3, 38), seq(3, 1, 3, 4, 38), // NOLINT
-    seq(3, 2, 1, 4, 19), seq(3, 2, 2, 3, 19), seq(3, 2, 3, 1, 19), // NOLINT
-    seq(3, 2, 3, 3, 19), seq(3, 2, 3, 4, 19), seq(3, 3, 1, 1, 28), // NOLINT
-    seq(3, 3, 3, 4, 28),                                           // NOLINT
-    }}, SP{{
-    ass(1, 1, 104), ass(1, 2, 70), ass(1, 3, 9),  ass(1, 4, 0),    // NOLINT
-    ass(2, 1, 0),   ass(2, 2, 9),  ass(2, 3, 98), ass(2, 4, 28),   // NOLINT
-    ass(3, 1, 28),  ass(3, 2, 66), ass(3, 3, 0),  ass(3, 4, 85)    // NOLINT
-    }, {
-    seq(1, 2, 1, 1, 34), seq(1, 3, 1, 1, 61), seq(1, 3, 1, 2, 61), // NOLINT
-    seq(1, 3, 3, 4, 61), seq(1, 4, 1, 1, 2),  seq(1, 4, 1, 2, 2),  // NOLINT
-    seq(1, 4, 1, 3, 2),  seq(1, 4, 2, 3, 2),  seq(1, 4, 3, 2, 2),  // NOLINT
-    seq(2, 1, 1, 3, 9),  seq(2, 1, 2, 2, 9),  seq(2, 1, 2, 3, 9),  // NOLINT
-    seq(2, 1, 2, 4, 9),  seq(2, 1, 3, 4, 9),  seq(2, 2, 1, 2, 15), // NOLINT
-    seq(2, 2, 2, 3, 15), seq(2, 2, 2, 4, 15), seq(2, 2, 3, 1, 15), // NOLINT
-    seq(2, 4, 1, 1, 70), seq(2, 4, 2, 3, 70), seq(3, 1, 1, 2, 38), // NOLINT
-    seq(3, 1, 3, 2, 38), seq(3, 1, 3, 4, 38), seq(3, 2, 2, 3, 19), // NOLINT
-    seq(3, 2, 3, 4, 19), seq(3, 3, 1, 1, 28), seq(3, 3, 2, 4, 28), // NOLINT
-    seq(3, 3, 3, 1, 28), seq(3, 3, 3, 2, 28), seq(3, 3, 3, 4, 28), // NOLINT
-}}};
+                        ass(1, 1, 100), ass(1, 2, 0), ass(1, 3, 34), ass(1, 4, 95), // NOLINT
+                        ass(2, 1, 95), ass(2, 2, 72), ass(2, 3, 104), ass(2, 4, 0), // NOLINT
+                        ass(3, 1, 34), ass(3, 2, 0), ass(3, 3, 72), ass(3, 4, 104)  // NOLINT
+                    },
+                    {
+                        seq(1, 2, 1, 1, 34), seq(1, 2, 1, 3, 34), seq(1, 2, 1, 4, 34), // NOLINT
+                        seq(1, 2, 2, 2, 34), seq(1, 2, 3, 1, 34), seq(1, 3, 1, 1, 61), // NOLINT
+                        seq(1, 3, 1, 4, 61), seq(1, 3, 2, 1, 61), seq(1, 3, 3, 4, 61), // NOLINT
+                        seq(1, 4, 1, 1, 2),  seq(1, 4, 2, 3, 2),                       // NOLINT
+                        seq(2, 1, 2, 3, 9),  seq(2, 1, 3, 4, 9),  seq(2, 2, 2, 1, 15), // NOLINT
+                        seq(2, 2, 2, 3, 15), seq(2, 4, 1, 1, 70), seq(2, 4, 2, 1, 70), // NOLINT
+                        seq(2, 4, 2, 2, 70), seq(2, 4, 2, 3, 70), seq(2, 4, 3, 3, 70), // NOLINT
+                        seq(3, 1, 2, 2, 38), seq(3, 1, 3, 3, 38), seq(3, 1, 3, 4, 38), // NOLINT
+                        seq(3, 2, 1, 4, 19), seq(3, 2, 2, 3, 19), seq(3, 2, 3, 1, 19), // NOLINT
+                        seq(3, 2, 3, 3, 19), seq(3, 2, 3, 4, 19), seq(3, 3, 1, 1, 28), // NOLINT
+                        seq(3, 3, 3, 4, 28),                                           // NOLINT
+                    }},
+                 SP{{
+                        ass(1, 1, 104), ass(1, 2, 70), ass(1, 3, 9), ass(1, 4, 0), // NOLINT
+                        ass(2, 1, 0), ass(2, 2, 9), ass(2, 3, 98), ass(2, 4, 28),  // NOLINT
+                        ass(3, 1, 28), ass(3, 2, 66), ass(3, 3, 0), ass(3, 4, 85)  // NOLINT
+                    },
+                    {
+                        seq(1, 2, 1, 1, 34), seq(1, 3, 1, 1, 61), seq(1, 3, 1, 2, 61), // NOLINT
+                        seq(1, 3, 3, 4, 61), seq(1, 4, 1, 1, 2),  seq(1, 4, 1, 2, 2),  // NOLINT
+                        seq(1, 4, 1, 3, 2),  seq(1, 4, 2, 3, 2),  seq(1, 4, 3, 2, 2),  // NOLINT
+                        seq(2, 1, 1, 3, 9),  seq(2, 1, 2, 2, 9),  seq(2, 1, 2, 3, 9),  // NOLINT
+                        seq(2, 1, 2, 4, 9),  seq(2, 1, 3, 4, 9),  seq(2, 2, 1, 2, 15), // NOLINT
+                        seq(2, 2, 2, 3, 15), seq(2, 2, 2, 4, 15), seq(2, 2, 3, 1, 15), // NOLINT
+                        seq(2, 4, 1, 1, 70), seq(2, 4, 2, 3, 70), seq(3, 1, 1, 2, 38), // NOLINT
+                        seq(3, 1, 3, 2, 38), seq(3, 1, 3, 4, 38), seq(3, 2, 2, 3, 19), // NOLINT
+                        seq(3, 2, 3, 4, 19), seq(3, 3, 1, 1, 28), seq(3, 3, 2, 4, 28), // NOLINT
+                        seq(3, 3, 3, 1, 28), seq(3, 3, 3, 2, 28), seq(3, 3, 3, 4, 28), // NOLINT
+                    }}};
 
 //! A handler to gather statistics in a DL theory.
 class Handler : public Clingo::SolveEventHandler {
-public:
-    Handler(clingodl_theory_t *theory)
-    : theory_{theory} {
-    }
+  public:
+    Handler(clingodl_theory_t *theory) : theory_{theory} {}
     //! Add theory specific statistics.
     void on_statistics(Clingo::UserStatistics step, Clingo::UserStatistics accu) override {
         clingodl_on_statistics(theory_, step.to_c(), accu.to_c());
     }
 
-private:
+  private:
     clingodl_theory_t *theory_; //!< The DL theory.
 };
 
 //! Solve a given DL problem returning all models.
-RV solve(clingodl_theory_t *theory, Clingo::Control &ctl) {
+auto solve(clingodl_theory_t *theory, Clingo::Control &ctl) -> RV {
     Handler h{theory};
     using namespace Clingo;
     RV result;
@@ -164,16 +160,14 @@ RV solve(clingodl_theory_t *theory, Clingo::Control &ctl) {
         auto &sol_bool = result.back().second;
         auto id = m.thread_id();
         size_t index{0};
-        for (clingodl_assignment_begin(theory, id, &index); clingodl_assignment_next(theory, id, &index); ) {
+        for (clingodl_assignment_begin(theory, id, &index); clingodl_assignment_next(theory, id, &index);) {
             clingodl_value_t value;
             clingodl_assignment_get_value(theory, id, index, &value);
             if (value.type == clingodl_value_type_int) {
                 sol.emplace_back(Symbol{clingodl_get_symbol(theory, index)}, value.int_number); // NOLINT
-            }
-            else if (value.type == clingodl_value_type_double) {
+            } else if (value.type == clingodl_value_type_double) {
                 sol.emplace_back(Symbol{clingodl_get_symbol(theory, index)}, value.double_number); // NOLINT
-            }
-            else {
+            } else {
                 REQUIRE(false);
             }
         }
@@ -209,53 +203,53 @@ TEST_CASE("solving", "[clingo]") { // NOLINT
         SECTION("solve") {
             REQUIRE(clingodl_register(theory, ctl.to_c()));
             parse_program(theory, ctl,
-                "#program base.\n"
-                "1 { a; b } 1. &diff { a - b } <= 3.\n"
-                "&diff { 0 - a } <= -5 :- a.\n"
-                "&diff { 0 - b } <= -7 :- b.\n");
+                          "#program base.\n"
+                          "1 { a; b } 1. &diff { a - b } <= 3.\n"
+                          "&diff { 0 - a } <= -5 :- a.\n"
+                          "&diff { 0 - b } <= -7 :- b.\n");
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
             auto result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{{a, 0}, {b, 7}},{b}}, {{{a, 5}, {b, 2}},{a}}}));
+            REQUIRE(result == (RV{{{{a, 0}, {b, 7}}, {b}}, {{{a, 5}, {b, 2}}, {a}}}));
 
             parse_program(theory, ctl,
-                "#program ext.\n"
-                "&diff { a - 0 } <= 4.\n");
+                          "#program ext.\n"
+                          "&diff { a - 0 } <= 4.\n");
             ctl.ground({{"ext", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
             result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{{a, 0}, {b, 7}},{b}}}));
+            REQUIRE(result == (RV{{{{a, 0}, {b, 7}}, {b}}}));
         }
         SECTION("unequal") {
             REQUIRE(clingodl_register(theory, ctl.to_c()));
             parse_program(theory, ctl,
-                "#program base.\n"
-                "{ a }. &diff { b } != 5 :- not a.\n");
+                          "#program base.\n"
+                          "{ a }. &diff { b } != 5 :- not a.\n");
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
             auto result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{},{a}}, {{{b, 0}},{}},{{{b, 6}},{}}}));
+            REQUIRE(result == (RV{{{}, {a}}, {{{b, 0}}, {}}, {{{b, 6}}, {}}}));
         }
 
         SECTION("cc") {
             REQUIRE(clingodl_register(theory, ctl.to_c()));
             parse_program(theory, ctl,
-                "#program base.\n"
-                "&diff { 0 - a } <= -5.\n"
-                "&diff { 0 - b } <= -10.\n");
+                          "#program base.\n"
+                          "&diff { 0 - a } <= -5.\n"
+                          "&diff { 0 - b } <= -10.\n");
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
             auto result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{{a, 5}, {b, 10}},{}}}));
+            REQUIRE(result == (RV{{{{a, 5}, {b, 10}}, {}}}));
             REQUIRE(ctl.statistics()["user_step"]["DifferenceLogic"]["CCs"] == 2);
 
             parse_program(theory, ctl,
-                "#program ext.\n"
-                "&diff { b - a } <= 3.\n");
+                          "#program ext.\n"
+                          "&diff { b - a } <= 3.\n");
             ctl.ground({{"ext", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
             result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{{a, 7}, {b, 10}},{}}}));
+            REQUIRE(result == (RV{{{{a, 7}, {b, 10}}, {}}}));
             REQUIRE(ctl.statistics()["user_step"]["DifferenceLogic"]["CCs"] == 1);
         }
 
@@ -264,59 +258,55 @@ TEST_CASE("solving", "[clingo]") { // NOLINT
             REQUIRE(clingodl_register(theory, ctl.to_c()));
 
             parse_program(theory, ctl,
-                "#program base.\n"
-                "&diff { a - 0 } <= 0.\n"
-                "a :- &diff { a - 0 } <=  0.\n"
-                "b :- &diff { 0 - a } <= -1.\n"
-                "c :- &diff { a } <= -1.\n"
-                );
+                          "#program base.\n"
+                          "&diff { a - 0 } <= 0.\n"
+                          "a :- &diff { a - 0 } <=  0.\n"
+                          "b :- &diff { 0 - a } <= -1.\n"
+                          "c :- &diff { a } <= -1.\n");
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
 
             auto result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{{a, -1}},{a, c}},{{{a, 0}},{a}}}));
+            REQUIRE(result == (RV{{{{a, -1}}, {a, c}}, {{{a, 0}}, {a}}}));
         }
         SECTION("rdl") {
             REQUIRE(clingodl_configure(theory, "rdl", "yes"));
             REQUIRE(clingodl_register(theory, ctl.to_c()));
 
             parse_program(theory, ctl,
-                "#program base.\n"
-                "&diff { a } >= \"0.5\" * 3.\n"
-                );
+                          "#program base.\n"
+                          "&diff { a } >= \"0.5\" * 3.\n");
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
 
             auto result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{{a, 1.5}},{}}})); // NOLINT
+            REQUIRE(result == (RV{{{{a, 1.5}}, {}}})); // NOLINT
         }
 
         SECTION("parse") {
             REQUIRE(clingodl_register(theory, ctl.to_c()));
 
             parse_program(theory, ctl,
-                "#program base.\n"
-                "&diff { p( 1 + 2 ) - q( 3 * 4 - 7 ) } <= 3 - \"9.0\".\n"
-                );
+                          "#program base.\n"
+                          "&diff { p( 1 + 2 ) - q( 3 * 4 - 7 ) } <= 3 - \"9.0\".\n");
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
 
             auto result = solve(theory, ctl);
             auto p = Clingo::parse_term("p(3)");
             auto q = Clingo::parse_term("q(5)");
-            REQUIRE(result == (RV{{{{p, 0}, {q, 6}},{}}}));
+            REQUIRE(result == (RV{{{{p, 0}, {q, 6}}, {}}}));
         }
         SECTION("normalize") {
             REQUIRE(clingodl_register(theory, ctl.to_c()));
 
             parse_program(theory, ctl,
-                "#program base.\n"
-                "&diff { a } = b.\n"
-                "&diff { 5 } >= 0.\n"
-                "&diff { b } > c.\n"
-                "&diff { c } >= d + 1.\n"
-                "&diff { e } != (f,f).\n"
-                );
+                          "#program base.\n"
+                          "&diff { a } = b.\n"
+                          "&diff { 5 } >= 0.\n"
+                          "&diff { b } > c.\n"
+                          "&diff { c } >= d + 1.\n"
+                          "&diff { e } != (f,f).\n");
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
 
@@ -326,36 +316,35 @@ TEST_CASE("solving", "[clingo]") { // NOLINT
             auto d = Id("d");
             auto e = Id("e");
             auto f = Function("", {Id("f"), Id("f")});
-            REQUIRE(result == (RV{{{{a, 2}, {b, 2}, {c, 1}, {d, 0}, {e, 0}, {f, 1}}, {}}, {{{a, 2}, {b, 2},{c, 1},{d, 0}, {e, 1}, {f, 0}}, {}}}));
+            REQUIRE(result == (RV{{{{a, 2}, {b, 2}, {c, 1}, {d, 0}, {e, 0}, {f, 1}}, {}},
+                                  {{{a, 2}, {b, 2}, {c, 1}, {d, 0}, {e, 1}, {f, 0}}, {}}}));
         }
         SECTION("empty constraints") {
             REQUIRE(clingodl_register(theory, ctl.to_c()));
 
             parse_program(theory, ctl,
-                "#program base.\n"
-                "a :- &diff { a - a } <= 5.\n"
-                "{ b }.\n"
-                "&diff { 0 } < -4 :- b.\n"
-                );
+                          "#program base.\n"
+                          "a :- &diff { a - a } <= 5.\n"
+                          "{ b }.\n"
+                          "&diff { 0 } < -4 :- b.\n");
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
 
             auto result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{},{a}}}));
+            REQUIRE(result == (RV{{{}, {a}}}));
             REQUIRE(ctl.statistics()["solving"]["solvers"]["choices"] == 0);
         }
         SECTION("symbols") {
             REQUIRE(clingodl_register(theory, ctl.to_c()));
 
             parse_program(theory, ctl,
-                "#program base.\n"
-                "&diff{ (\"foo\\\\\\nbar\\\"foo\",123) - 0 } <= 17.\n"
-                );
+                          "#program base.\n"
+                          "&diff{ (\"foo\\\\\\nbar\\\"foo\",123) - 0 } <= 17.\n");
             ctl.ground({{"base", {}}});
             REQUIRE(clingodl_prepare(theory, ctl.to_c()));
 
             auto result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{{Function("",{String("foo\\\nbar\"foo"), Number(123)}), 0}},{}}}));
+            REQUIRE(result == (RV{{{{Function("", {String("foo\\\nbar\"foo"), Number(123)}), 0}}, {}}}));
         }
         clingodl_destroy(theory);
     }

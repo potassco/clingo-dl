@@ -22,11 +22,11 @@
 //
 // }}}
 
-#include <clingo.hh>
+#include <catch2/catch_test_macros.hpp>
+#include <clingo-dl-app/app.hh>
 #include <clingo-dl.h>
 #include <clingo-dl/propagator.hh>
-#include <clingo-dl-app/app.hh>
-#include <catch2/catch_test_macros.hpp>
+#include <clingo.hh>
 
 namespace ClingoDL {
 
@@ -34,18 +34,14 @@ namespace {
 
 //! Helper class to extract the last model while solving.
 class SolveHandler : public Clingo::SolveEventHandler {
-public:
-    SolveHandler(clingodl_theory_t *theory)
-    : theory_{theory} {
-    }
+  public:
+    SolveHandler(clingodl_theory_t *theory) : theory_{theory} {}
     //! Return the symbols in the last model found while solving.
-    [[nodiscard]] Clingo::SymbolVector const &symbols() const {
-        return symbols_;
-    }
+    [[nodiscard]] auto symbols() const -> Clingo::SymbolVector const & { return symbols_; }
 
-private:
+  private:
     //! Stores the last model.
-    bool on_model(Clingo::Model &model) override {
+    auto on_model(Clingo::Model &model) -> bool override {
         REQUIRE(clingodl_on_model(theory_, model.to_c()));
         symbols_ = model.symbols(Clingo::ShowType::Theory);
         std::sort(symbols_.begin(), symbols_.end());
@@ -69,12 +65,12 @@ void parse_program(clingodl_theory_t *theory, Clingo::Control &ctl, const char *
 }
 
 //! Create symbols representing DL assignments.
-Clingo::Symbol assign(Clingo::Symbol name, int value) {
+auto assign(Clingo::Symbol name, int value) -> Clingo::Symbol {
     return Clingo::Function("dl", {name, Clingo::Number(value)});
 }
 
 //! Run the optimization algorithm minimizing the given variable.
-Clingo::SymbolVector optimize(Clingo::Control &ctl, Clingo::Symbol bound, double factor, char const *prg) {
+auto optimize(Clingo::Control &ctl, Clingo::Symbol bound, double factor, char const *prg) -> Clingo::SymbolVector {
     clingodl_theory_t *theory{nullptr};
     REQUIRE(clingodl_create(&theory));
     REQUIRE(clingodl_register(theory, ctl.to_c()));
@@ -99,11 +95,10 @@ TEST_CASE("optimize", "[clingo-dl]") { // NOLINT
         for (auto factor : {1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0}) {
             Clingo::Control ctl{{"1"}};
             Clingo::SymbolVector ret{assign(a, 100), assign(b, -50)}; // NOLINT
-            REQUIRE(optimize(
-                ctl, b, factor,
-                "&diff { a - 0 } >=  100.\n"
-                "&diff { b - 0 } >= -100.\n"
-                "&diff { a - b } <=  150.\n") == ret);
+            REQUIRE(optimize(ctl, b, factor,
+                             "&diff { a - 0 } >=  100.\n"
+                             "&diff { b - 0 } >= -100.\n"
+                             "&diff { a - b } <=  150.\n") == ret);
             REQUIRE(ctl.statistics()["user_step"]["DifferenceLogic"].has_subkey("Optimization"));
             REQUIRE(ctl.statistics()["user_step"]["DifferenceLogic"]["Optimization"].value() == -50);
         }
@@ -111,11 +106,11 @@ TEST_CASE("optimize", "[clingo-dl]") { // NOLINT
     SECTION("unsat") {
         Clingo::Control ctl{{"1"}};
         REQUIRE(optimize( // NOLINT
-            ctl, b, 1.0,
-            "&diff { a - 0 } >=  100.\n"
-            "&diff { b - 0 } >= -100.\n"
-            "&diff { a - b } <=  150.\n"
-            "&diff { b - 0 } <  -50.\n") == Clingo::SymbolVector{});
+                    ctl, b, 1.0,
+                    "&diff { a - 0 } >=  100.\n"
+                    "&diff { b - 0 } >= -100.\n"
+                    "&diff { a - b } <=  150.\n"
+                    "&diff { b - 0 } <  -50.\n") == Clingo::SymbolVector{});
         REQUIRE(!ctl.statistics()["user_step"]["DifferenceLogic"].has_subkey("Optimization"));
     }
 }

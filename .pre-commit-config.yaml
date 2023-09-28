@@ -4,6 +4,8 @@ repos:
     rev: v1.3.5
     hooks:
       - id: clang-format
+        exclude: _clingodl.c
         args: ["-i"]
       - id: clang-tidy
+        exclude: _clingodl.c
         args: ["-fix"]

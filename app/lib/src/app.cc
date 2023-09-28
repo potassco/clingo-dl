@@ -24,52 +24,47 @@
 
 #include <clingo-dl-app/app.hh>
 
+#include <cmath>
 #include <iostream>
 #include <limits>
-#include <cmath>
 
 namespace ClingoDL {
 
-Rewriter::Rewriter(clingodl_theory_t *theory, clingo_program_builder_t *builder)
-: theory_{theory}
-, builder_{builder} {
-}
+Rewriter::Rewriter(clingodl_theory_t *theory, clingo_program_builder_t *builder) : theory_{theory}, builder_{builder} {}
 
 void Rewriter::rewrite(Clingo::Control &ctl, Clingo::StringSpan files) {
-    Clingo::Detail::handle_error(clingo_ast_parse_files(files.begin(), files.size(), rewrite_, this, ctl.to_c(), nullptr, nullptr, 0));
+    Clingo::Detail::handle_error(
+        clingo_ast_parse_files(files.begin(), files.size(), rewrite_, this, ctl.to_c(), nullptr, nullptr, 0));
 }
 
 void Rewriter::rewrite(Clingo::Control &ctl, char const *str) {
     Clingo::Detail::handle_error(clingo_ast_parse_string(str, rewrite_, this, ctl.to_c(), nullptr, nullptr, 0));
 }
 
-bool Rewriter::add_(clingo_ast_t *stm, void *data) {
-    auto *self = static_cast<Rewriter*>(data);
+auto Rewriter::add_(clingo_ast_t *stm, void *data) -> bool {
+    auto *self = static_cast<Rewriter *>(data);
     return clingo_program_builder_add(self->builder_, stm);
 }
 
-bool Rewriter::rewrite_(clingo_ast_t *stm, void *data) {
-    auto *self = static_cast<Rewriter*>(data);
+auto Rewriter::rewrite_(clingo_ast_t *stm, void *data) -> bool {
+    auto *self = static_cast<Rewriter *>(data);
     return clingodl_rewrite_ast(self->theory_, stm, add_, self);
 }
 
 Optimizer::Optimizer(OptimizerConfig const &opt_cfg, Clingo::SolveEventHandler &handler, clingodl_theory_t *theory)
-: opt_cfg_{opt_cfg}
-, handler_{handler}
-, theory_{theory} {
-}
+    : opt_cfg_{opt_cfg}, handler_{handler}, theory_{theory} {}
 
-void Optimizer::solve(Clingo::Control& ctl) {
+void Optimizer::solve(Clingo::Control &ctl) {
     Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
         Rewriter rewriter{theory_, builder.to_c()};
         rewriter.rewrite(ctl,
-            // add a fixed bound
-            "#program __ub(s,b)."
-            "&diff { s-0 } <= b."
-            // add a retractable bound
-            "#program __sb(s,b)."
-            "#external __sb(b). [true]"
-            "&diff { s-0 } <= b :- __sb(b).");
+                         // add a fixed bound
+                         "#program __ub(s,b)."
+                         "&diff { s-0 } <= b."
+                         // add a retractable bound
+                         "#program __sb(s,b)."
+                         "#external __sb(b). [true]"
+                         "&diff { s-0 } <= b :- __sb(b).");
     });
     if (opt_cfg_.has_initial) {
         upper_bound_ = opt_cfg_.initial;
@@ -111,7 +106,7 @@ void Optimizer::add_stats(Clingo::UserStatistics root) const {
     }
 }
 
-bool Optimizer::on_model(Clingo::Model &model) {
+auto Optimizer::on_model(Clingo::Model &model) -> bool {
     // update (upper) bound
     optimization = get_bound(model);
     upper_bound_ = *optimization - 1;
@@ -134,7 +129,7 @@ bool Optimizer::on_model(Clingo::Model &model) {
     return false;
 }
 
-int_value_t Optimizer::get_bound(Clingo::Model &model) {
+auto Optimizer::get_bound(Clingo::Model &model) -> int_value_t {
     // get bound
     if (opt_cfg_.index == 0) {
         if (!clingodl_lookup_symbol(theory_, opt_cfg_.symbol.to_c(), &opt_cfg_.index)) {
@@ -153,7 +148,7 @@ int_value_t Optimizer::get_bound(Clingo::Model &model) {
     return value.int_number; // NOLINT
 }
 
-void Optimizer::prepare_(Clingo::Control& ctl) {
+void Optimizer::prepare_(Clingo::Control &ctl) {
     if (upper_bound_ && upper_bound_ != upper_bound_last_) {
         upper_bound_last_ = upper_bound_;
         ctl.ground({{"__ub", {opt_cfg_.symbol, Clingo::Number(*upper_bound_)}}});
@@ -165,8 +160,7 @@ void Optimizer::prepare_(Clingo::Control& ctl) {
         if (search_bound_ && search_bound_ != upper_bound_) {
             search_bound_last_ = search_bound_;
             ctl.ground({{"__sb", {opt_cfg_.symbol, Clingo::Number(*search_bound_)}}});
-        }
-        else {
+        } else {
             search_bound_last_ = Bound{};
         }
     }

@@ -25,8 +25,8 @@
 #ifndef CLINGODL_PARSING_HH
 #define CLINGODL_PARSING_HH
 
-#include <clingo.hh>
 #include <clingo-dl/theory.hh>
+#include <clingo.hh>
 
 namespace ClingoDL {
 
@@ -44,8 +44,7 @@ term {
 }.)";
 
 //! Throw a syntax error with the given message.
-template <typename T=void>
-inline T throw_syntax_error(char const *message = "Invalid Syntax") {
+template <typename T = void> inline auto throw_syntax_error(char const *message = "Invalid Syntax") -> T {
     throw std::runtime_error(message);
 }
 
@@ -67,11 +66,12 @@ using NodeCallback = std::function<void(Clingo::AST::Node &&ast)>;
 void transform(Clingo::AST::Node const &ast, NodeCallback const &cb, bool shift);
 
 //! Return true if the given theory term matches the given signature.
-[[nodiscard]] bool match(Clingo::TheoryTerm const &term, char const *name, size_t arity);
+[[nodiscard]] auto match(Clingo::TheoryTerm const &term, char const *name, size_t arity) -> bool;
 
 //! Parse a theory atom for a difference constraint.
 template <class N>
-[[nodiscard]] EdgeAtom<N> parse(Clingo::TheoryAtom const &atom, std::function<int (Clingo::Symbol)> const &map_vert);
+[[nodiscard]] auto parse(Clingo::TheoryAtom const &atom, std::function<int(Clingo::Symbol)> const &map_vert)
+    -> EdgeAtom<N>;
 
 } // namespace ClingoDL
 

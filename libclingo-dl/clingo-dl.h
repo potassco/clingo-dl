@@ -25,6 +25,8 @@
 #ifndef CLINGODL_H
 #define CLINGODL_H
 
+#include <clingo.h>
+
 //! Major version number.
 #define CLINGODL_VERSION_MAJOR 1
 //! Minor version number.
@@ -39,31 +41,31 @@ extern "C" {
 #endif
 
 #if defined _WIN32 || defined __CYGWIN__
-#   define CLINGODL_WIN
+#define CLINGODL_WIN
 #endif
 #ifdef CLINGODL_NO_VISIBILITY
-#   define CLINGODL_VISIBILITY_DEFAULT
-#   define CLINGODL_VISIBILITY_PRIVATE
+#define CLINGODL_VISIBILITY_DEFAULT
+#define CLINGODL_VISIBILITY_PRIVATE
 #else
-#   ifdef CLINGODL_WIN
-#       ifdef CLINGODL_BUILD_LIBRARY
-#           define CLINGODL_VISIBILITY_DEFAULT __declspec (dllexport)
-#       else
-#           define CLINGODL_VISIBILITY_DEFAULT __declspec (dllimport)
-#       endif
-#       define CLINGODL_VISIBILITY_PRIVATE
-#   else
-#       if __GNUC__ >= 4
-#           define CLINGODL_VISIBILITY_DEFAULT  __attribute__ ((visibility ("default")))
-#           define CLINGODL_VISIBILITY_PRIVATE __attribute__ ((visibility ("hidden")))
-#       else
-#           define CLINGODL_VISIBILITY_DEFAULT
-#           define CLINGODL_VISIBILITY_PRIVATE
-#       endif
-#   endif
+#ifdef CLINGODL_WIN
+#ifdef CLINGODL_BUILD_LIBRARY
+#define CLINGODL_VISIBILITY_DEFAULT __declspec(dllexport)
+#else
+#define CLINGODL_VISIBILITY_DEFAULT __declspec(dllimport)
+#endif
+#define CLINGODL_VISIBILITY_PRIVATE
+#else
+#if __GNUC__ >= 4
+#define CLINGODL_VISIBILITY_DEFAULT __attribute__((visibility("default")))
+#define CLINGODL_VISIBILITY_PRIVATE __attribute__((visibility("hidden")))
+#else
+#define CLINGODL_VISIBILITY_DEFAULT
+#define CLINGODL_VISIBILITY_PRIVATE
+#endif
+#endif
 #endif
 
-#include <clingo.h>
+// NOLINTBEGIN(modernize-use-using,modernize-use-trailing-return-type)
 
 enum clingodl_value_type {
     clingodl_value_type_int = 0,
@@ -93,13 +95,14 @@ CLINGODL_VISIBILITY_DEFAULT void clingodl_version(int *major, int *minor, int *p
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_create(clingodl_theory_t **theory);
 
 //! registers the theory with the control
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_register(clingodl_theory_t *theory, clingo_control_t* control);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_register(clingodl_theory_t *theory, clingo_control_t *control);
 
 //! Rewrite asts before adding them via the given callback.
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_rewrite_ast(clingodl_theory_t *theory, clingo_ast_t *ast, clingodl_ast_callback_t add, void *data);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_rewrite_ast(clingodl_theory_t *theory, clingo_ast_t *ast,
+                                                      clingodl_ast_callback_t add, void *data);
 
 //! prepare the theory between grounding and solving
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_prepare(clingodl_theory_t *theory, clingo_control_t* control);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_prepare(clingodl_theory_t *theory, clingo_control_t *control);
 
 //! destroys the theory, currently no way to unregister a theory
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_destroy(clingodl_theory_t *theory);
@@ -109,18 +112,19 @@ CLINGODL_VISIBILITY_DEFAULT bool clingodl_destroy(clingodl_theory_t *theory);
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_configure(clingodl_theory_t *theory, char const *key, char const *value);
 
 //! add options for your theory
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_register_options(clingodl_theory_t *theory, clingo_options_t* options);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_register_options(clingodl_theory_t *theory, clingo_options_t *options);
 
 //! validate options for your theory
 CLINGODL_VISIBILITY_DEFAULT bool clingodl_validate_options(clingodl_theory_t *theory);
 
 //! callback on every model
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_model(clingodl_theory_t *theory, clingo_model_t* model);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_model(clingodl_theory_t *theory, clingo_model_t *model);
 
 //! obtain a symbol index which can be used to get the value of a symbol
 //! returns true if the symbol exists
 //! does not throw
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_lookup_symbol(clingodl_theory_t *theory, clingo_symbol_t symbol, size_t *index);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_lookup_symbol(clingodl_theory_t *theory, clingo_symbol_t symbol,
+                                                        size_t *index);
 
 //! obtain the symbol at the given index
 //! does not throw
@@ -128,7 +132,8 @@ CLINGODL_VISIBILITY_DEFAULT clingo_symbol_t clingodl_get_symbol(clingodl_theory_
 
 //! initialize index so that it can be used with clingodl_assignment_next
 //! does not throw
-CLINGODL_VISIBILITY_DEFAULT void clingodl_assignment_begin(clingodl_theory_t *theory, uint32_t thread_id, size_t *index);
+CLINGODL_VISIBILITY_DEFAULT void clingodl_assignment_begin(clingodl_theory_t *theory, uint32_t thread_id,
+                                                           size_t *index);
 
 //! move to the next index that has a value
 //! returns true if the updated index is valid
@@ -137,15 +142,20 @@ CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_next(clingodl_theory_t *the
 
 //! check if the symbol at the given index has a value
 //! does not throw
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_has_value(clingodl_theory_t *theory, uint32_t thread_id, size_t index);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_assignment_has_value(clingodl_theory_t *theory, uint32_t thread_id,
+                                                               size_t index);
 
 //! get the symbol and it's value at the given index
 //! does not throw
-CLINGODL_VISIBILITY_DEFAULT void clingodl_assignment_get_value(clingodl_theory_t *theory, uint32_t thread_id, size_t index, clingodl_value_t *value);
+CLINGODL_VISIBILITY_DEFAULT void clingodl_assignment_get_value(clingodl_theory_t *theory, uint32_t thread_id,
+                                                               size_t index, clingodl_value_t *value);
 
 //! callback on statistic updates
 /// please add a subkey with the name of your theory
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_statistics(clingodl_theory_t *theory, clingo_statistics_t* step, clingo_statistics_t* accu);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_statistics(clingodl_theory_t *theory, clingo_statistics_t *step,
+                                                        clingo_statistics_t *accu);
+
+// NOLINTEND(modernize-use-using,modernize-use-trailing-return-type)
 
 #ifdef __cplusplus
 }

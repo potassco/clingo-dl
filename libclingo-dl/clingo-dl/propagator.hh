@@ -25,10 +25,10 @@
 #ifndef CLINGODL_PROPAGATOR_HH
 #define CLINGODL_PROPAGATOR_HH
 
-#include <clingo.hh>
-#include <clingo-dl/util.hh>
-#include <clingo-dl/parsing.hh>
 #include <clingo-dl/graph.hh>
+#include <clingo-dl/parsing.hh>
+#include <clingo-dl/util.hh>
+#include <clingo.hh>
 
 #include <unordered_map>
 
@@ -56,29 +56,28 @@ struct Statistics {
 };
 
 //! A propagator for difference constraints.
-template <typename T>
-class DLPropagator : public Clingo::Heuristic {
-public:
+template <typename T> class DLPropagator : public Clingo::Heuristic {
+  public:
     using value_t = T;
 
     // construction
     DLPropagator(Statistics &stats, PropagatorConfig conf);
     DLPropagator(DLPropagator const &other) = delete;
     DLPropagator(DLPropagator &&other) = delete;
-    DLPropagator &operator=(DLPropagator const &other) = delete;
-    DLPropagator &operator=(DLPropagator &&other) = delete;
+    auto operator=(DLPropagator const &other) -> DLPropagator & = delete;
+    auto operator=(DLPropagator &&other) -> DLPropagator & = delete;
     ~DLPropagator() override;
 
     //! Get the number of vertices in the graph.
-    [[nodiscard]] vertex_t num_vertices() const;
+    [[nodiscard]] auto num_vertices() const -> vertex_t;
     //! Get the symbol associated with a vertex index.
-    [[nodiscard]] Clingo::Symbol symbol(vertex_t index) const;
+    [[nodiscard]] auto symbol(vertex_t index) const -> Clingo::Symbol;
     //! Lookup the index of a vertex.
-    vertex_t lookup(Clingo::Symbol symbol);
+    auto lookup(Clingo::Symbol symbol) -> vertex_t;
     //! Check if the given vertex has a lower bound in the given thread.
-    [[nodiscard]] bool has_lower_bound(Clingo::id_t thread_id, vertex_t index) const;
+    [[nodiscard]] auto has_lower_bound(Clingo::id_t thread_id, vertex_t index) const -> bool;
     //! Get the lower bound of a vertex in the given thread.
-    [[nodiscard]] value_t lower_bound(Clingo::id_t thread_id, vertex_t index) const;
+    [[nodiscard]] auto lower_bound(Clingo::id_t thread_id, vertex_t index) const -> value_t;
     //! Extend the model with vertex assignments.
     void extend_model(Clingo::Model &model);
 
@@ -94,8 +93,9 @@ public:
 
     // heuristic interface
     //! Customize the decision heuristic.
-    literal_t decide(id_t thread_id, Clingo::Assignment const &assign, literal_t fallback) override;
-private:
+    auto decide(id_t thread_id, Clingo::Assignment const &assign, literal_t fallback) -> literal_t override;
+
+  private:
     struct VertexInfo;
     struct ThreadState;
     struct FactState;
@@ -113,23 +113,26 @@ private:
 
     // initialization functions
     //! Map a symbol to an integer.
-    vertex_t map_vertex_(Clingo::Symbol symbol);
+    auto map_vertex_(Clingo::Symbol symbol) -> vertex_t;
     //! Add constraints in the theory data.
-    [[nodiscard]] bool add_constraints_(Clingo::PropagateInit &init);
+    [[nodiscard]] auto add_constraints_(Clingo::PropagateInit &init) -> bool;
     //! Normalize constraints to individual edges over `<=`.
-    [[nodiscard]] bool normalize_constraint_(Clingo::PropagateInit &init, literal_t literal, CoVarVec const &elements, char const *op, value_t rhs, bool strict);
+    [[nodiscard]] auto normalize_constraint_(Clingo::PropagateInit &init, literal_t literal, CoVarVec const &elements,
+                                             char const *op, value_t rhs, bool strict) -> bool;
     //! Add up to two edges for the given constraint if the has at most 2 variables and suitable coefficients.
-    [[nodiscard]] bool add_edges_(Clingo::PropagateInit& init, literal_t literal, CoVarVec const &covec, value_t rhs, bool strict);
+    [[nodiscard]] auto add_edges_(Clingo::PropagateInit &init, literal_t literal, CoVarVec const &covec, value_t rhs,
+                                  bool strict) -> bool;
     //! Add up to two edges for a constraint.
-    void add_edges_(Clingo::PropagateInit& init, vertex_t u_id, vertex_t v_id, value_t weight, literal_t lit, bool strict);
+    void add_edges_(Clingo::PropagateInit &init, vertex_t u_id, vertex_t v_id, value_t weight, literal_t lit,
+                    bool strict);
     //! Add (up to one) edge for a constraint.
     void add_edge_(Clingo::PropagateInit &init, vertex_t u_id, vertex_t v_id, value_t weight, literal_t lit);
     //! Reset connected components (to be recalculated with the next call to cc_calculate_).
     void cc_reset_();
     //! Mark a vertex in a component as visited.
-    [[nodiscard]] bool cc_visited_(vertex_t index) const;
+    [[nodiscard]] auto cc_visited_(vertex_t index) const -> bool;
     //! Check if the given vertex is a zero vertex.
-    [[nodiscard]] bool is_zero_(vertex_t index) const;
+    [[nodiscard]] auto is_zero_(vertex_t index) const -> bool;
     //! Calculate the connected components.
     void cc_calculate_(AdjacencyMap &outgoing, AdjacencyMap &incoming);
     //! Calculate mutually exclusive edges.
@@ -141,11 +144,11 @@ private:
     //! Disable all edges associated with the given literal in the thread state.
     void disable_edge_by_lit(ThreadState &state, literal_t lit);
     //! Compute the current potential of a vertex in the given graph.
-    [[nodiscard]] value_t get_potential_(Graph const &graph, vertex_t index) const;
+    [[nodiscard]] auto get_potential_(Graph const &graph, vertex_t index) const -> value_t;
     //! Compute the current cost of a vertex in the given graph.
-    [[nodiscard]] value_t cost_(Graph const &graph, Edge const &edge) const;
+    [[nodiscard]] auto cost_(Graph const &graph, Edge const &edge) const -> value_t;
     //! Compute a weight to sort vertices before propagation.
-    [[nodiscard]] value_t cost_(SortMode mode, Graph const &graph, edge_t index) const;
+    [[nodiscard]] auto cost_(SortMode mode, Graph const &graph, edge_t index) const -> value_t;
     //! Sort vertices in the propagation queue according to the given mode.
     void sort_edges(SortMode mode, ThreadState &state);
     //! Propagate the given literals.

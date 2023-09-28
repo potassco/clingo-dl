@@ -22,12 +22,12 @@
 
 // }}}
 
-#include <clingo.hh>
-#include <clingo-dl.h>
 #include <clingo-dl-app/app.hh>
-#include <sstream>
+#include <clingo-dl.h>
+#include <clingo.hh>
 #include <fstream>
 #include <limits>
+#include <sstream>
 
 #ifdef CLINGODL_PROFILE
 #include <gperftools/profiler.h>
@@ -39,27 +39,19 @@ using Clingo::Detail::handle_error;
 
 //! Application class to run clingo-dl.
 class App : public Clingo::Application, private Clingo::SolveEventHandler {
-public:
-    App() {
-        handle_error(clingodl_create(&theory_));
-    }
+  public:
+    App() { handle_error(clingodl_create(&theory_)); }
     App(App const &) = default;
     App(App &&) = default;
-    App &operator=(App const &) = default;
-    App &operator=(App &&) = default;
-    ~App() override {
-        clingodl_destroy(theory_);
-    }
+    auto operator=(App const &) -> App & = default;
+    auto operator=(App &&) -> App & = default;
+    ~App() override { clingodl_destroy(theory_); }
     //! Set program name to clingo-dl.
-    char const *program_name() const noexcept override {
-        return "clingo-dl";
-    }
+    auto program_name() const noexcept -> char const * override { return "clingo-dl"; }
     //! Set the version.
-    char const *version() const noexcept override {
-        return CLINGODL_VERSION;
-    }
+    auto version() const noexcept -> char const * override { return CLINGODL_VERSION; }
     //! Pass models to the theory.
-    bool on_model(Clingo::Model &model) override {
+    auto on_model(Clingo::Model &model) -> bool override {
         handle_error(clingodl_on_model(theory_, model.to_c()));
         return true;
     }
@@ -82,8 +74,7 @@ public:
 #endif
         if (!opt_cfg_.active) {
             ctl.solve(Clingo::SymbolicLiteralSpan{}, this, false, false).get();
-        }
-        else {
+        } else {
             Optimizer{opt_cfg_, *this, theory_}.solve(ctl);
         }
 #ifdef CLINGODL_PROFILE
@@ -91,7 +82,7 @@ public:
 #endif
     }
     //! Parse the variable to minimize and an optional initial bound.
-    bool parse_bound(char const *value) {
+    auto parse_bound(char const *value) -> bool {
         std::ostringstream oss;
         oss << "(" << value << ",)";
         auto term = Clingo::parse_term(oss.str().c_str());
@@ -109,7 +100,7 @@ public:
         return true;
     }
     //! Parse factor to adjust optimization step length.
-    bool parse_factor(char const *value) {
+    auto parse_factor(char const *value) -> bool {
         std::stringstream strValue;
         strValue.imbue(std::locale::classic());
         strValue << value;
@@ -124,32 +115,29 @@ public:
     //! Register options of the theory and optimization related options.
     void register_options(Clingo::ClingoOptions &options) override {
         handle_error(clingodl_register_options(theory_, options.to_c()));
-        char const * group = "Clingo.DL Options";
+        char const *group = "Clingo.DL Options";
         options.add(group, "minimize-variable",
-            "Minimize the given variable\n"
-            "      <arg>     : <variable>[,<initial>]\n"
-            "      <variable>: the variable to minimize\n"
-            "      <initial> : upper bound for the variable",
-            [this](char const *value) { return parse_bound(value); });
-        options.add(group, "minimize-factor",
-            "Factor to adjust minimization step size [1]",
-            [this](char const *value) { return parse_factor(value); },
-            false, "<factor>");
+                    "Minimize the given variable\n"
+                    "      <arg>     : <variable>[,<initial>]\n"
+                    "      <variable>: the variable to minimize\n"
+                    "      <initial> : upper bound for the variable",
+                    [this](char const *value) { return parse_bound(value); });
+        options.add(
+            group, "minimize-factor", "Factor to adjust minimization step size [1]",
+            [this](char const *value) { return parse_factor(value); }, false, "<factor>");
     }
     //! Validate options of the theory.
-    void validate_options() override {
-        handle_error(clingodl_validate_options(theory_));
-    }
+    void validate_options() override { handle_error(clingodl_validate_options(theory_)); }
 
-private:
+  private:
     clingodl_theory_t *theory_{nullptr}; //!< The underlying DL theory.
     OptimizerConfig opt_cfg_;            //!< The optimization configuration.
 };
 
-} // namespace CLingoDL
+} // namespace ClingoDL
 
 //! Run the clingo-dl application.
-int main(int argc, char *argv[]) { // NOLINT(bugprone-exception-escape)
+auto main(int argc, char *argv[]) -> int { // NOLINT(bugprone-exception-escape)
     ClingoDL::App app;
     return Clingo::clingo_main(app, {argv + 1, static_cast<size_t>(argc - 1)});
 }

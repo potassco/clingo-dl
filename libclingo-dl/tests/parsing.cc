@@ -22,11 +22,11 @@
 //
 // }}}
 
-#include <clingo.hh>
-#include <clingo-dl/parsing.hh>
 #include <catch2/catch_test_macros.hpp>
-#include <sstream>
+#include <clingo-dl/parsing.hh>
+#include <clingo.hh>
 #include <map>
+#include <sstream>
 
 namespace ClingoDL {
 
@@ -37,14 +37,13 @@ using V = std::vector<std::string>;
 
 //! Parse the theory atoms in the given program and return their string
 //! representations.
-V parse(char const *prg) {
+auto parse(char const *prg) -> V {
     Clingo::Control ctl;
     {
         Clingo::AST::ProgramBuilder builder{ctl};
         Clingo::AST::parse_string(prg, [&](Clingo::AST::Node const &ast) {
-            transform(ast, [&](Clingo::AST::Node &&trans) {
-                builder.add(trans);
-            }, true);
+            transform(
+                ast, [&](Clingo::AST::Node &&trans) { builder.add(trans); }, true);
         });
     }
     ctl.add("base", {}, THEORY);

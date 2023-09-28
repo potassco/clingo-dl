@@ -33,22 +33,19 @@ constexpr double DOUBLE_EPSILON = 0.00001;
 
 //! Epsilon value for integral numbers.
 template <class T, typename std::enable_if<std::is_integral_v<T>, bool>::type = true>
-[[nodiscard]] T epsilon_() {
+[[nodiscard]] auto epsilon_() -> T {
     return 1;
 }
 
 //! Epsilon value for floating point numbers.
 template <class T, typename std::enable_if<std::is_floating_point_v<T>, bool>::type = true>
-[[nodiscard]] T epsilon_() {
+[[nodiscard]] auto epsilon_() -> T {
     return DOUBLE_EPSILON;
 }
 
 } // namespace
 
-template <class T>
-T epsilon() {
-    return epsilon_<T>();
-}
+template <class T> auto epsilon() -> T { return epsilon_<T>(); }
 
 template int epsilon<int>();
 template double epsilon<double>();

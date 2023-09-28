@@ -25,16 +25,15 @@
 #ifndef CLINGODL_GRAPH_HH
 #define CLINGODL_GRAPH_HH
 
-#include <clingo.hh>
-#include <clingo-dl/theory.hh>
 #include <clingo-dl/config.hh>
+#include <clingo-dl/theory.hh>
 #include <clingo-dl/util.hh>
+#include <clingo.hh>
 
 namespace ClingoDL {
 
 //! Struct to represent an edge in the difference logic graph.
-template <typename T>
-struct Edge {
+template <typename T> struct Edge {
     using value_t = T;     //!< The value type (integral or floating point).
     vertex_t from;         //!< Start vertex index of the edge.
     vertex_t to;           //!< End vertex index of the edge.
@@ -69,14 +68,12 @@ struct ThreadStatistics {
 //! edges, perform propagation, and access the assignment to vertices.
 //!
 //! The class is meant to be used by the DLPropagator.
-template <typename T>
-class Graph {
-private:
+template <typename T> class Graph {
+  private:
     struct Vertex;
     struct EdgeState;
     struct TrailEntry;
-    template <typename D>
-    struct Impl;
+    template <typename D> struct Impl;
     using HeapType = Heap<4>;                 //!< The heap type used in (dijkstra-like) algorithms.
     using index_t = HeapType::index_type;     //!< Type for indexing (32bit unsigned).
     using value_t = T;                        //!< The value type (integral or floating point).
@@ -87,25 +84,25 @@ private:
     //! Trail of bound changes involving a vertex, path, and value.
     using BoundTrailVec = std::vector<std::tuple<vertex_t, edge_t, value_t>>;
 
-public:
+  public:
     Graph(ThreadStatistics &stats, EdgeVec const &edges, PropagationMode propagate);
     Graph(Graph const &other) = delete;
     Graph(Graph &&other) noexcept;
-    Graph &operator=(Graph const &other) = delete;
-    Graph &operator=(Graph &&other) = delete;
+    auto operator=(Graph const &other) -> Graph & = delete;
+    auto operator=(Graph &&other) -> Graph & = delete;
     ~Graph();
     //! Return no edges have been added to the graph yet.
-    [[nodiscard]] bool empty() const;
+    [[nodiscard]] auto empty() const -> bool;
     //! Return true if a potential has been assigned to the vertex.
-    [[nodiscard]] bool has_value(vertex_t idx) const;
+    [[nodiscard]] auto has_value(vertex_t idx) const -> bool;
     //! Return true the (inverted) potential of a vertex.
-    [[nodiscard]] value_t get_value(vertex_t idx) const;
+    [[nodiscard]] auto get_value(vertex_t idx) const -> value_t;
     //! Return true if the edge is enabled.
     //!
     //! Disabled edges are ignored during full propagation.
-    [[nodiscard]] bool edge_is_enabled(edge_t edge_idx) const;
+    [[nodiscard]] auto edge_is_enabled(edge_t edge_idx) const -> bool;
     //! Check if the edge is negative w.r.t. the current assginment of potentials.
-    [[nodiscard]] bool edge_is_negative(edge_t edge_idx) const;
+    [[nodiscard]] auto edge_is_negative(edge_t edge_idx) const -> bool;
     //! This disables an edge.
     //!
     //! Any edge whose literal became true or false is disabled. See also
@@ -115,7 +112,7 @@ public:
     //!
     //! Propagation can be disabled on a decision level. It will stay disabled
     //! on higher decision level and reset during backtracking.
-    [[nodiscard]] bool can_propagate() const;
+    [[nodiscard]] auto can_propagate() const -> bool;
     //! Disable propagation on the current and higher decision levels.
     //!
     //! See also can_propagate().
@@ -125,28 +122,28 @@ public:
     //! Add an edge to the graph and return false if the edge induces a negative cycle.
     //!
     //! This function assumes that the graph is not conflicting.
-    [[nodiscard]] bool add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx);
+    [[nodiscard]] auto add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx) -> bool;
     //! Backtracks the last decision level established with ensure_decision_level().
     void backtrack();
     //! Return the configured propagation mode.
-    [[nodiscard]] PropagationMode mode() const;
+    [[nodiscard]] auto mode() const -> PropagationMode;
 
-private:
+  private:
     //! Checks if there is a cycle after adding the given edge.
     //!
     //! The function does not clean up information about found shortest paths.
     //!
     //! \note Has to be called during add_edge().
-    bool check_cycle_(Clingo::PropagateControl &ctl, edge_t uv_idx);
+    auto check_cycle_(Clingo::PropagateControl &ctl, edge_t uv_idx) -> bool;
     //! Perform configured simple propagations after adding the given edge.
     //!
     //! \note Has to be called during add_edge() and uses temporary state
     //! established during check_cycle_().
-    bool propagate_simple_(Clingo::PropagateControl &ctl, edge_t uv_idx);
+    auto propagate_simple_(Clingo::PropagateControl &ctl, edge_t uv_idx) -> bool;
     //! Propagates edges to avoid cycles through the zero node.
     //!
     //! \note Has to be called during add_edge().
-    bool propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx);
+    auto propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx) -> bool;
     //! Fully propagates the graph after adding the given edge.
     //!
     //! Afterward any of the remaining edges can be added to the graph without
@@ -154,7 +151,7 @@ private:
     //! propagated before the edge was added.
     //!
     //! \note Has to be called during add_edge().
-    [[nodiscard]] bool propagate_full_(Clingo::PropagateControl &ctl, edge_t xy_idx);
+    [[nodiscard]] auto propagate_full_(Clingo::PropagateControl &ctl, edge_t xy_idx) -> bool;
     //! Traverse the incoming edges of a vertex.
     //!
     //! Edges that were disabled will be removed during the traversal. The
@@ -162,23 +159,22 @@ private:
     //! the callback returns true. Furthermore, the functions assumes that the
     //! callback provides a clause in this case. If adding the clause causes a
     //! conflict, the traversal will stop and the function returns false.
-    template <class F>
-    [[nodiscard]] bool with_incoming_(Clingo::PropagateControl &ctl, vertex_t s_idx, F f);
+    template <class F> [[nodiscard]] auto with_incoming_(Clingo::PropagateControl &ctl, vertex_t s_idx, F f) -> bool;
     //! If s has been reached from u, we can use the current potentials to
     //! detect some conflicts involving incoming edges of s.
-    [[nodiscard]] bool cheap_propagate_(Clingo::PropagateControl &ctl, vertex_t u_idx, vertex_t s_idx);
+    [[nodiscard]] auto cheap_propagate_(Clingo::PropagateControl &ctl, vertex_t u_idx, vertex_t s_idx) -> bool;
     //! Helper to add candidate edges initially and during backtracking.
     void add_candidate_edge_(edge_t uv_idx);
     //! Disable edge u -> v, if there is a shorter path u ->* v.
-    template <bool full>
-    [[nodiscard]] bool propagate_edge_true_(edge_t uv_idx, edge_t xy_idx);
+    template <bool full> [[nodiscard]] auto propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) -> bool;
     //! Make edge u -> v false, if there is a negative cycle u ->* v -> u.
     template <bool full>
-    [[nodiscard]] bool propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret);
+    [[nodiscard]] auto propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret)
+        -> bool;
     //! Sets the potential of a vertex and ensures that it can be backtracked.
     void set_potential_(Vertex &vtx, level_t level, value_t potential);
     //! Returns the current decision level.
-    [[nodiscard]] level_t current_decision_level_();
+    [[nodiscard]] auto current_decision_level_() -> level_t;
 
     HeapType costs_heap_;                    //!< Heap used throught various algorithms.
     std::vector<vertex_t> visited_from_;     //!< Vertices visited during traversal of the original graph.

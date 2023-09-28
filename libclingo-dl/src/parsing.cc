@@ -31,7 +31,7 @@ namespace ClingoDL {
 namespace {
 
 //! Negate a relation symbol.
-char const *negate_relation(char const *op) {
+auto negate_relation(char const *op) -> char const * {
     if (std::strcmp(op, "=") == 0) {
         return "!=";
     }
@@ -56,7 +56,7 @@ char const *negate_relation(char const *op) {
 using ClingoDL::match;
 
 //! Match if the given node represents a constant with the given name.
-bool match_constant(Clingo::AST::Node const &ast, char const *name) {
+auto match_constant(Clingo::AST::Node const &ast, char const *name) -> bool {
     using namespace Clingo::AST;
     switch (ast.type()) {
         case Type::SymbolicTerm: {
@@ -78,7 +78,7 @@ bool match_constant(Clingo::AST::Node const &ast, char const *name) {
 }
 
 //! Shift difference constraints in integrity constraints to the head.
-Clingo::AST::Node shift_rule(Clingo::AST::Node ast) {
+auto shift_rule(Clingo::AST::Node ast) -> Clingo::AST::Node {
     using namespace Clingo::AST;
     if (ast.type() != Type::Rule) {
         return ast;
@@ -128,7 +128,7 @@ Clingo::AST::Node shift_rule(Clingo::AST::Node ast) {
 }
 
 //! Tag terms depending on whether they occur in heads or bodies.
-Clingo::AST::Node tag_terms(Clingo::AST::Node &ast, char const *tag) {
+auto tag_terms(Clingo::AST::Node &ast, char const *tag) -> Clingo::AST::Node {
     using namespace Clingo::AST;
     if (ast.type() == Type::SymbolicTerm) {
         auto ret = ast.copy();
@@ -143,7 +143,7 @@ Clingo::AST::Node tag_terms(Clingo::AST::Node &ast, char const *tag) {
     if (ast.type() == Type::Function) {
         auto ret = ast.copy();
         std::string name{"__"};
-        name += ret.get<char const*>(Attribute::Name);
+        name += ret.get<char const *>(Attribute::Name);
         name += tag;
         ret.set(Attribute::Name, Clingo::add_string(name.c_str()));
         return ret;
@@ -153,7 +153,7 @@ Clingo::AST::Node tag_terms(Clingo::AST::Node &ast, char const *tag) {
 
 //! Tag head/body theory atoms.
 struct TheoryRewriter {
-    Clingo::AST::Node operator()(Clingo::AST::Node const &ast) {
+    auto operator()(Clingo::AST::Node const &ast) -> Clingo::AST::Node {
         using namespace Clingo::AST;
         if (ast.type() == Type::Literal) {
             in_literal = true;
@@ -188,13 +188,10 @@ struct TheoryRewriter {
 constexpr int INVALID_VAR{std::numeric_limits<int>::max()};
 
 //! Test whether a variable is valid.
-[[nodiscard]] inline bool is_valid_var(int var) {
-    return var < INVALID_VAR;
-}
+[[nodiscard]] inline auto is_valid_var(int var) -> bool { return var < INVALID_VAR; }
 
 //! Convert a symbol to a double or integer.
-template <class T>
-[[nodiscard]] T to_number(Clingo::Symbol const &a) {
+template <class T> [[nodiscard]] auto to_number(Clingo::Symbol const &a) -> T {
     if (a.type() == Clingo::SymbolType::Number) {
         return static_cast<T>(a.number());
     }
@@ -205,12 +202,11 @@ template <class T>
 }
 
 //! Evaluate a theory term to a number (represented by a symbol).
-template <class N>
-[[nodiscard]] Clingo::Symbol evaluate(Clingo::TheoryTerm const &term);
+template <class N> [[nodiscard]] auto evaluate(Clingo::TheoryTerm const &term) -> Clingo::Symbol;
 
 //! Evaluate two theory terms involved involved in a binary operation to an integral number.
 template <class N, class F, typename std::enable_if<std::is_integral_v<N>, bool>::type = true>
-[[nodiscard]] Clingo::Symbol evaluate_binary(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F &&f) {
+[[nodiscard]] auto evaluate_binary(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F &&f) -> Clingo::Symbol {
     auto ea = evaluate<N>(a);
     check_syntax(ea.type() == Clingo::SymbolType::Number);
     auto eb = evaluate<N>(b);
@@ -220,23 +216,22 @@ template <class N, class F, typename std::enable_if<std::is_integral_v<N>, bool>
 
 //! Evaluate two theory terms involved involved in a binary operation to a floating point number.
 template <class N, class F, typename std::enable_if<std::is_floating_point_v<N>, bool>::type = true>
-[[nodiscard]] Clingo::Symbol evaluate_binary(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F &&f) {
+[[nodiscard]] auto evaluate_binary(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F &&f) -> Clingo::Symbol {
     auto ea = evaluate<N>(a);
     auto eb = evaluate<N>(b);
     return Clingo::String(std::to_string(f(to_number<N>(ea), to_number<N>(eb))).c_str());
 }
 
 //! Parse a string to a number.
-template <class N>
-[[nodiscard]] std::optional<N> parse_number(char const *name) {
+template <class N> [[nodiscard]] auto parse_number(char const *name) -> std::optional<N> {
     static const std::string chars = "\"";
     auto len = std::strlen(name);
     if (len < 2 || name[0] != '"' || name[len - 1] != '"') { // NOLINT
         return std::nullopt;
     }
-    char *parsed = nullptr; // NOLINT
+    char *parsed = nullptr;                    // NOLINT
     auto res = std::strtod(name + 1, &parsed); // NOLINT
-    if (parsed != name + len - 1) { // NOLINT
+    if (parsed != name + len - 1) {            // NOLINT
         return std::nullopt;
     }
     auto ret = static_cast<N>(res);
@@ -246,8 +241,7 @@ template <class N>
     return ret;
 }
 
-template <class N>
-Clingo::Symbol evaluate(Clingo::TheoryTerm const &term) {
+template <class N> auto evaluate(Clingo::TheoryTerm const &term) -> Clingo::Symbol {
     if (term.type() == Clingo::TheoryTermType::Symbol) {
         auto const *name = term.name();
         if (std::strncmp(name, "\"", 1) == 0) {
@@ -305,16 +299,15 @@ Clingo::Symbol evaluate(Clingo::TheoryTerm const &term) {
 
 //! Parse the given theory term for an arithmetic expression.
 template <class N>
-void parse_elem(Clingo::TheoryTerm const &term, std::function<int (Clingo::Symbol)> const &map_vert, CoVarVec<N> &res) { // NOLINT
+void parse_elem(Clingo::TheoryTerm const &term, std::function<int(Clingo::Symbol)> const &map_vert,
+                CoVarVec<N> &res) { // NOLINT
     if (term.type() == Clingo::TheoryTermType::Number) {
         res.emplace_back(term.number(), INVALID_VAR);
-    }
-    else if (match(term, "+", 2)) {
+    } else if (match(term, "+", 2)) {
         auto args = term.arguments();
         parse_elem(args.front(), map_vert, res);
         parse_elem(args.back(), map_vert, res);
-    }
-    else if (match(term, "-", 2)) {
+    } else if (match(term, "-", 2)) {
         auto args = term.arguments();
         parse_elem(args.front(), map_vert, res);
         auto pos = res.size();
@@ -322,18 +315,15 @@ void parse_elem(Clingo::TheoryTerm const &term, std::function<int (Clingo::Symbo
         for (auto it = res.begin() + pos, ie = res.end(); it != ie; ++it) {
             it->first = safe_inv(it->first);
         }
-    }
-    else if (match(term, "-", 1)) {
+    } else if (match(term, "-", 1)) {
         auto pos = res.size();
         parse_elem(term.arguments().front(), map_vert, res);
         for (auto it = res.begin() + pos, ie = res.end(); it != ie; ++it) {
             it->first = safe_inv(it->first);
         }
-    }
-    else if (match(term, "+", 1)) {
+    } else if (match(term, "+", 1)) {
         parse_elem(term.arguments().front(), map_vert, res);
-    }
-    else if (match(term, "*", 2)) {
+    } else if (match(term, "*", 2)) {
         auto args = term.arguments();
         CoVarVec<N> lhs;
         parse_elem(args.front(), map_vert, lhs);
@@ -343,35 +333,28 @@ void parse_elem(Clingo::TheoryTerm const &term, std::function<int (Clingo::Symbo
             for (auto &r : rhs) {
                 if (!is_valid_var(l.second)) {
                     res.emplace_back(safe_mul(l.first, r.first), r.second);
-                }
-                else if (!is_valid_var(r.second)) {
+                } else if (!is_valid_var(r.second)) {
                     res.emplace_back(safe_mul(l.first, r.first), l.second);
-                }
-                else {
+                } else {
                     throw_syntax_error("Invalid Syntax: only linear difference constraints are supported");
                 }
             }
         }
-    }
-    else if (term.type() == Clingo::TheoryTermType::Symbol) {
+    } else if (term.type() == Clingo::TheoryTermType::Symbol) {
         if (auto val = parse_number<N>(term.name()); val) {
             res.emplace_back(*val, INVALID_VAR);
-        }
-        else {
+        } else {
             res.emplace_back(1, map_vert(evaluate<N>(term)));
         }
-    }
-    else if (term.type() == Clingo::TheoryTermType::Function || term.type() == Clingo::TheoryTermType::Tuple) {
+    } else if (term.type() == Clingo::TheoryTermType::Function || term.type() == Clingo::TheoryTermType::Tuple) {
         res.emplace_back(1, map_vert(evaluate<N>(term)));
-    }
-    else {
+    } else {
         throw_syntax_error("Invalid Syntax: invalid diff constraint");
     }
 }
 
 //! Simplify the given vector of terms.
-template <class N>
-[[nodiscard]] N simplify(CoVarVec<N> &vec) {
+template <class N> [[nodiscard]] auto simplify(CoVarVec<N> &vec) -> N {
     static thread_local std::unordered_map<int, typename CoVarVec<N>::iterator> seen;
     N rhs = 0;
     seen.clear();
@@ -384,15 +367,13 @@ template <class N>
         }
         if (!is_valid_var(var)) {
             rhs = safe_sub<N>(rhs, co);
-        }
-        else {
+        } else {
             auto r = seen.emplace(var, jt);
             auto kt = r.first;
             auto ins = r.second;
             if (!ins) {
                 kt->second->first = safe_add<N>(kt->second->first, co);
-            }
-            else {
+            } else {
                 if (it != jt) {
                     *jt = *it;
                 }
@@ -401,20 +382,17 @@ template <class N>
         }
     }
 
-    jt = std::remove_if(vec.begin(), jt, [](auto &co_var) { return co_var.first == 0; } );
+    jt = std::remove_if(vec.begin(), jt, [](auto &co_var) { return co_var.first == 0; });
     vec.erase(jt, vec.end());
     return rhs;
 }
 
 } // namespace
 
-bool match(Clingo::TheoryTerm const &term, char const *name, size_t arity) {
-    return (term.type() == Clingo::TheoryTermType::Symbol &&
-        std::strcmp(term.name(), name) == 0 &&
-        arity == 0) ||
-        (term.type() == Clingo::TheoryTermType::Function &&
-        std::strcmp(term.name(), name) == 0 &&
-        term.arguments().size() == arity);
+auto match(Clingo::TheoryTerm const &term, char const *name, size_t arity) -> bool {
+    return (term.type() == Clingo::TheoryTermType::Symbol && std::strcmp(term.name(), name) == 0 && arity == 0) ||
+           (term.type() == Clingo::TheoryTermType::Function && std::strcmp(term.name(), name) == 0 &&
+            term.arguments().size() == arity);
 }
 
 void transform(Clingo::AST::Node const &ast, NodeCallback const &cb, bool shift) {
@@ -427,7 +405,7 @@ void transform(Clingo::AST::Node const &ast, NodeCallback const &cb, bool shift)
 }
 
 template <class N>
-EdgeAtom<N> parse(Clingo::TheoryAtom const &atom, std::function<int (Clingo::Symbol)> const &map_vert) {
+auto parse(Clingo::TheoryAtom const &atom, std::function<int(Clingo::Symbol)> const &map_vert) -> EdgeAtom<N> {
     char const *msg = "parsing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";
     if (!atom.has_guard()) {
         throw std::runtime_error(msg);
@@ -458,7 +436,7 @@ EdgeAtom<N> parse(Clingo::TheoryAtom const &atom, std::function<int (Clingo::Sym
     return {std::move(covec), rel, rhs, atom.literal(), strict};
 }
 
-template EdgeAtom<int> parse<int>(Clingo::TheoryAtom const &, std::function<int (Clingo::Symbol)> const &);
-template EdgeAtom<double> parse<double>(Clingo::TheoryAtom const &, std::function<int (Clingo::Symbol)> const &);
+template EdgeAtom<int> parse<int>(Clingo::TheoryAtom const &, std::function<int(Clingo::Symbol)> const &);
+template EdgeAtom<double> parse<double>(Clingo::TheoryAtom const &, std::function<int(Clingo::Symbol)> const &);
 
 } // namespace ClingoDL
