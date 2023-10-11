@@ -29,5 +29,5 @@ Furthermore, clingo-dl provides the Python module `clingodl`.
 
 [clingo]: https://potassco.org/clingo/
 [Potassco]: https://potassco.org/
-[home]: https://potassco.org/labs/clingodl/
+[home]: https://potassco.org/labs/clingoDL/
 [download]: https://github.com/potassco/clingoDL/releases/
