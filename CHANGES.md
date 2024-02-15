@@ -1,5 +1,9 @@
 # Changes
 
+## clingo-dl 1.5.0
+  * add dl-specific heuristic (#71)
+  * update to clingo 5.7.0
+
 ## clingo-dl 1.4.0
   * add support for ASPIF parsing
   * improve shifting of zero node

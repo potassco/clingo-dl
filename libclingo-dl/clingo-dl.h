@@ -30,11 +30,11 @@
 //! Major version number.
 #define CLINGODL_VERSION_MAJOR 1
 //! Minor version number.
-#define CLINGODL_VERSION_MINOR 4
+#define CLINGODL_VERSION_MINOR 5
 //! Revision number.
-#define CLINGODL_VERSION_REVISION 1
+#define CLINGODL_VERSION_REVISION 0
 //! String representation of version.
-#define CLINGODL_VERSION "1.4.1"
+#define CLINGODL_VERSION "1.5.0"
 
 #ifdef __cplusplus
 extern "C" {
