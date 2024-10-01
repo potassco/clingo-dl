@@ -43,7 +43,7 @@ or the latest development version:
 
 To build clingo-dl in its default configurations in release mode, run
 
-    cmake -H<SOURCE_DIR> -B<BUILD_DIR> -DCMAKE_BUILD_TYPE=Release
+    cmake -S<SOURCE_DIR> -B<BUILD_DIR> -DCMAKE_BUILD_TYPE=Release
     cmake --build <BUILD_DIR>
 
 The resulting binaries and shared libraries will be in `<BUILD_DIR>/bin` and are ready to use.
@@ -62,11 +62,11 @@ The most important options to control the build are
 Cmake's `-L` option can be used to get an overview over the variables that can be set for building clingo-dl.
 To get clingo-dl specific options, run
 
-    cmake -H<SOURCE_DIR> -B<BUILD_DIR> -DCMAKE_BUILD_TYPE=Release -LH
+    cmake -S<SOURCE_DIR> -B<BUILD_DIR> -DCMAKE_BUILD_TYPE=Release -LH
 
 or, to also print important cmake specific configuration variables, run
 
-    cmake -H<SOURCE_DIR> -B<BUILD_DIR> -DCMAKE_BUILD_TYPE=Release -LAH
+    cmake -S<SOURCE_DIR> -B<BUILD_DIR> -DCMAKE_BUILD_TYPE=Release -LAH
 
 Options and variables can be passed to cmake on the command line using `-D<VARIABLE>=<VALUE>`
 or by editing `<BUILD_DIR>/CMakeCache.txt` after running cmake.
