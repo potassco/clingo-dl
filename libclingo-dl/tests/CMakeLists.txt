@@ -1,16 +1,19 @@
 # [[[source: .
 set(ide_source_group "Source Files")
 set(source-group
-    "${CMAKE_CURRENT_SOURCE_DIR}/optimize.cc"
+    #"${CMAKE_CURRENT_SOURCE_DIR}/optimize.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/parsing.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/solve.cc")
+    #"${CMAKE_CURRENT_SOURCE_DIR}/solve.cc"
+)
 source_group("${ide_source_group}" FILES ${source-group})
 set(source
     ${source-group})
 # ]]]
 
 add_executable(test_clingo-dl ${source})
-target_link_libraries(test_clingo-dl PRIVATE libclingo-dl-app_t Catch2::Catch2WithMain)
+# TODO: revert
+# target_link_libraries(test_clingo-dl PRIVATE libclingo-dl-app_t Catch2::Catch2WithMain)
+target_link_libraries(test_clingo-dl PRIVATE libclingo-dl_t Catch2::Catch2WithMain)
 target_include_directories(test_clingo-dl PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
 )

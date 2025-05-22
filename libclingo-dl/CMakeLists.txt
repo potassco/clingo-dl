@@ -22,11 +22,12 @@ set(header
 # [[[source: src
 set(ide_source_group "Source Files")
 set(source-group
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/clingo-dl.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/graph.cc"
+    #"${CMAKE_CURRENT_SOURCE_DIR}/src/clingo-dl.cc"
+    #"${CMAKE_CURRENT_SOURCE_DIR}/src/graph.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/parsing.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/propagator.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/theory.cc")
+    #"${CMAKE_CURRENT_SOURCE_DIR}/src/propagator.cc"
+    #"${CMAKE_CURRENT_SOURCE_DIR}/src/theory.cc"
+)
 source_group("${ide_source_group}" FILES ${source-group})
 set(source
     ${source-group})
@@ -108,7 +109,7 @@ if (CLINGODL_BUILD_TESTS)
     add_library(libclingo-dl_t STATIC ${header} ${source})
     target_include_directories(libclingo-dl_t PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
     target_compile_definitions(libclingo-dl_t PUBLIC CLINGODL_NO_VISIBILITY)
-    target_link_libraries(libclingo-dl_t PUBLIC libclingo)
+    target_link_libraries(libclingo-dl_t PUBLIC clingo::clingo)
     target_compile_definitions(libclingo-dl_t PUBLIC "CLINGODL_CROSSCHECK")
     set_target_properties(libclingo-dl_t PROPERTIES
         OUTPUT_NAME clingo-dl_t
