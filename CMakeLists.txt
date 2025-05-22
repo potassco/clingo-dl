@@ -16,7 +16,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Enable folders in IDEs like Visual Studio
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 
@@ -162,7 +162,7 @@ if (PYCLINGODL_ENABLE STREQUAL "pip")
     add_subdirectory(libclingo-dl)
     add_subdirectory(libpyclingo-dl)
 else()
-    find_package(Clingo REQUIRED)
+    find_package(clingo 6.0.0 REQUIRED)
     add_subdirectory(libclingo-dl)
     if (PYCLINGODL_ENABLE)
         add_subdirectory(libpyclingo-dl)

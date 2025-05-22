@@ -26,7 +26,7 @@
 #define CLINGODL_APP_HH
 
 #include <clingo-dl.h>
-#include <clingo.hh>
+#include <clingo/control.hh>
 #include <optional>
 
 namespace ClingoDL {

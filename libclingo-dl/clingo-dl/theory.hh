@@ -25,7 +25,7 @@
 #ifndef CLINGODL_THEORY_HH
 #define CLINGODL_THEORY_HH
 
-#include <clingo.hh>
+#include <clingo/core.hh>
 
 namespace ClingoDL {
 
@@ -36,24 +36,28 @@ using VertexIndexVec = std::vector<vertex_t>;
 //! Type for edge indices in the theory.
 using edge_t = uint32_t;
 //! Import id_t from Clingo namespace.
-using Clingo::id_t;
+using Clingo::ProgramId;
 //! Import literal_t from Clingo namespace.
-using Clingo::literal_t;
+using Clingo::SolverLiteral;
 //! Type for decision levels.
 using level_t = uint32_t;
 //! Type for array indices/sizes.
 using index_t = uint32_t;
+//! Type for program and solver literals.
+using literal_t = Clingo::ProgramLiteral;
+//! Type for ids.
+using id_t = Clingo::ProgramId;
 
 //! Vector of coefficients and variables.
 template <class T> using CoVarVec = std::vector<std::pair<T, vertex_t>>;
 
 //! An edge in the difference logic graph.
 template <typename T> struct EdgeAtom {
-    CoVarVec<T> lhs;           //!< The terms associated with the atom.
-    char const *rel;           //!< The comparision relation of the atom.
-    T rhs;                     //!< The value on the right hand side.
-    Clingo::literal_t literal; //!< The literal associated with the atom.
-    bool strict;               //!< Whether the atom is strict.
+    CoVarVec<T> lhs;               //!< The terms associated with the atom.
+    char const *rel;               //!< The comparision relation of the atom.
+    T rhs;                         //!< The value on the right hand side.
+    Clingo::SolverLiteral literal; //!< The literal associated with the atom.
+    bool strict;                   //!< Whether the atom is strict.
 };
 
 //! Epsilon value depending on number type.

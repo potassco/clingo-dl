@@ -25,9 +25,8 @@
 #ifndef CLINGODL_CONFIG_HH
 #define CLINGODL_CONFIG_HH
 
-#include <clingo.hh>
+#include <clingo/core.hh>
 #include <optional>
-#include <utility>
 #include <vector>
 
 namespace ClingoDL {
@@ -109,24 +108,24 @@ struct PropagatorConfig {
     bool calculate_cc{CALCULATE_CC};
 
     //! Get per thread propagate_root if present or global value.
-    [[nodiscard]] auto get_propagate_root(Clingo::id_t thread_id) const -> uint64_t {
+    [[nodiscard]] auto get_propagate_root(Clingo::ProgramId thread_id) const -> uint64_t {
         return get_prop(thread_id, propagate_root, &ThreadConfig::propagate_root);
     }
     //! Get per thread propagate_budget if present or global value.
-    [[nodiscard]] auto get_propagate_budget(Clingo::id_t thread_id) const -> uint64_t {
+    [[nodiscard]] auto get_propagate_budget(Clingo::ProgramId thread_id) const -> uint64_t {
         return get_prop(thread_id, propagate_budget, &ThreadConfig::propagate_budget);
     }
     //! Get per thread propagate_mode if present or global value.
-    [[nodiscard]] auto get_propagate_mode(Clingo::id_t thread_id) const -> PropagationMode {
+    [[nodiscard]] auto get_propagate_mode(Clingo::ProgramId thread_id) const -> PropagationMode {
         return get_prop(thread_id, propagate_mode, &ThreadConfig::propagate_mode);
     }
     //! Get per thread sort_mode if present or global value.
-    [[nodiscard]] auto get_sort_mode(Clingo::id_t thread_id) const -> SortMode {
+    [[nodiscard]] auto get_sort_mode(Clingo::ProgramId thread_id) const -> SortMode {
         return get_prop(thread_id, sort_mode, &ThreadConfig::sort_mode);
     }
     //! Return the thread config for the given thread or return a default
     //! constructed object if absent.
-    auto ensure(Clingo::id_t thread_id) -> ThreadConfig & {
+    auto ensure(Clingo::ProgramId thread_id) -> ThreadConfig & {
         if (thread_config.size() < thread_id + 1) {
             thread_config.resize(thread_id + 1);
         }
@@ -135,7 +134,7 @@ struct PropagatorConfig {
 
   private:
     //! Helper to access per thread or global properties.
-    template <class T, class P> [[nodiscard]] auto get_prop(Clingo::id_t thread_id, T &&def, P &&prop) const -> T {
+    template <class T, class P> [[nodiscard]] auto get_prop(Clingo::ProgramId thread_id, T &&def, P &&prop) const -> T {
         if (thread_id < thread_config.size() && thread_config[thread_id].*prop) {
             return *(thread_config[thread_id].*prop); // NOLINT(bugprone-unchecked-optional-access)
         }

@@ -10,7 +10,7 @@ set(source
 add_subdirectory(lib)
 
 add_executable(clingo-dl ${source})
-target_link_libraries(clingo-dl PRIVATE libclingo libclingo-dl-app)
+target_link_libraries(clingo-dl PRIVATE clingo::clingo libclingo-dl-app)
 set_target_properties(clingo-dl PROPERTIES FOLDER exe)
 
 install(TARGETS clingo-dl

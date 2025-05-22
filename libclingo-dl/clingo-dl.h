@@ -152,8 +152,8 @@ CLINGODL_VISIBILITY_DEFAULT void clingodl_assignment_get_value(clingodl_theory_t
 
 //! callback on statistic updates
 /// please add a subkey with the name of your theory
-CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_statistics(clingodl_theory_t *theory, clingo_statistics_t *step,
-                                                        clingo_statistics_t *accu);
+CLINGODL_VISIBILITY_DEFAULT bool clingodl_on_statistics(clingodl_theory_t *theory, clingo_stats_t *step,
+                                                        clingo_stats_t *accu);
 
 // NOLINTEND(modernize-use-using,modernize-use-trailing-return-type)
 

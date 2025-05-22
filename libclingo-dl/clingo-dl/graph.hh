@@ -28,17 +28,19 @@
 #include <clingo-dl/config.hh>
 #include <clingo-dl/theory.hh>
 #include <clingo-dl/util.hh>
-#include <clingo.hh>
+
+#include <clingo/core.hh>
+#include <clingo/propagate.hh>
 
 namespace ClingoDL {
 
 //! Struct to represent an edge in the difference logic graph.
 template <typename T> struct Edge {
-    using value_t = T;     //!< The value type (integral or floating point).
-    vertex_t from;         //!< Start vertex index of the edge.
-    vertex_t to;           //!< End vertex index of the edge.
-    value_t weight;        //!< Weight of the edge.
-    Clingo::literal_t lit; //!< Solver literal associated with the edge.
+    using value_t = T;          //!< The value type (integral or floating point).
+    vertex_t from;              //!< Start vertex index of the edge.
+    vertex_t to;                //!< End vertex index of the edge.
+    value_t weight;             //!< Weight of the edge.
+    Clingo::ProgramLiteral lit; //!< Solver literal associated with the edge.
 };
 
 //! Struct to capture per thread statistics of the DL propagator/graph.

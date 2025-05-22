@@ -22,9 +22,12 @@
 //
 // }}}
 
-#include <catch2/catch_test_macros.hpp>
 #include <clingo-dl/parsing.hh>
-#include <clingo.hh>
+
+#include <clingo/control.hh>
+
+#include <catch2/catch_test_macros.hpp>
+
 #include <map>
 #include <sstream>
 
@@ -42,8 +45,7 @@ auto parse(char const *prg) -> V {
     {
         Clingo::AST::ProgramBuilder builder{ctl};
         Clingo::AST::parse_string(prg, [&](Clingo::AST::Node const &ast) {
-            transform(
-                ast, [&](Clingo::AST::Node &&trans) { builder.add(trans); }, true);
+            transform(ast, [&](Clingo::AST::Node &&trans) { builder.add(trans); }, true);
         });
     }
     ctl.add("base", {}, THEORY);

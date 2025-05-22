@@ -26,7 +26,9 @@
 #define CLINGODL_PARSING_HH
 
 #include <clingo-dl/theory.hh>
-#include <clingo.hh>
+
+#include <clingo/ast.hh>
+#include <clingo/base.hh>
 
 namespace ClingoDL {
 

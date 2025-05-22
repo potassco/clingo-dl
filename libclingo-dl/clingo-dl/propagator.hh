@@ -28,7 +28,9 @@
 #include <clingo-dl/graph.hh>
 #include <clingo-dl/parsing.hh>
 #include <clingo-dl/util.hh>
-#include <clingo.hh>
+
+#include <clingo/propagate.hh>
+#include <clingo/solve.hh>
 
 #include <unordered_map>
 
@@ -75,25 +77,25 @@ template <typename T> class DLPropagator : public Clingo::Heuristic {
     //! Lookup the index of a vertex.
     auto lookup(Clingo::Symbol symbol) -> vertex_t;
     //! Check if the given vertex has a lower bound in the given thread.
-    [[nodiscard]] auto has_lower_bound(Clingo::id_t thread_id, vertex_t index) const -> bool;
+    [[nodiscard]] auto has_lower_bound(id_t thread_id, vertex_t index) const -> bool;
     //! Get the lower bound of a vertex in the given thread.
-    [[nodiscard]] auto lower_bound(Clingo::id_t thread_id, vertex_t index) const -> value_t;
+    [[nodiscard]] auto lower_bound(id_t thread_id, vertex_t index) const -> value_t;
     //! Extend the model with vertex assignments.
     void extend_model(Clingo::Model &model);
 
     // propagator interface
     //! Initialize the propagator.
-    void init(Clingo::PropagateInit &init) override;
+    void do_init(Clingo::PropagateInit init) override;
     //! Propagate edges.
-    void propagate(Clingo::PropagateControl &ctl, Clingo::LiteralSpan changes) override;
+    void do_propagate(Clingo::PropagateControl ctl, Clingo::SolverLiteralSpan changes) override;
     //! Undo propgated edges.
-    void undo(Clingo::PropagateControl const &ctl, Clingo::LiteralSpan changes) noexcept override;
+    void do_undo(id_t thread_id, Clingo::Assignment assignment, Clingo::SolverLiteralSpan changes) override;
     //! Check a propagation fixed point.
-    void check(Clingo::PropagateControl &ctl) override;
+    void do_check(Clingo::PropagateControl ctl) override;
 
     // heuristic interface
     //! Customize the decision heuristic.
-    auto decide(id_t thread_id, Clingo::Assignment const &assign, literal_t fallback) -> literal_t override;
+    auto do_decide(id_t thread_id, Clingo::Assignment assign, literal_t fallback) -> literal_t override;
 
   private:
     struct VertexInfo;
@@ -152,7 +154,7 @@ template <typename T> class DLPropagator : public Clingo::Heuristic {
     //! Sort vertices in the propagation queue according to the given mode.
     void sort_edges(SortMode mode, ThreadState &state);
     //! Propagate the given literals.
-    void do_propagate(Clingo::PropagateControl &ctl, Clingo::LiteralSpan changes);
+    void do_propagate(Clingo::PropagateControl &ctl, Clingo::SolverLiteralSpan changes);
 
     ThreadStateVec states_;        //!< Thread specific state.
     FactStateVec facts_;           //!< Thread specific state for fact propagation.

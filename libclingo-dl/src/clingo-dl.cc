@@ -26,13 +26,14 @@
 #include <clingo-dl/propagator.hh>
 
 #include <clingo.h>
-#include <clingo.hh>
+#include <clingo/propagate.hh>
+
 #include <sstream>
 
 #define CLINGODL_TRY try // NOLINT
 #define CLINGODL_CATCH                                                                                                 \
     catch (...) {                                                                                                      \
-        Clingo::Detail::handle_cxx_error();                                                                            \
+        Clingo::Detail::store_error();                                                                                 \
         return false;                                                                                                  \
     }                                                                                                                  \
     return true // NOLINT
@@ -117,7 +118,7 @@ class PropagatorFacade {
     //! Extend the given model with the assignment stored in the propagator.
     virtual void extend_model(Clingo::Model &m) = 0;
     //! Add the propagator statistics to clingo's statistics.
-    virtual void on_statistics(Clingo::UserStatistics &step, Clingo::UserStatistics &accu) = 0;
+    virtual void on_statistics(Clingo::Stats &step, Clingo::Stats &accu) = 0;
 };
 
 //! Set variant to an integer value.
@@ -136,14 +137,14 @@ void set_value(clingodl_value_t *variant, double value) {
 template <typename T> class DLPropagatorFacade : public PropagatorFacade {
   public:
     DLPropagatorFacade(clingo_control_t *control, PropagatorConfig const &conf) : prop_{step_, conf} {
-        handle_error(clingo_control_add(control, "base", nullptr, 0, THEORY));
+        handle_error(clingo_control_parse_string(control, THEORY, std::strlen(THEORY)));
         static clingo_propagator_t prop = {init<T>, propagate<T>, undo<T>, check<T>,
                                            conf.decision_mode != DecisionMode::Disabled ? decide<T> : nullptr};
         handle_error(clingo_control_register_propagator(control, &prop, &prop_, false));
     }
 
     auto lookup_symbol(clingo_symbol_t name, size_t *index) -> bool override {
-        *index = prop_.lookup(Clingo::Symbol{name}) + 1;
+        *index = prop_.lookup(Clingo::Symbol{name, true}) + 1;
         return *index <= prop_.num_vertices();
     }
 
@@ -171,7 +172,7 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
 
     void extend_model(Clingo::Model &m) override { prop_.extend_model(m); }
 
-    void on_statistics(Clingo::UserStatistics &step, Clingo::UserStatistics &accu) override {
+    void on_statistics(Clingo::Stats &step, Clingo::Stats &accu) override {
         accu_.accu(step_);
         add_statistics_(step, step_);
         add_statistics_(accu, accu_);
@@ -181,24 +182,24 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
   private:
     //! Add an integral value to the statistics.
     template <class V, std::enable_if_t<std::is_integral_v<V>, bool> = true>
-    static void add_subkey_(Clingo::UserStatistics &root, char const *name, V value) {
-        root.add_subkey(name, Clingo::StatisticsType::Value).set_value(static_cast<double>(value));
+    static void add_subkey_(Clingo::Stats &root, char const *name, V value) {
+        root.add_subkey(name, Clingo::Stats::Value).set_value(static_cast<double>(value));
     }
     //! Add an floating point value to the statistics.
     template <class V, std::enable_if_t<std::is_floating_point_v<V>, bool> = true>
-    static void add_subkey_(Clingo::UserStatistics &root, char const *name, V value) {
+    static void add_subkey_(Clingo::Stats &root, char const *name, V value) {
         root.add_subkey(name, Clingo::StatisticsType::Value).set_value(value);
     }
 
     //!< Helper function to add the DL statistics to clingo's statistics.
-    void add_statistics_(Clingo::UserStatistics &root, Statistics const &stats) {
-        Clingo::UserStatistics diff = root.add_subkey("DifferenceLogic", Clingo::StatisticsType::Map);
+    void add_statistics_(Clingo::Stats &root, Statistics const &stats) {
+        Clingo::Stats diff = root.add_subkey("DifferenceLogic", Clingo::StatisticsType::Map);
         add_subkey_(diff, "Time init(s)", stats.time_init.count());
         add_subkey_(diff, "CCs", stats.ccs);
         add_subkey_(diff, "Mutexes", stats.mutexes);
         add_subkey_(diff, "Edges", stats.edges);
         add_subkey_(diff, "Variables", stats.variables);
-        Clingo::UserStatistics threads = diff.add_subkey("Thread", Clingo::StatisticsType::Array);
+        Clingo::Stats threads = diff.add_subkey("Thread", Clingo::StatisticsType::Array);
         threads.ensure_size(stats.thread_statistics.size(), Clingo::StatisticsType::Map);
         auto it = threads.begin();
         for (auto const &stat : stats.thread_statistics) {
@@ -633,8 +634,8 @@ extern "C" auto clingodl_on_statistics(clingodl_theory_t *theory, clingo_statist
         uint64_t root_a{0};
         handle_error(clingo_statistics_root(step, &root_s));
         handle_error(clingo_statistics_root(accu, &root_a));
-        Clingo::UserStatistics s(step, root_s);
-        Clingo::UserStatistics a(accu, root_a);
+        Clingo::Stats s(step, root_s);
+        Clingo::Stats a(accu, root_a);
         theory->clingodl->on_statistics(s, a);
     }
     CLINGODL_CATCH;

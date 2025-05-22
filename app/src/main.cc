@@ -24,7 +24,7 @@
 
 #include <clingo-dl-app/app.hh>
 #include <clingo-dl.h>
-#include <clingo.hh>
+#include <clingo/app.hh>
 #include <fstream>
 #include <limits>
 #include <sstream>
@@ -38,7 +38,7 @@ namespace ClingoDL {
 using Clingo::Detail::handle_error;
 
 //! Application class to run clingo-dl.
-class App : public Clingo::Application, private Clingo::SolveEventHandler {
+class App : public Clingo::App, private Clingo::SolveEventHandler {
   public:
     App() { handle_error(clingodl_create(&theory_)); }
     App(App const &) = default;
