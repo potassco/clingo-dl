@@ -53,7 +53,7 @@ auto negate_relation(char const *op) -> char const * {
     throw std::runtime_error("unexpected operator");
 }
 
-using ClingoDL::match;
+// using ClingoDL::match;
 
 //! Match if the given node represents a constant with the given name.
 auto match_constant(Clingo::AST::Node const &ast, char const *name) -> bool {
@@ -200,6 +200,7 @@ constexpr int INVALID_VAR{std::numeric_limits<int>::max()};
 //! Test whether a variable is valid.
 [[nodiscard]] inline auto is_valid_var(int var) -> bool { return var < INVALID_VAR; }
 
+/*
 //! Convert a symbol to a double or integer.
 template <class T> [[nodiscard]] auto to_number(Clingo::Symbol const &a) -> T {
     if (a.type() == Clingo::SymbolType::Number) {
@@ -396,24 +397,35 @@ template <class N> [[nodiscard]] auto simplify(CoVarVec<N> &vec) -> N {
     vec.erase(jt, vec.end());
     return rhs;
 }
+*/
 
 } // namespace
 
+/*
 auto match(Clingo::TheoryTerm const &term, char const *name, size_t arity) -> bool {
     return (term.type() == Clingo::TheoryTermType::Symbol && std::strcmp(term.name(), name) == 0 && arity == 0) ||
            (term.type() == Clingo::TheoryTermType::Function && std::strcmp(term.name(), name) == 0 &&
             term.arguments().size() == arity);
 }
+*/
 
-void transform(Clingo::AST::Node const &ast, NodeCallback const &cb, bool shift) {
-    for (auto &unpooled : ast.unpool()) {
+void transform(Clingo::Library &lib, Clingo::AST::Node const &ast, NodeCallback const &cb, bool shift) {
+    // TODO: maybe we can avoid rewriting...
+    auto ctx = Clingo::AST::RewriteContext{lib};
+    for (auto &ast_2 : Clingo::AST::rewrite(ctx, ast)) {
         if (shift) {
-            unpooled = shift_rule(unpooled);
+            throw std::runtime_error{"implement me!!!"};
         }
-        cb(unpooled.transform_ast(TheoryRewriter{}));
+        auto ast_3 = rewrite_theory(lib, ast_2);
+        if (ast_3) {
+            cb(*std::move(ast_3));
+        } else {
+            cb(std::move(ast_2));
+        }
     }
 }
 
+/*
 template <class N>
 auto parse(Clingo::TheoryAtom const &atom, std::function<int(Clingo::Symbol)> const &map_vert) -> EdgeAtom<N> {
     char const *msg = "parsing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";
@@ -448,5 +460,6 @@ auto parse(Clingo::TheoryAtom const &atom, std::function<int(Clingo::Symbol)> co
 
 template EdgeAtom<int> parse<int>(Clingo::TheoryAtom const &, std::function<int(Clingo::Symbol)> const &);
 template EdgeAtom<double> parse<double>(Clingo::TheoryAtom const &, std::function<int(Clingo::Symbol)> const &);
+*/
 
 } // namespace ClingoDL

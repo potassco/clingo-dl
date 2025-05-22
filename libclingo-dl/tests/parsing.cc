@@ -41,7 +41,8 @@ using V = std::vector<std::string>;
 //! Parse the theory atoms in the given program and return their string
 //! representations.
 auto parse(char const *prg) -> V {
-    Clingo::Control ctl;
+    auto lib = Clingo::Library{};
+    auto ctl = Clingo::Control{lib};
     {
         Clingo::AST::ProgramBuilder builder{ctl};
         Clingo::AST::parse_string(prg, [&](Clingo::AST::Node const &ast) {

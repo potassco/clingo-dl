@@ -92,6 +92,7 @@ endif()
 
 add_subdirectory(third_party)
 
+# TODO: reenable
 if (PYCLINGODL_ENABLE)
     if(NOT PYCLINGODL_ENABLE STREQUAL "pip" AND (CMAKE_VERSION VERSION_GREATER "3.15.0" OR CMAKE_VERSION VERSION_EQUAL "3.15.0"))
         if(DEFINED PYTHON_EXECUTABLE AND NOT DEFINED Python_EXECUTABLE)
@@ -164,8 +165,9 @@ if (PYCLINGODL_ENABLE STREQUAL "pip")
 else()
     find_package(clingo 6.0.0 REQUIRED)
     add_subdirectory(libclingo-dl)
+    # TODO: reenable
     if (PYCLINGODL_ENABLE)
-        add_subdirectory(libpyclingo-dl)
+        #add_subdirectory(libpyclingo-dl)
     endif()
     #add_subdirectory(app)
 endif()
