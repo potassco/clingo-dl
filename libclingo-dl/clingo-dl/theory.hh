@@ -48,13 +48,67 @@ using literal_t = Clingo::ProgramLiteral;
 //! Type for ids.
 using id_t = Clingo::ProgramId;
 
+enum class Relation {
+    less_than,
+    less_equal,
+    greater_than,
+    greater_equal,
+    equal_to,
+    no_equal_to,
+};
+
+inline auto relation_from_string(std::string_view str) -> Relation {
+    if (str == "<") {
+        return Relation::less_than;
+    }
+    if (str == ">") {
+        return Relation::greater_than;
+    }
+    if (str == "<=") {
+        return Relation::less_equal;
+    }
+    if (str == ">=") {
+        return Relation::greater_equal;
+    }
+    if (str == "=" || str == "==") {
+        return Relation::equal_to;
+    }
+    if (str == "!=") {
+        return Relation::no_equal_to;
+    }
+    throw std::logic_error{"invalid relation"};
+}
+
+inline auto relation_to_string(Relation rel) -> std::string_view {
+    switch (rel) {
+        case Relation::less_than: {
+            return "<";
+        }
+        case Relation::less_equal: {
+            return "<=";
+        }
+        case Relation::greater_than: {
+            return ">";
+        }
+        case Relation::greater_equal: {
+            return ">=";
+        }
+        case Relation::equal_to: {
+            return "=";
+        }
+        case Relation::no_equal_to: {
+            return "!=";
+        }
+    }
+}
+
 //! Vector of coefficients and variables.
 template <class T> using CoVarVec = std::vector<std::pair<T, vertex_t>>;
 
 //! An edge in the difference logic graph.
 template <typename T> struct EdgeAtom {
     CoVarVec<T> lhs;               //!< The terms associated with the atom.
-    char const *rel;               //!< The comparision relation of the atom.
+    Relation rel;                  //!< The comparision relation of the atom.
     T rhs;                         //!< The value on the right hand side.
     Clingo::SolverLiteral literal; //!< The literal associated with the atom.
     bool strict;                   //!< Whether the atom is strict.

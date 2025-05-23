@@ -29,35 +29,42 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <map>
-#include <sstream>
 
 namespace ClingoDL {
 
 namespace {
 
-//! Vector of strings for capturing the representation of theory atoms.
+//! Vector of strings for capturing results.
 using V = std::vector<std::string>;
+
+//! Rewrite the given statement and return the string representation of the
+//! resulting statements.
+auto rewrite(std::string_view prg) -> V {
+    auto ret = V{};
+    auto lib = Clingo::Library{};
+    auto stm = Clingo::AST::parse(lib, prg);
+    transform(lib, stm, [&]<class T>(T &&node) { ret.emplace_back(node.to_string()); }, true);
+    return ret;
+}
 
 //! Parse the theory atoms in the given program and return their string
 //! representations.
-auto parse(char const *prg) -> V {
+auto parse(std::string_view str) -> V {
     auto lib = Clingo::Library{};
     auto ctl = Clingo::Control{lib};
-    {
-        Clingo::AST::ProgramBuilder builder{ctl};
-        Clingo::AST::parse_string(prg, [&](Clingo::AST::Node const &ast) {
-            transform(ast, [&](Clingo::AST::Node &&trans) { builder.add(trans); }, true);
-        });
-    }
-    ctl.add("base", {}, THEORY);
-    ctl.ground({{"base", {}}});
+    auto prg = Clingo::AST::Program{lib};
+    auto stm = Clingo::AST::parse(lib, str);
+    transform(lib, stm, [&]<class T>(T &&node) { prg.add(std::forward<T>(node)); }, true);
+    ctl.join(prg);
+    ctl.parse_string(THEORY);
+    ctl.ground();
 
-    std::map<Clingo::Symbol, vertex_t> vertex_map;
-    std::vector<Clingo::Symbol> vertices;
-    std::ostringstream oss;
+    auto vertex_map = std::map<Clingo::Symbol, vertex_t>{};
+    auto vertices = std::vector<Clingo::Symbol>{};
+    auto oss = std::ostringstream{};
     V ret;
-    for (auto &&atom : ctl.theory_atoms()) {
-        auto edge = ClingoDL::parse<int>(atom, [&](Clingo::Symbol sym) {
+    for (auto atom : ctl.base().theory()) {
+        auto edge = ClingoDL::parse<int>(lib, atom, [&](Clingo::Symbol sym) {
             auto [it, ins] = vertex_map.try_emplace(sym, vertices.size());
             if (ins) {
                 vertices.emplace_back(it->first);
@@ -72,7 +79,8 @@ auto parse(char const *prg) -> V {
             oss << co << "*" << vertices[var];
             plus = true;
         }
-        oss << " " << edge.rel << " " << edge.rhs << " (" << (edge.strict ? "strict" : "non-strict") << ")";
+        oss << " " << relation_to_string(edge.rel) << " " << edge.rhs << " (" << (edge.strict ? "strict" : "non-strict")
+            << ")";
         ret.emplace_back(oss.str());
     }
     return ret;
@@ -80,7 +88,14 @@ auto parse(char const *prg) -> V {
 
 } // namespace
 
-TEST_CASE("parsing", "[parsing]") { // NOLINT
+TEST_CASE("parsing rewrite", "[parsing][rewrite]") {
+    REQUIRE(rewrite("&diff { a - b } < 0.") == V{"&__diff_h { (a - b) } < 0."});
+    REQUIRE(rewrite("x :- &diff { a - b } < 0.") == V{"x :- &__diff_b { (a - b) } < 0."});
+    REQUIRE(rewrite(" :- &diff { a - b } < 0.") == V{"&__diff_h { (a - b) } >= 0."});
+    REQUIRE(rewrite(" :- not &diff { a - b } >= 0.") == V{"&__diff_h { (a - b) } >= 0."});
+}
+
+TEST_CASE("parsing parse", "[parsing][parse]") {
     SECTION("strict / non-strict") {
         REQUIRE(parse("&diff { a - b } < 0.") == V{"1*a + -1*b < 0 (non-strict)"});
         REQUIRE(parse(":- &diff { a - b } < 0.") == V{"1*a + -1*b >= 0 (non-strict)"});

@@ -306,10 +306,13 @@ auto safe_pow(Float a, Float b) -> Float {
     return std::pow(a, b);
 }
 
-inline auto unquote(char const *str) -> std::string {
+inline auto unquote(std::string_view str) -> std::string {
     std::string res;
     bool slash = false;
-    for (char const *it = *str == '"' ? str + 1 : str; *it != '\0'; ++it) { // NOLINT
+    if (str.size() >= 2 && str.front() == '"' && str.back() == '"') {
+        str = str.substr(1, str.size() - 2);
+    }
+    for (auto it = str.begin(), ie = str.end(); it != ie; ++it) {
         if (slash) {
             switch (*it) {
                 case 'n': {
@@ -330,10 +333,7 @@ inline auto unquote(char const *str) -> std::string {
                 }
             }
             slash = false;
-        } else if (*it == '"' && *(it + 1) == '\0') {
-            break;
-        } // NOLINT
-        else if (*it == '\\') {
+        } else if (*it == '\\') {
             slash = true;
         } else {
             res.push_back(*it);
