@@ -150,7 +150,10 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
     }
 
     auto get_symbol(size_t index) -> clingo_symbol_t override {
-        return c_cast(prop_.symbol(numeric_cast<vertex_t>(index - 1)));
+        auto sym = prop_.symbol(numeric_cast<vertex_t>(index - 1));
+        auto c_sym = c_cast(sym);
+        clingo_symbol_acquire(sym);
+        return c_sym;
     }
 
     auto has_value(uint32_t thread_id, size_t index) -> bool override {
@@ -246,59 +249,51 @@ auto iequals(std::string_view a, std::string_view b) -> bool {
     return res && res->empty();
 }
 
-//! Turn the largest prefix of value into an unsigned integer and return the remainder.
+//! Turn the largest prefix of value into an unsigned integer and return the value and remainder.
 //!
-//! The function returns a nullopt if there are no leading digits. The
-//! result is stored in data which is assumed to be a pointer to a uint64_t.
-auto parse_uint64_pre(std::string_view value, void *data) -> std::optional<std::string_view> {
-    auto &res = *static_cast<uint64_t *>(data);
+//! The function returns a nullopt if there are no leading digits.
+auto parse_uint64_pre(std::string_view value) -> std::optional<std::pair<uint64_t, std::string_view>> {
+    uint64_t res = 0;
     auto const *first = value.data();
     auto const *last = value.data() + value.size();
-    auto fc_result = std::from_chars(first, last, res);
-    return fc_result.ec != std::errc{} ? std::make_optional<std::string_view>(fc_result.ptr, last) : std::nullopt;
+    auto [ptr, err] = std::from_chars(first, last, res);
+    return err == std::errc{} ? std::make_optional(std::make_pair(res, std::string_view(ptr, last))) : std::nullopt;
 }
 
-//! Turn the value into an uint64_t assuming that data is a pointer to an
-//! uint64_t.
-auto parse_uint64(std::string_view value, void *data) -> bool {
-    auto res = parse_uint64_pre(value, data);
-    return res && res->empty();
+//! Turn the value into an uint64_t and return it as optional.
+auto parse_uint64(std::string_view value) -> std::optional<uint64_t> {
+    auto opt = parse_uint64_pre(value);
+    return (opt && opt->second.empty()) ? std::optional{opt->first} : std::nullopt;
 }
 
 //! Parse thread-specific option via a callback.
 //!
 //! The thread number is optional and can follow separated with a comma.
-template <typename F, typename G> auto set_config(char const *value, void *data, bool *result, F f, G g) -> bool {
-    try {
-        auto &config = *static_cast<PropagatorConfig *>(data);
-        uint64_t id = 0;
-        if (*value == '\0') {
-            f(config);
-            *result = true;
-            return true;
-        }
-        if (*value == ',' && parse_uint64(value + 1, &id) && id < 64) { // NOLINT
-            g(config.ensure(id));
-            *result = true;
-            return true;
-        }
-    } catch (...) {
-        // TODO: set error
-        return false;
+template <typename F, typename G> auto set_config(std::string_view value, void *data, F f, G g) -> bool {
+    auto &config = *static_cast<PropagatorConfig *>(data);
+    uint64_t id = 0;
+    if (value.empty()) {
+        f(config);
+        return true;
     }
-    *result = false;
-    return true;
+    if (auto opt = value.starts_with(',') ? parse_uint64(value.substr(1)) : std::nullopt; opt && *opt < 64) {
+        g(config.ensure(*opt));
+        return true;
+    }
+    return false;
 }
 
 //! Parse a level to limit full propagation.
 //!
 //! Return false if there is a parse error.
 auto parse_root(char const *value, size_t size, void *data, bool *result) -> bool {
-    uint64_t x = 0;
-    return (value = parse_uint64_pre(value, &x)) != nullptr &&
-           set_config(
-               value, data, [x](PropagatorConfig &config) { config.propagate_root = x; },
-               [x](ThreadConfig &config) { config.propagate_root = x; });
+    CLINGODL_TRY {
+        auto res = parse_uint64_pre({value, size});
+        *result = res && set_config(
+                             res->second, data, [&](PropagatorConfig &config) { config.propagate_root = res->first; },
+                             [&](ThreadConfig &config) { config.propagate_root = res->first; });
+    }
+    CLINGODL_CATCH;
 }
 
 //! Parse the propagation budget and store it data.
