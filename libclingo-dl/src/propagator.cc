@@ -118,7 +118,7 @@ template <typename T> DLPropagator<T>::~DLPropagator() = default;
 
 template <typename T> auto DLPropagator<T>::num_vertices() const -> vertex_t { return vertex_info_.size(); }
 
-template <typename T> auto DLPropagator<T>::symbol(vertex_t index) const -> Clingo::Symbol {
+template <typename T> auto DLPropagator<T>::symbol(vertex_t index) const -> Clingo::Symbol const & {
     return vertex_info_[index].symbol;
 }
 

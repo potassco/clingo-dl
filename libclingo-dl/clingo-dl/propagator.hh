@@ -70,7 +70,7 @@ template <typename T> class DLPropagator : public Clingo::Heuristic {
     //! Get the number of vertices in the graph.
     [[nodiscard]] auto num_vertices() const -> vertex_t;
     //! Get the symbol associated with a vertex index.
-    [[nodiscard]] auto symbol(vertex_t index) const -> Clingo::Symbol;
+    [[nodiscard]] auto symbol(vertex_t index) const -> Clingo::Symbol const &;
     //! Lookup the index of a vertex.
     auto lookup(Clingo::Symbol symbol) -> vertex_t;
     //! Check if the given vertex has a lower bound in the given thread.

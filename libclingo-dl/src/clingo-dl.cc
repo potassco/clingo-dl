@@ -150,9 +150,6 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
     }
 
     auto get_symbol(size_t index) -> clingo_symbol_t override {
-        // TODO:: ref or copy???
-        // Currently, this amounts to a ref. To better reflect this,
-        // prop_.symbol should return a reference as well.
         return c_cast(prop_.symbol(numeric_cast<vertex_t>(index - 1)));
     }
 
@@ -230,78 +227,73 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
     DLPropagator<T> prop_; //!< The underlying difference logic propagator.
 };
 
-//! Check if b is a lower case prefix of a returning a pointer to the remainder of a.
-auto iequals_pre(char const *a, char const *b) -> char const * {
-    for (; *a && *b; ++a, ++b) { // NOLINT
-        if (tolower(*a) != tolower(*b)) {
-            return nullptr;
-        }
+//! Ascii tolower conversion.
+constexpr auto tolower(char c) -> char { return (c >= 'A' && c <= 'Z') ? c + ('a' - 'A') : c; }
+
+//! Check if b is a lower case prefix of a returning a string_view to the remainder of a.
+auto iequals_pre(std::string_view a, std::string_view b) -> std::optional<std::string_view> {
+    if (a.size() < b.size()) {
+        return std::nullopt;
     }
-    return *b != '\0' ? nullptr : a;
+    auto cmp = [](char ac, char bc) { return tolower(ac) == tolower(bc); };
+    auto res = std::ranges::mismatch(b, a, cmp);
+    return res.in1 == b.end() ? std::optional{a.substr(b.size())} : std::nullopt;
 }
 
 //! Check if two strings are lower case equal.
-auto iequals(char const *a, char const *b) -> bool {
-    a = iequals_pre(a, b);
-    return a != nullptr && *a == '\0';
+auto iequals(std::string_view a, std::string_view b) -> bool {
+    auto res = iequals_pre(a, b);
+    return res && res->empty();
 }
 
 //! Turn the largest prefix of value into an unsigned integer and return the remainder.
 //!
-//! The function returns a nullpointer if there are no leading digits. The
-//! result is stored in data which is assumed to be a pointer to an uint64_t.
-auto parse_uint64_pre(const char *value, void *data) -> char const * {
+//! The function returns a nullopt if there are no leading digits. The
+//! result is stored in data which is assumed to be a pointer to a uint64_t.
+auto parse_uint64_pre(std::string_view value, void *data) -> std::optional<std::string_view> {
     auto &res = *static_cast<uint64_t *>(data);
-    char const *it = value;
-    res = 0;
-
-    for (; *it != '\0'; ++it) { // NOLINT
-        if ('0' <= *it && *it <= '9') {
-            auto tmp = res;
-            res *= 10; // NOLINT
-            res += *it - '0';
-            if (res < tmp) {
-                return nullptr;
-            }
-        } else {
-            break;
-        }
-    }
-
-    return value != it ? it : nullptr;
+    auto const *first = value.data();
+    auto const *last = value.data() + value.size();
+    auto fc_result = std::from_chars(first, last, res);
+    return fc_result.ec != std::errc{} ? std::make_optional<std::string_view>(fc_result.ptr, last) : std::nullopt;
 }
 
 //! Turn the value into an uint64_t assuming that data is a pointer to an
 //! uint64_t.
-auto parse_uint64(const char *value, void *data) -> bool {
-    value = parse_uint64_pre(value, data);
-    return value != nullptr && *value == '\0';
+auto parse_uint64(std::string_view value, void *data) -> bool {
+    auto res = parse_uint64_pre(value, data);
+    return res && res->empty();
 }
 
 //! Parse thread-specific option via a callback.
 //!
 //! The thread number is optional and can follow separated with a comma.
-template <typename F, typename G> auto set_config(char const *value, void *data, F f, G g) -> bool {
+template <typename F, typename G> auto set_config(char const *value, void *data, bool *result, F f, G g) -> bool {
     try {
         auto &config = *static_cast<PropagatorConfig *>(data);
         uint64_t id = 0;
         if (*value == '\0') {
             f(config);
+            *result = true;
             return true;
         }
         if (*value == ',' && parse_uint64(value + 1, &id) && id < 64) { // NOLINT
             g(config.ensure(id));
+            *result = true;
             return true;
         }
     } catch (...) {
+        // TODO: set error
+        return false;
     }
-    return false;
+    *result = false;
+    return true;
 }
 
 //! Parse a level to limit full propagation.
 //!
 //! Return false if there is a parse error.
-auto parse_root(const char *value, void *data) -> bool {
+auto parse_root(char const *value, size_t size, void *data, bool *result) -> bool {
     uint64_t x = 0;
     return (value = parse_uint64_pre(value, &x)) != nullptr &&
            set_config(
@@ -346,7 +338,7 @@ auto parse_mutex(const char *value, void *data) -> bool {
 //! Parse the propagation mode and store it data.
 //!
 //! Return false if there is a parse error.
-auto parse_mode(const char *value, void *data) -> bool {
+auto parse_mode(char const *value, size_t size, void *data, bool *result) -> bool {
     PropagationMode mode = PropagationMode::Check;
     char const *rem = nullptr;
     if (rem = iequals_pre(value, "no"); rem != nullptr) {
@@ -361,10 +353,13 @@ auto parse_mode(const char *value, void *data) -> bool {
         mode = PropagationMode::Zero;
     } else if (rem = iequals_pre(value, "full"); rem != nullptr) {
         mode = PropagationMode::Strong;
+    } else {
+        *result = false;
+        return true;
     }
-    return rem != nullptr && set_config(
-                                 rem, data, [mode](PropagatorConfig &config) { config.propagate_mode = mode; },
-                                 [mode](ThreadConfig &config) { config.propagate_mode = mode; });
+    return set_config(
+        rem, data, result, [mode](PropagatorConfig &config) { config.propagate_mode = mode; },
+        [mode](ThreadConfig &config) { config.propagate_mode = mode; });
 }
 
 //! Parse the sort mode and store it data.
@@ -479,38 +474,42 @@ auto clingodl_rewrite_ast(void *self, clingo_ast_t *ast, clingo_theory_ast_callb
 
 auto clingodl_prepare([[maybe_unused]] void *self, [[maybe_unused]] clingo_control_t *control) -> bool { return true; }
 
-extern "C" auto clingodl_destroy(clingodl_theory_t *theory) -> bool {
-    CLINGODL_TRY { delete theory; } // NOLINT
-    CLINGODL_CATCH;
+void clingodl_destroy(void *self) {
+    auto theory = static_cast<clingodl_theory *>(self);
+    std::unique_ptr<clingodl_theory>{theory};
 }
 
-extern "C" auto clingodl_configure(clingodl_theory_t *theory, char const *key, char const *value) -> bool {
+extern "C" auto clingodl_configure(void *self, char const *key, size_t key_size, char const *value, size_t value_size)
+    -> bool {
+    auto theory = static_cast<clingodl_theory *>(self);
     CLINGODL_TRY {
-        if (strcmp(key, "propagate") == 0) {
-            return check_parse("propagate", parse_mode(value, &theory->config));
+        auto sv_key = std::string_view{key, key_size};
+        if (sv_key == "propagate") {
+            // TODO: adapt to new interface
+            return check_parse("propagate", parse_mode(value, value_size, &theory->config));
         }
-        if (strcmp(key, "propagate-root") == 0) {
+        if (sv_key == "propagate-root") {
             return check_parse("propagate-root", parse_root(value, &theory->config));
         }
-        if (strcmp(key, "propagate-budget") == 0) {
+        if (sv_key == "propagate-budget") {
             return check_parse("propgate-budget", parse_budget(value, &theory->config));
         }
-        if (strcmp(key, "add-mutexes") == 0) {
+        if (sv_key == "add-mutexes") {
             return check_parse("add-mutexes", parse_mutex(value, &theory->config));
         }
-        if (strcmp(key, "sort-edges") == 0) {
+        if (sv_key == "sort-edges") {
             return check_parse("sort-edges", parse_sort(value, &theory->config));
         }
-        if (strcmp(key, "rdl") == 0) {
+        if (sv_key == "rdl") {
             return check_parse("rdl", parse_bool(value, &theory->rdl));
         }
-        if (strcmp(key, "dl-heuristic") == 0) {
+        if (sv_key == "dl-heuristic") {
             return check_parse("dl-heuristic", parse_decide(value, &theory->config));
         }
-        if (strcmp(key, "shift-constraints") == 0) {
+        if (sv_key == "shift-constraints") {
             return check_parse("shift-constraints", parse_bool(value, &theory->shift_constraints));
         }
-        if (strcmp(key, "compute-components") == 0) {
+        if (sv_key == "compute-components") {
             return check_parse("compute-components", parse_bool(value, &theory->config.calculate_cc));
         }
         std::ostringstream msg;
@@ -521,20 +520,28 @@ extern "C" auto clingodl_configure(clingodl_theory_t *theory, char const *key, c
     CLINGODL_CATCH;
 }
 
-extern "C" auto clingodl_register_options(clingodl_theory_t *theory, clingo_options_t *options) -> bool {
+extern "C" auto clingodl_register_options(void *self, clingo_options_t *options) -> bool {
+    auto theory = static_cast<clingodl_theory *>(self);
     CLINGODL_TRY {
-        char const *group = "Clingo.DL Options";
-        handle_error(clingo_options_add(options, group, "propagate",
-                                        "Set propagation mode [no]\n"
-                                        "      <mode>  : {no,inverse,partial,partial+,zero,full}[,<thread>]\n"
-                                        "        no      : No propagation; only detect conflicts\n"
-                                        "        inverse : Check inverse constraints\n"
-                                        "        partial : Detect some conflicts\n"
-                                        "        partial+: Detect some more conflicts\n"
-                                        "        zero    : Detect all immediate conflicts through zero nodes\n"
-                                        "        full    : Detect all immediate conflicts\n"
-                                        "      <thread>: Restrict to thread",
-                                        &parse_mode, &theory->config, true, "<mode>"));
+        using namespace std::string_view_literals;
+        auto group = "Clingo.DL Options"sv;
+        auto add = [&](std::string_view name, std::string_view desc, clingo_option_parser_t parser, bool multi = false,
+                       std::string_view arg = {}) {
+            handle_error(clingo_options_add(options, group.data(), group.size(), name.data(), name.size(), desc.data(),
+                                            desc.size(), parser, &theory->config, true,
+                                            arg.empty() ? nullptr : arg.data(), arg.size()));
+        };
+        handle_error(add("propagate",
+                         "Set propagation mode [no]\n"
+                         "      <mode>  : {no,inverse,partial,partial+,zero,full}[,<thread>]\n"
+                         "        no      : No propagation; only detect conflicts\n"
+                         "        inverse : Check inverse constraints\n"
+                         "        partial : Detect some conflicts\n"
+                         "        partial+: Detect some more conflicts\n"
+                         "        zero    : Detect all immediate conflicts through zero nodes\n"
+                         "        full    : Detect all immediate conflicts\n"
+                         "      <thread>: Restrict to thread",
+                         &parse_mode, true, "<mode>"));
         handle_error(clingo_options_add(options, group, "propagate-root",
                                         "Enable full propagation below decision level [0]\n"
                                         "      <arg>   : <n>[,<thread>]\n"
@@ -640,10 +647,13 @@ extern "C" auto clingodl_on_statistics(clingodl_theory_t *theory, clingo_statist
 
 extern "C" bool clingodl_create(clingo_lib_t *lib, clingo_theory_t *theory) {
     CLINGODL_TRY {
-        theory->self = new clingodl_theory{lib};
-        theory->register_theory = &clingodl_register;
-        theory->rewrite_ast = &clingodl_rewrite_ast;
-        theory->prepare = &clingodl_prepare;
+        auto self = std::make_unique<clingodl_theory>(lib);
+        *theory = clingo_theory_t{
+            nullptr,          clingodl_destroy, clingodl_register, clingodl_rewrite_ast,
+            clingodl_prepare, nullptr,          nullptr,           nullptr,
+            nullptr,          nullptr,          nullptr,           nullptr,
+            nullptr,          self.release(),
+        };
     }
     CLINGODL_CATCH;
 }
