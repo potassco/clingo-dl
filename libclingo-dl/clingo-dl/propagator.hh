@@ -63,11 +63,8 @@ template <typename T> class DLPropagator : public Clingo::Heuristic {
     using value_t = T;
 
     // construction
-    DLPropagator(Statistics &stats, PropagatorConfig conf);
-    DLPropagator(DLPropagator const &other) = delete;
+    DLPropagator(Clingo::Library lib, Statistics &stats, PropagatorConfig conf);
     DLPropagator(DLPropagator &&other) = delete;
-    auto operator=(DLPropagator const &other) -> DLPropagator & = delete;
-    auto operator=(DLPropagator &&other) -> DLPropagator & = delete;
     ~DLPropagator() override;
 
     //! Get the number of vertices in the graph.
@@ -115,12 +112,12 @@ template <typename T> class DLPropagator : public Clingo::Heuristic {
 
     // initialization functions
     //! Map a symbol to an integer.
-    auto map_vertex_(Clingo::Symbol symbol) -> vertex_t;
+    auto map_vertex_(Clingo::Symbol const &symbol) -> vertex_t;
     //! Add constraints in the theory data.
     [[nodiscard]] auto add_constraints_(Clingo::PropagateInit &init) -> bool;
     //! Normalize constraints to individual edges over `<=`.
     [[nodiscard]] auto normalize_constraint_(Clingo::PropagateInit &init, literal_t literal, CoVarVec const &elements,
-                                             char const *op, value_t rhs, bool strict) -> bool;
+                                             Relation op, value_t rhs, bool strict) -> bool;
     //! Add up to two edges for the given constraint if the has at most 2 variables and suitable coefficients.
     [[nodiscard]] auto add_edges_(Clingo::PropagateInit &init, literal_t literal, CoVarVec const &covec, value_t rhs,
                                   bool strict) -> bool;
@@ -154,8 +151,9 @@ template <typename T> class DLPropagator : public Clingo::Heuristic {
     //! Sort vertices in the propagation queue according to the given mode.
     void sort_edges(SortMode mode, ThreadState &state);
     //! Propagate the given literals.
-    void do_propagate(Clingo::PropagateControl &ctl, Clingo::SolverLiteralSpan changes);
+    void propagate_(Clingo::PropagateControl ctl, Clingo::SolverLiteralSpan changes);
 
+    Clingo::Library lib_;          //!< The associated library.
     ThreadStateVec states_;        //!< Thread specific state.
     FactStateVec facts_;           //!< Thread specific state for fact propagation.
     LitEdgeMap lit_to_edges_;      //!< Map from literals to edges.

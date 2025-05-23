@@ -23,10 +23,10 @@ set(header
 set(ide_source_group "Source Files")
 set(source-group
     #"${CMAKE_CURRENT_SOURCE_DIR}/src/clingo-dl.cc"
-    #"${CMAKE_CURRENT_SOURCE_DIR}/src/graph.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/graph.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/parsing.cc"
-    #"${CMAKE_CURRENT_SOURCE_DIR}/src/propagator.cc"
-    #"${CMAKE_CURRENT_SOURCE_DIR}/src/theory.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/propagator.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/theory.cc"
 )
 source_group("${ide_source_group}" FILES ${source-group})
 set(source

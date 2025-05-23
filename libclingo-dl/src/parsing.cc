@@ -402,7 +402,7 @@ auto match(Clingo::TheoryTerm const &term, std::string_view name, size_t arity) 
            (term.type() == Clingo::TheoryTermType::function && term.name() == name && term.arguments().size() == arity);
 }
 
-void transform(Clingo::Library &lib, Clingo::AST::Node ast, NodeCallback const &cb, bool shift) {
+void rewrite(Clingo::Library &lib, Clingo::AST::Node ast, NodeCallback const &cb, bool shift) {
     if (shift) {
         ast = shift_rule(lib, ast);
     }
@@ -414,8 +414,8 @@ void transform(Clingo::Library &lib, Clingo::AST::Node ast, NodeCallback const &
 }
 
 template <class N>
-auto parse(Clingo::Library &lib, Clingo::TheoryAtom const &atom, std::function<int(Clingo::Symbol)> const &map_vert)
-    -> EdgeAtom<N> {
+auto parse(Clingo::Library &lib, Clingo::TheoryAtom const &atom,
+           std::function<int(Clingo::Symbol const &)> const &map_vert) -> EdgeAtom<N> {
     char const *msg = "parsing difference constraint failed";
     auto guard = atom.guard();
     if (!guard) {
@@ -448,8 +448,8 @@ auto parse(Clingo::Library &lib, Clingo::TheoryAtom const &atom, std::function<i
 }
 
 template EdgeAtom<int> parse<int>(Clingo::Library &lib, Clingo::TheoryAtom const &,
-                                  std::function<int(Clingo::Symbol)> const &);
+                                  std::function<int(Clingo::Symbol const &)> const &);
 template EdgeAtom<double> parse<double>(Clingo::Library &lib, Clingo::TheoryAtom const &,
-                                        std::function<int(Clingo::Symbol)> const &);
+                                        std::function<int(Clingo::Symbol const &)> const &);
 
 } // namespace ClingoDL

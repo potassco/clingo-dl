@@ -65,7 +65,7 @@ using NodeCallback = std::function<void(Clingo::AST::Node ast)>;
 //!
 //! Optionally shifts constraints from rule bodies into heads of integrity
 //! constraints if possible.
-void transform(Clingo::Library &lib, Clingo::AST::Node ast, NodeCallback const &cb, bool shift);
+void rewrite(Clingo::Library &lib, Clingo::AST::Node ast, NodeCallback const &cb, bool shift);
 
 //! Return true if the given theory term matches the given signature.
 [[nodiscard]] auto match(Clingo::TheoryTerm const &term, std::string_view name, size_t arity) -> bool;
@@ -73,7 +73,7 @@ void transform(Clingo::Library &lib, Clingo::AST::Node ast, NodeCallback const &
 //! Parse a theory atom for a difference constraint.
 template <class N>
 [[nodiscard]] auto parse(Clingo::Library &lib, Clingo::TheoryAtom const &atom,
-                         std::function<int(Clingo::Symbol)> const &map_vert) -> EdgeAtom<N>;
+                         std::function<int(Clingo::Symbol const &)> const &map_vert) -> EdgeAtom<N>;
 
 } // namespace ClingoDL
 

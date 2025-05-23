@@ -24,8 +24,6 @@
 
 #include <clingo-dl/propagator.hh>
 
-#include <unordered_set>
-
 #define CLINGODL_CHECKSOLUTION
 
 namespace ClingoDL {
@@ -33,13 +31,13 @@ namespace ClingoDL {
 namespace {
 
 template <typename T, typename std::enable_if<std::is_integral_v<T>, bool>::type = true>
-inline auto to_symbol(T value) -> Clingo::Symbol {
+inline auto to_symbol(Clingo::Library &lib, T value) -> Clingo::Symbol {
     return Clingo::Number(value);
 }
 
 template <typename T, typename std::enable_if<std::is_floating_point_v<T>, bool>::type = true>
-inline auto to_symbol(T value) -> Clingo::Symbol {
-    return Clingo::String(std::to_string(value).c_str());
+inline auto to_symbol(Clingo::Library &lib, T value) -> Clingo::Symbol {
+    return Clingo::String(lib, std::to_string(value));
 }
 
 } // namespace
@@ -110,7 +108,8 @@ template <typename T> struct DLPropagator<T>::FactState {
 };
 
 template <typename T>
-DLPropagator<T>::DLPropagator(Statistics &stats, PropagatorConfig conf) : stats_{stats}, conf_{std::move(conf)} {
+DLPropagator<T>::DLPropagator(Clingo::Library lib, Statistics &stats, PropagatorConfig conf)
+    : lib_{std::move(lib)}, stats_{stats}, conf_{std::move(conf)} {
     zero_vertices_.emplace_back(map_vertex_(Clingo::Number(0)));
     cc_reset_();
 }
@@ -128,11 +127,11 @@ template <typename T> auto DLPropagator<T>::lookup(Clingo::Symbol symbol) -> ver
     return it != vert_map_inv_.end() ? it->second : num_vertices();
 }
 
-template <typename T> auto DLPropagator<T>::has_lower_bound(Clingo::id_t thread_id, vertex_t index) const -> bool {
+template <typename T> auto DLPropagator<T>::has_lower_bound(id_t thread_id, vertex_t index) const -> bool {
     return index < vertex_info_.size() && !is_zero_(index) && states_[thread_id].graph.has_value(index);
 }
 
-template <typename T> auto DLPropagator<T>::lower_bound(Clingo::id_t thread_id, vertex_t index) const -> value_t {
+template <typename T> auto DLPropagator<T>::lower_bound(id_t thread_id, vertex_t index) const -> value_t {
     assert(has_lower_bound(thread_id, index));
     auto &state = states_[thread_id];
     auto zero_vertex = zero_vertices_[vertex_info_[index].cc];
@@ -149,16 +148,16 @@ template <typename T> void DLPropagator<T>::extend_model(Clingo::Model &model) {
             auto zero_vertex = zero_vertices_[vertex_info_[idx].cc];
             T adjust = state.graph.has_value(zero_vertex) ? state.graph.get_value(zero_vertex) : 0;
             params.emplace_back(vertex_info_[idx].symbol);
-            params.emplace_back(to_symbol<T>(state.graph.get_value(idx) - adjust));
-            vec.emplace_back(Function("dl", params));
+            params.emplace_back(to_symbol<T>(lib_, state.graph.get_value(idx) - adjust));
+            vec.emplace_back(Function(lib_, "dl", params));
         }
     }
     model.extend(vec);
 }
 
-template <typename T> void DLPropagator<T>::init(Clingo::PropagateInit &init) {
+template <typename T> void DLPropagator<T>::do_init(Clingo::PropagateInit init) {
     if (!edges_.empty()) {
-        init.set_check_mode(Clingo::PropagatorCheckMode::Partial);
+        init.check_mode(Clingo::PropagatorCheckMode::fixpoint);
     }
 
     edge_t edge_start = edges_.size();
@@ -187,30 +186,31 @@ template <typename T> void DLPropagator<T>::init(Clingo::PropagateInit &init) {
     initialize_states_(init);
 }
 
-template <typename T> void DLPropagator<T>::propagate(Clingo::PropagateControl &ctl, Clingo::LiteralSpan changes) {
+template <typename T>
+void DLPropagator<T>::do_propagate(Clingo::PropagateControl ctl, Clingo::SolverLiteralSpan changes) {
     // add facts for propagation at the next step
     if (ctl.assignment().decision_level() == 0) {
         auto &facts = facts_[ctl.thread_id()];
         facts.lits.insert(facts.lits.end(), changes.begin(), changes.end());
     }
-    do_propagate(ctl, changes);
+    propagate_(ctl, changes);
 }
 
 template <typename T>
-void DLPropagator<T>::undo(Clingo::PropagateControl const &ctl, Clingo::LiteralSpan changes) noexcept {
+void DLPropagator<T>::do_undo(id_t thread_id, Clingo::Assignment assignment, Clingo::SolverLiteralSpan changes) {
     static_cast<void>(changes);
-    auto &state = states_[ctl.thread_id()];
+    auto &state = states_[thread_id];
     Timer t{state.stats.time_undo};
     state.graph.backtrack();
 }
 
-template <typename T> void DLPropagator<T>::check(Clingo::PropagateControl &ctl) {
+template <typename T> void DLPropagator<T>::do_check(Clingo::PropagateControl ctl) {
     ThreadState &state = states_[ctl.thread_id()];
     auto &facts = facts_[ctl.thread_id()];
     auto assignment = ctl.assignment();
     // propagate facts from previous step
     if (assignment.decision_level() == 0 && facts.limit > 0) {
-        do_propagate(ctl, {facts.lits.data(), facts.lits.data() + facts.limit}); // NOLINT
+        propagate_(ctl, std::span{facts.lits.data(), facts.limit});
         facts.limit = 0;
     }
 #if defined(CLINGODL_CHECKSOLUTION) || defined(CLINGODL_CROSSCHECK)
@@ -227,7 +227,7 @@ template <typename T> void DLPropagator<T>::check(Clingo::PropagateControl &ctl)
 #endif
 }
 
-template <typename T> auto DLPropagator<T>::map_vertex_(Clingo::Symbol symbol) -> vertex_t {
+template <typename T> auto DLPropagator<T>::map_vertex_(Clingo::Symbol const &symbol) -> vertex_t {
     auto [it, ins] = vert_map_inv_.emplace(symbol, numeric_cast<vertex_t>(vertex_info_.size()));
     if (ins) {
         vertex_info_.emplace_back(it->first);
@@ -236,10 +236,10 @@ template <typename T> auto DLPropagator<T>::map_vertex_(Clingo::Symbol symbol) -
 }
 
 template <typename T> auto DLPropagator<T>::add_constraints_(Clingo::PropagateInit &init) -> bool {
-    for (auto atom : init.theory_atoms()) {
-        auto term = atom.term();
+    for (auto atom : init.base().theory()) {
+        auto term = atom.name();
         if (match(term, "__diff_h", 0) || match(term, "__diff_b", 0)) {
-            auto edge = parse<T>(atom, [this](Clingo::Symbol const &sym) { return map_vertex_(sym); });
+            auto edge = parse<T>(lib_, atom, [this](Clingo::Symbol const &sym) { return map_vertex_(sym); });
             literal_t lit = init.solver_literal(atom.literal());
             if (!normalize_constraint_(init, lit, edge.lhs, edge.rel, edge.rhs, edge.strict)) {
                 return false;
@@ -251,31 +251,31 @@ template <typename T> auto DLPropagator<T>::add_constraints_(Clingo::PropagateIn
 
 template <typename T>
 auto DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, literal_t literal, CoVarVec const &elements,
-                                            char const *op, T rhs, bool strict) -> bool { // NOLINT
+                                            Relation op, T rhs, bool strict) -> bool { // NOLINT
     // rewrite '>', '<', and '>=' into '<='
-    if (std::strcmp(op, ">") == 0) {
-        op = ">=";
+    if (op == Relation::greater_than) {
+        op = Relation::greater_equal;
         rhs = safe_add<T>(rhs, epsilon<T>());
-    } else if (std::strcmp(op, "<") == 0) {
-        op = "<=";
+    } else if (op == Relation::less_than) {
+        op = Relation::less_equal;
         rhs = safe_sub<T>(rhs, epsilon<T>());
     }
 
-    if (std::strcmp(op, ">=") == 0) {
+    if (op == Relation::greater_equal) {
         CoVarVec copy;
         copy.reserve(elements.size());
         for (auto &[co, var] : elements) {
             copy.emplace_back(safe_inv<T>(co), var);
         }
-        return normalize_constraint_(init, literal, copy, "<=", safe_inv<T>(rhs), strict);
+        return normalize_constraint_(init, literal, copy, Relation::less_equal, safe_inv<T>(rhs), strict);
     }
 
     // hanle remaining '<=', '=', and '!='
-    if (std::strcmp(op, "<=") == 0) {
+    if (op == Relation::less_equal) {
         if (!init.assignment().is_true(-literal) && !add_edges_(init, literal, elements, rhs, false)) {
             return false;
         }
-    } else if (std::strcmp(op, "=") == 0) {
+    } else if (op == Relation::equal_to) {
         literal_t a = 0;
         literal_t b = 0;
         if (strict) {
@@ -300,19 +300,19 @@ auto DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, literal
             a = b = literal;
         }
 
-        if (!normalize_constraint_(init, a, elements, "<=", rhs, strict)) {
+        if (!normalize_constraint_(init, a, elements, Relation::less_equal, rhs, strict)) {
             return false;
         }
-        if (!normalize_constraint_(init, b, elements, ">=", rhs, strict)) {
+        if (!normalize_constraint_(init, b, elements, Relation::greater_equal, rhs, strict)) {
             return false;
         }
 
         if (strict) {
             return true;
         }
-    } else if (std::strcmp(op, "!=") == 0) {
+    } else if (op == Relation::no_equal_to) {
         if (strict) {
-            return normalize_constraint_(init, -literal, elements, "=", rhs, true);
+            return normalize_constraint_(init, -literal, elements, Relation::equal_to, rhs, true);
         }
 
         auto a = init.add_literal();
@@ -331,21 +331,21 @@ auto DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, literal
             return false;
         }
 
-        if (!normalize_constraint_(init, a, elements, "<", rhs, false)) {
+        if (!normalize_constraint_(init, a, elements, Relation::less_than, rhs, false)) {
             return false;
         }
-        if (!normalize_constraint_(init, b, elements, ">", rhs, false)) {
+        if (!normalize_constraint_(init, b, elements, Relation::greater_than, rhs, false)) {
             return false;
         }
     }
 
     if (strict) {
-        assert(std::strcmp(op, "=") != 0);
+        assert(op != Relation::equal_to);
 
-        if (std::strcmp(op, "<=") == 0) {
-            op = ">";
-        } else if (std::strcmp(op, "!=") == 0) {
-            op = "=";
+        if (op == Relation::less_equal) {
+            op = Relation::greater_than;
+        } else if (op == Relation::no_equal_to) {
+            op = Relation::equal_to;
         }
 
         if (!normalize_constraint_(init, -literal, elements, op, rhs, false)) {
@@ -492,7 +492,7 @@ template <typename T> void DLPropagator<T>::cc_calculate_(AdjacencyMap &outgoing
 
     zero_vertices_.reserve(cc);
     for (auto i = numeric_cast<index_t>(zero_vertices_.size()); i < cc; ++i) {
-        auto vertex = map_vertex_(Clingo::Function("__null", {Clingo::Number(numeric_cast<int>(i))}));
+        auto vertex = map_vertex_(Clingo::Function(lib_, "__null", {Clingo::Number(numeric_cast<int>(i))}));
         zero_vertices_.emplace_back(vertex);
         vertex_info_[vertex].set_visited(i, true);
     }
@@ -554,7 +554,7 @@ void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, edge_t edg
         // skipping over true literals forgoes some mutexes in the incremental case
         // but makes the algorithm much faster when there are many static edges
         // which are checked on level zero anyway
-        if (ass.truth_value(start.lit) != Clingo::TruthValue::Free) {
+        if (ass.value(start.lit)) {
             continue;
         }
 
@@ -566,9 +566,8 @@ void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, edge_t edg
             for (auto it = out.first; it != out.second; ++it) {
                 auto st_id = it->second;
                 auto &st = edges_[st_id];
-                auto st_truth = ass.truth_value(st.lit);
-                if ((st_id > start_id && st_truth == Clingo::TruthValue::Free) ||
-                    st_truth == Clingo::TruthValue::False) {
+                auto st_truth = ass.value(st.lit);
+                if ((st_id > start_id && !st_truth.has_value()) || st_truth == false) {
                     continue;
                 }
                 auto w = rs_state.weight + st.weight;
@@ -589,7 +588,7 @@ void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, edge_t edg
                 if (found == 2) {
                     continue;
                 }
-                if (found == 0 && st_truth == Clingo::TruthValue::Free) {
+                if (found == 0 && !st_truth.has_value()) {
                     n += 1;
                 }
                 if (st.to == start.from && w < 0) {
@@ -620,7 +619,7 @@ template <typename T> void DLPropagator<T>::initialize_states_(Clingo::Propagate
     if (facts_.size() < numeric_cast<size_t>(init.number_of_threads())) {
         facts_.resize(init.number_of_threads());
     }
-    for (Clingo::id_t i = 0; i < numeric_cast<Clingo::id_t>(init.number_of_threads()); ++i) {
+    for (id_t i = 0; i < numeric_cast<id_t>(init.number_of_threads()); ++i) {
         states_.emplace_back(stats_.thread_statistics[i], edges_, conf_.get_propagate_mode(i),
                              conf_.get_propagate_root(i), conf_.get_propagate_budget(i));
         facts_[i].limit = facts_[i].lits.size();
@@ -672,7 +671,7 @@ template <typename T> void DLPropagator<T>::sort_edges(SortMode mode, ThreadStat
 }
 
 template <typename T>
-void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::LiteralSpan changes) { // NOLINT
+void DLPropagator<T>::propagate_(Clingo::PropagateControl ctl, Clingo::SolverLiteralSpan changes) { // NOLINT
     // This function checks for conflicts and propagates edges if enabled. If
     // propagation is enabled, the graph has to be propagated after each edge
     // added. If limited propagation is enabled and the limit is reached,
@@ -697,11 +696,11 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
         auto it = state.removed_watchs.begin();
         auto ie = state.removed_watchs.end();
         for (auto jt = it; jt != ie; ++jt) {
-            auto truth = ass.truth_value(*jt);
-            if (truth == Clingo::TruthValue::True) {
+            auto truth = ass.value(*jt);
+            if (truth == true) {
                 disable_edge_by_lit(state, *jt);
             }
-            if (truth == Clingo::TruthValue::Free || ass.level(*jt) == level) {
+            if (!truth.has_value() || ass.level(*jt) == level) {
                 ctl.add_watch(*jt);
                 if (it != jt) {
                     *it = *jt;
@@ -752,7 +751,7 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl &ctl, Clingo::Litera
 }
 
 template <typename T>
-auto DLPropagator<T>::decide(id_t thread_id, Clingo::Assignment const &assign, literal_t fallback) -> literal_t {
+auto DLPropagator<T>::do_decide(id_t thread_id, Clingo::Assignment assign, literal_t fallback) -> literal_t {
     static_cast<void>(assign);
     if (conf_.decision_mode == DecisionMode::Disabled) {
         return fallback;

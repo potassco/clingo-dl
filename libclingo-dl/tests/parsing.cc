@@ -43,7 +43,7 @@ auto rewrite(std::string_view prg) -> V {
     auto ret = V{};
     auto lib = Clingo::Library{};
     auto stm = Clingo::AST::parse(lib, prg);
-    transform(lib, stm, [&]<class T>(T &&node) { ret.emplace_back(node.to_string()); }, true);
+    ClingoDL::rewrite(lib, stm, [&]<class T>(T &&node) { ret.emplace_back(node.to_string()); }, true);
     return ret;
 }
 
@@ -54,7 +54,7 @@ template <class N> auto parse(std::string_view str) -> V {
     auto ctl = Clingo::Control{lib};
     auto prg = Clingo::AST::Program{lib};
     auto stm = Clingo::AST::parse(lib, str);
-    transform(lib, stm, [&]<class T>(T &&node) { prg.add(std::forward<T>(node)); }, true);
+    ClingoDL::rewrite(lib, stm, [&]<class T>(T &&node) { prg.add(std::forward<T>(node)); }, true);
     ctl.join(prg);
     ctl.parse_string(THEORY);
     ctl.ground();

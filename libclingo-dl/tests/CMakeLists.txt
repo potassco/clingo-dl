@@ -3,6 +3,7 @@ set(ide_source_group "Source Files")
 set(source-group
     #"${CMAKE_CURRENT_SOURCE_DIR}/optimize.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/parsing.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/propagator.cc"
     #"${CMAKE_CURRENT_SOURCE_DIR}/solve.cc"
 )
 source_group("${ide_source_group}" FILES ${source-group})
