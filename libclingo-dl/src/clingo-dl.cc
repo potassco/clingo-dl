@@ -65,17 +65,17 @@ auto propagate(clingo_propagate_control_t *i, const clingo_literal_t *changes, s
 
 //! C undo callback for the DL propagator.
 template <typename T>
-void undo(clingo_propagate_control_t const *i, const clingo_literal_t *changes, size_t size, void *data) {
-    Clingo::PropagateControl in(const_cast<clingo_propagate_control_t *>(i)); // NOLINT
-    static_cast<DLPropagator<T> *>(data)->undo(in, {changes, size});
+void undo(clingo_propagate_control_t const *control, clingo_literal_t const *changes, size_t size, void *data) {
+    id_t thread_id = 0;
+    clingo_assignment_t const *assignment = nullptr;
+    handle_error(clingo_propagate_control_thread_id(control, &thread_id));
+    handle_error(clingo_propagate_control_assignment(control, &assignment));
+    static_cast<DLPropagator<T> *>(data)->undo(thread_id, Clingo::Assignment{assignment}, {changes, size});
 }
 
 //! C check callback for the DL propagator.
-template <typename T> auto check(clingo_propagate_control_t *i, void *data) -> bool {
-    CLINGODL_TRY {
-        Clingo::PropagateControl in(i);
-        static_cast<DLPropagator<T> *>(data)->check(in);
-    }
+template <typename T> auto check(clingo_propagate_control_t *control, void *data) -> bool {
+    CLINGODL_TRY { static_cast<DLPropagator<T> *>(data)->check(Clingo::PropagateControl{control}); }
     CLINGODL_CATCH;
 }
 
@@ -109,7 +109,7 @@ class PropagatorFacade {
     //! Check if a symbol has a value in a thread.
     virtual auto has_value(uint32_t thread_id, size_t index) -> bool = 0;
     //! Get the value of a symbol in a thread.
-    virtual void get_value(uint32_t thread_id, size_t index, clingodl_value_t *value) = 0;
+    virtual void get_value(uint32_t thread_id, size_t index, clingo_theory_value_t *value) = 0;
     //! Function to iterato over the thread specific assignment of symbols and values.
     //!
     //! Argument current should initially be set to 0. The function returns
@@ -122,25 +122,26 @@ class PropagatorFacade {
 };
 
 //! Set variant to an integer value.
-void set_value(clingodl_value_t *variant, int value) {
-    variant->type = clingodl_value_type_int;
+void set_value(clingo_theory_value_t *variant, int value) {
+    variant->type = clingo_theory_value_type_int;
     variant->int_number = value; // NOLINT
 }
 
 //! Set variant to a double value.
-void set_value(clingodl_value_t *variant, double value) {
-    variant->type = clingodl_value_type_double;
+void set_value(clingo_theory_value_t *variant, double value) {
+    variant->type = clingo_theory_value_type_double;
     variant->double_number = value; // NOLINT
 }
 
 //! High level interface to use the DL propagator.
 template <typename T> class DLPropagatorFacade : public PropagatorFacade {
   public:
-    DLPropagatorFacade(clingo_control_t *control, PropagatorConfig const &conf) : prop_{step_, conf} {
+    DLPropagatorFacade(clingo_lib_t *lib, clingo_control_t *control, PropagatorConfig const &conf)
+        : prop_{Clingo::Library{lib, true}, step_, conf} {
         handle_error(clingo_control_parse_string(control, THEORY, std::strlen(THEORY)));
         static clingo_propagator_t prop = {init<T>, propagate<T>, undo<T>, check<T>,
                                            conf.decision_mode != DecisionMode::Disabled ? decide<T> : nullptr};
-        handle_error(clingo_control_register_propagator(control, &prop, &prop_, false));
+        handle_error(clingo_control_register_propagator(control, &prop, &prop_));
     }
 
     auto lookup_symbol(clingo_symbol_t name, size_t *index) -> bool override {
@@ -149,14 +150,17 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
     }
 
     auto get_symbol(size_t index) -> clingo_symbol_t override {
-        return prop_.symbol(numeric_cast<vertex_t>(index - 1)).to_c();
+        // TODO:: ref or copy???
+        // Currently, this amounts to a ref. To better reflect this,
+        // prop_.symbol should return a reference as well.
+        return c_cast(prop_.symbol(numeric_cast<vertex_t>(index - 1)));
     }
 
     auto has_value(uint32_t thread_id, size_t index) -> bool override {
         return prop_.has_lower_bound(thread_id, numeric_cast<vertex_t>(index - 1));
     }
 
-    void get_value(uint32_t thread_id, size_t index, clingodl_value_t *value) override {
+    void get_value(uint32_t thread_id, size_t index, clingo_theory_value_t *value) override {
         assert(index > 0 && index <= prop_.num_vertices());
         set_value(value, prop_.lower_bound(thread_id, numeric_cast<vertex_t>(index - 1)));
     }
@@ -174,36 +178,36 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
 
     void on_statistics(Clingo::Stats &step, Clingo::Stats &accu) override {
         accu_.accu(step_);
-        add_statistics_(step, step_);
-        add_statistics_(accu, accu_);
+        add_statistics_(step.map(), step_);
+        add_statistics_(accu.map(), accu_);
         step_.reset();
     }
 
   private:
     //! Add an integral value to the statistics.
     template <class V, std::enable_if_t<std::is_integral_v<V>, bool> = true>
-    static void add_subkey_(Clingo::Stats &root, char const *name, V value) {
-        root.add_subkey(name, Clingo::Stats::Value).set_value(static_cast<double>(value));
+    static void add_subkey_(Clingo::StatsMap root, char const *name, V value) {
+        root.insert(name, Clingo::StatsType::value).value(static_cast<double>(value));
     }
     //! Add an floating point value to the statistics.
     template <class V, std::enable_if_t<std::is_floating_point_v<V>, bool> = true>
-    static void add_subkey_(Clingo::Stats &root, char const *name, V value) {
-        root.add_subkey(name, Clingo::StatisticsType::Value).set_value(value);
+    static void add_subkey_(Clingo::StatsMap root, char const *name, V value) {
+        root.insert(name, Clingo::StatsType::value).value(value);
     }
 
     //!< Helper function to add the DL statistics to clingo's statistics.
-    void add_statistics_(Clingo::Stats &root, Statistics const &stats) {
-        Clingo::Stats diff = root.add_subkey("DifferenceLogic", Clingo::StatisticsType::Map);
+    void add_statistics_(Clingo::StatsMap root, Statistics const &stats) {
+        auto diff = root.insert("DifferenceLogic", Clingo::StatsType::map).map();
         add_subkey_(diff, "Time init(s)", stats.time_init.count());
         add_subkey_(diff, "CCs", stats.ccs);
         add_subkey_(diff, "Mutexes", stats.mutexes);
         add_subkey_(diff, "Edges", stats.edges);
         add_subkey_(diff, "Variables", stats.variables);
-        Clingo::Stats threads = diff.add_subkey("Thread", Clingo::StatisticsType::Array);
-        threads.ensure_size(stats.thread_statistics.size(), Clingo::StatisticsType::Map);
+        auto threads = diff.insert("Thread", Clingo::StatsType::array).array();
+        std::ignore = threads.ensure(stats.thread_statistics.size() - 1, Clingo::StatsType::map);
         auto it = threads.begin();
         for (auto const &stat : stats.thread_statistics) {
-            auto thread = *it++;
+            auto thread = (*it++).map();
             add_subkey_(thread, "Propagation(s)", stat.time_propagate.count());
             add_subkey_(thread, "Dijkstra(s)", stat.time_dijkstra.count());
             add_subkey_(thread, "Undo(s)", stat.time_undo.count());
@@ -424,14 +428,14 @@ auto check_parse(char const *key, bool ret) -> bool {
     if (!ret) {
         std::ostringstream msg;
         msg << "invalid value for '" << key << "'";
-        clingo_set_error(clingo_error_runtime, msg.str().c_str());
+        clingo_set_error(clingo_result_runtime, msg.view().data(), msg.view().size());
     }
     return ret;
 }
 
-} // namespace
-
 struct clingodl_theory {
+    clingodl_theory(clingo_lib_t *lib) : lib{lib, true} {}
+    Clingo::Library lib;
     std::unique_ptr<PropagatorFacade> clingodl{nullptr};
     PropagatorConfig config;
     bool rdl;
@@ -450,39 +454,30 @@ extern "C" void clingodl_version(int *major, int *minor, int *patch) {
     }
 }
 
-extern "C" auto clingodl_create(clingodl_theory_t **theory) -> bool {
-    CLINGODL_TRY { *theory = new clingodl_theory{}; } // NOLINT
-    CLINGODL_CATCH;
-}
-
-extern "C" auto clingodl_register(clingodl_theory_t *theory, clingo_control_t *control) -> bool {
+auto clingodl_register(void *self, clingo_control_t *control) -> bool {
+    auto theory = static_cast<clingodl_theory *>(self);
     CLINGODL_TRY {
         if (!theory->rdl) {
-            theory->clingodl = std::make_unique<DLPropagatorFacade<int>>(control, theory->config);
+            theory->clingodl = std::make_unique<DLPropagatorFacade<int>>(c_cast(theory->lib), control, theory->config);
         } else {
-            theory->clingodl = std::make_unique<DLPropagatorFacade<double>>(control, theory->config);
+            theory->clingodl =
+                std::make_unique<DLPropagatorFacade<double>>(c_cast(theory->lib), control, theory->config);
         }
     }
     CLINGODL_CATCH;
 }
 
-extern "C" auto clingodl_rewrite_ast(clingodl_theory_t *theory, clingo_ast_t *ast, clingodl_ast_callback_t add,
-                                     void *data) -> bool {
+auto clingodl_rewrite_ast(void *self, clingo_ast_t *ast, clingo_theory_ast_callback_t add, void *data) -> bool {
+    auto theory = static_cast<clingodl_theory *>(self);
     CLINGODL_TRY {
-        clingo_ast_acquire(ast);
-        Clingo::AST::Node ast_cpp{ast};
-        transform(
-            ast_cpp, [add, data](Clingo::AST::Node &&ast_trans) { handle_error(add(ast_trans.to_c(), data)); },
-            theory->shift_constraints);
+        rewrite(
+            theory->lib, Clingo::AST::Node{ast, true},
+            [add, data](Clingo::AST::Node ast) { handle_error(add(c_cast(ast), data)); }, theory->shift_constraints);
     }
     CLINGODL_CATCH;
 }
 
-extern "C" auto clingodl_prepare(clingodl_theory_t *theory, clingo_control_t *control) -> bool {
-    static_cast<void>(theory);
-    static_cast<void>(control);
-    return true;
-}
+auto clingodl_prepare([[maybe_unused]] void *self, [[maybe_unused]] clingo_control_t *control) -> bool { return true; }
 
 extern "C" auto clingodl_destroy(clingodl_theory_t *theory) -> bool {
     CLINGODL_TRY { delete theory; } // NOLINT
@@ -520,7 +515,7 @@ extern "C" auto clingodl_configure(clingodl_theory_t *theory, char const *key, c
         }
         std::ostringstream msg;
         msg << "invalid configuration key '" << key << "'";
-        clingo_set_error(clingo_error_runtime, msg.str().c_str());
+        clingo_set_error(clingo_result_runtime, msg.view().data(), msg.view().size());
         return false;
     }
     CLINGODL_CATCH;
@@ -641,5 +636,16 @@ extern "C" auto clingodl_on_statistics(clingodl_theory_t *theory, clingo_statist
     CLINGODL_CATCH;
 }
 
+} // namespace
+
+extern "C" bool clingodl_create(clingo_lib_t *lib, clingo_theory_t *theory) {
+    CLINGODL_TRY {
+        theory->self = new clingodl_theory{lib};
+        theory->register_theory = &clingodl_register;
+        theory->rewrite_ast = &clingodl_rewrite_ast;
+        theory->prepare = &clingodl_prepare;
+    }
+    CLINGODL_CATCH;
+}
 #undef CLINGODL_TRY
 #undef CLINGODL_CATCH
