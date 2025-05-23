@@ -348,7 +348,8 @@ void parse_elem(Clingo::Library &lib, Clingo::TheoryTerm const &term,
             }
         }
     } else if (term.type() == Clingo::TheoryTermType::symbol) {
-        if (auto val = parse_number<N>(term.name()); val) {
+        auto name = term.name();
+        if (auto val = name.starts_with('"') ? parse_number<N>(unquote(name)) : std::nullopt; val) {
             res.emplace_back(*val, INVALID_VAR);
         } else {
             res.emplace_back(1, map_vert(evaluate<N>(lib, term)));
@@ -415,7 +416,7 @@ void transform(Clingo::Library &lib, Clingo::AST::Node ast, NodeCallback const &
 template <class N>
 auto parse(Clingo::Library &lib, Clingo::TheoryAtom const &atom, std::function<int(Clingo::Symbol)> const &map_vert)
     -> EdgeAtom<N> {
-    char const *msg = "parsing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";
+    char const *msg = "parsing difference constraint failed";
     auto guard = atom.guard();
     if (!guard) {
         throw_syntax_error(msg);
@@ -438,7 +439,7 @@ auto parse(Clingo::Library &lib, Clingo::TheoryAtom const &atom, std::function<i
     }
     for (auto const &element : elems) {
         auto tuple = element.tuple();
-        check_syntax(!tuple.empty() && element.condition().empty(), "Invalid Syntax: invalid sum constraint");
+        check_syntax(!tuple.empty() && element.condition().empty(), "invalid diff constraint");
         parse_elem(lib, element.tuple().front(), map_vert, covec);
     }
 

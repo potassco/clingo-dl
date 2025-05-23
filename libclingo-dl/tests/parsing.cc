@@ -49,7 +49,7 @@ auto rewrite(std::string_view prg) -> V {
 
 //! Parse the theory atoms in the given program and return their string
 //! representations.
-auto parse(std::string_view str) -> V {
+template <class N> auto parse(std::string_view str) -> V {
     auto lib = Clingo::Library{};
     auto ctl = Clingo::Control{lib};
     auto prg = Clingo::AST::Program{lib};
@@ -64,7 +64,7 @@ auto parse(std::string_view str) -> V {
     auto oss = std::ostringstream{};
     V ret;
     for (auto atom : ctl.base().theory()) {
-        auto edge = ClingoDL::parse<int>(lib, atom, [&](Clingo::Symbol sym) {
+        auto edge = ClingoDL::parse<N>(lib, atom, [&](Clingo::Symbol sym) {
             auto [it, ins] = vertex_map.try_emplace(sym, vertices.size());
             if (ins) {
                 vertices.emplace_back(it->first);
@@ -95,23 +95,31 @@ TEST_CASE("parsing rewrite", "[parsing][rewrite]") {
     REQUIRE(rewrite(" :- not &diff { a - b } >= 0.") == V{"&__diff_h { (a - b) } >= 0."});
 }
 
-TEST_CASE("parsing parse", "[parsing][parse]") {
+TEST_CASE("parsing parse int", "[parsing][parse][int]") {
     SECTION("strict / non-strict") {
-        REQUIRE(parse("&diff { a - b } < 0.") == V{"1*a + -1*b < 0 (non-strict)"});
-        REQUIRE(parse(":- &diff { a - b } < 0.") == V{"1*a + -1*b >= 0 (non-strict)"});
-        REQUIRE(parse("a :- &diff { a - b } < 0.") == V{"1*a + -1*b < 0 (strict)"});
+        REQUIRE(parse<int>("&diff { a - b } < 0.") == V{"1*a + -1*b < 0 (non-strict)"});
+        REQUIRE(parse<int>(":- &diff { a - b } < 0.") == V{"1*a + -1*b >= 0 (non-strict)"});
+        REQUIRE(parse<int>("a :- &diff { a - b } < 0.") == V{"1*a + -1*b < 0 (strict)"});
     }
     SECTION("relations") {
-        REQUIRE(parse("&diff { a - b } < 0.") == V{"1*a + -1*b < 0 (non-strict)"});
-        REQUIRE(parse("&diff { a - b } <= 0.") == V{"1*a + -1*b <= 0 (non-strict)"});
-        REQUIRE(parse("&diff { a - b } > 0.") == V{"1*a + -1*b > 0 (non-strict)"});
-        REQUIRE(parse("&diff { a - b } >= 0.") == V{"1*a + -1*b >= 0 (non-strict)"});
-        REQUIRE(parse("&diff { a - b } = 0.") == V{"1*a + -1*b = 0 (non-strict)"});
-        REQUIRE(parse("&diff { a - b } != 0.") == V{"1*a + -1*b != 0 (non-strict)"});
+        REQUIRE(parse<int>("&diff { a - b } < 0.") == V{"1*a + -1*b < 0 (non-strict)"});
+        REQUIRE(parse<int>("&diff { a - b } <= 0.") == V{"1*a + -1*b <= 0 (non-strict)"});
+        REQUIRE(parse<int>("&diff { a - b } > 0.") == V{"1*a + -1*b > 0 (non-strict)"});
+        REQUIRE(parse<int>("&diff { a - b } >= 0.") == V{"1*a + -1*b >= 0 (non-strict)"});
+        REQUIRE(parse<int>("&diff { a - b } = 0.") == V{"1*a + -1*b = 0 (non-strict)"});
+        REQUIRE(parse<int>("&diff { a - b } != 0.") == V{"1*a + -1*b != 0 (non-strict)"});
     }
     SECTION("complex") {
-        REQUIRE(parse("&diff { 2 * (a - (x + b)) + 6*c } < 2*(3*c - x) + a - b.") == V{"1*a + -1*b < 0 (non-strict)"});
+        REQUIRE(parse<int>("&diff { 2 * (a - (x + b)) + 6*c } < 2*(3*c - x) + a - b.") ==
+                V{"1*a + -1*b < 0 (non-strict)"});
     }
+}
+
+TEST_CASE("parsing parse double", "[parsing][parse][double]") {
+    REQUIRE(parse<double>(R"p(&diff { a - b } < "10".)p") == V{"1*a + -1*b < 10 (non-strict)"});
+    REQUIRE(parse<double>(R"p(&diff { a - b } < "10.5".)p") == V{"1*a + -1*b < 10.5 (non-strict)"});
+    REQUIRE(parse<double>(R"p(&diff { "2.0" * (a - (x + b)) + "6"*c } < 2*("3.123"*c - x) + a - b.)p") ==
+            V{"-0.246*c + 1*a + -1*b < 0 (non-strict)"});
 }
 
 } // namespace ClingoDL
