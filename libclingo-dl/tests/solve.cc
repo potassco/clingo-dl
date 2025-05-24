@@ -30,6 +30,8 @@
 
 namespace ClingoDL {
 
+using namespace std::string_view_literals;
+
 namespace {
 
 //! A DL assignment.

@@ -25,57 +25,71 @@
 #include <clingo-dl-app/app.hh>
 
 #include <cmath>
-#include <iostream>
 #include <limits>
 
 namespace ClingoDL {
 
-Rewriter::Rewriter(clingodl_theory_t *theory, clingo_program_builder_t *builder) : theory_{theory}, builder_{builder} {}
+#define CLINGODL_TRY try // NOLINT
+#define CLINGODL_CATCH                                                                                                 \
+    catch (...) {                                                                                                      \
+        Clingo::Detail::store_error();                                                                                 \
+        return false;                                                                                                  \
+    }                                                                                                                  \
+    return true // NOLINT
 
-void Rewriter::rewrite(Clingo::Control &ctl, Clingo::StringSpan files) {
-    Clingo::Detail::handle_error(
-        clingo_ast_parse_files(files.begin(), files.size(), rewrite_, this, ctl.to_c(), nullptr, nullptr, 0));
+using Clingo::Detail::handle_error;
+
+namespace {
+auto add_(clingo_ast_t *stm, void *data) -> bool {
+    auto *program = static_cast<clingo_program_t *>(data);
+    return clingo_program_add(program, stm);
+}
+} // namespace
+
+void rewrite(Clingo::Library const &lib, clingo_theory_t *theory, Clingo::AST::Program const &program,
+             Clingo::StringSpan files) {
+    auto scanner = Clingo::AST::Scanner{lib, files};
+    for (auto &stm : scanner) {
+        handle_error(theory->rewrite_ast(theory->self, c_cast(stm), add_, c_cast(program)));
+    }
 }
 
-void Rewriter::rewrite(Clingo::Control &ctl, char const *str) {
-    Clingo::Detail::handle_error(clingo_ast_parse_string(str, rewrite_, this, ctl.to_c(), nullptr, nullptr, 0));
+void rewrite(Clingo::Library const &lib, clingo_theory_t *theory, Clingo::AST::Program const &program,
+             std::string_view str) {
+    auto scanner = Clingo::AST::Scanner{lib, str};
+    for (auto &stm : scanner) {
+        handle_error(theory->rewrite_ast(theory->self, c_cast(stm), add_, c_cast(program)));
+    }
 }
 
-auto Rewriter::add_(clingo_ast_t *stm, void *data) -> bool {
-    auto *self = static_cast<Rewriter *>(data);
-    return clingo_program_builder_add(self->builder_, stm);
-}
+Optimizer::Optimizer(Clingo::Library const &lib, OptimizerConfig const &opt_cfg, Clingo::SolveEventHandler &handler,
+                     clingo_theory_t *theory)
+    : lib_{lib}, opt_cfg_{opt_cfg}, handler_{handler}, theory_{theory} {}
 
-auto Rewriter::rewrite_(clingo_ast_t *stm, void *data) -> bool {
-    auto *self = static_cast<Rewriter *>(data);
-    return clingodl_rewrite_ast(self->theory_, stm, add_, self);
-}
-
-Optimizer::Optimizer(OptimizerConfig const &opt_cfg, Clingo::SolveEventHandler &handler, clingodl_theory_t *theory)
-    : opt_cfg_{opt_cfg}, handler_{handler}, theory_{theory} {}
-
-void Optimizer::solve(Clingo::Control &ctl) {
-    Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
-        Rewriter rewriter{theory_, builder.to_c()};
-        rewriter.rewrite(ctl,
-                         // add a fixed bound
-                         "#program __ub(s,b)."
-                         "&diff { s-0 } <= b."
-                         // add a retractable bound
-                         "#program __sb(s,b)."
-                         "#external __sb(b). [true]"
-                         "&diff { s-0 } <= b :- __sb(b).");
-    });
+void Optimizer::solve(Clingo::Control const &ctl) {
+    auto prg = Clingo::AST::Program{lib_};
+    rewrite(lib_, theory_, prg,
+            // add a fixed bound
+            "#program __ub(s,b)."
+            "&diff { s-0 } <= b."
+            // retract previous bound
+            "#program __rb(b)."
+            "#external __sb(b). [release]"
+            // add a retractable bound
+            "#program __sb(s,b)."
+            "#external __sb(b). [true]"
+            "&diff { s-0 } <= b :- __sb(b).");
+    ctl.join(prg);
     if (opt_cfg_.has_initial) {
         upper_bound_ = opt_cfg_.initial;
     }
     for (;;) {
         prepare_(ctl);
-        auto ret = ctl.solve(Clingo::SymbolicLiteralSpan{}, this, false, false).get();
-        if (ret.is_interrupted()) {
+        auto ret = ctl.solve(*this).get();
+        if (ret.interrupted()) {
             break;
         }
-        if (ret.is_unsatisfiable()) {
+        if (ret.unsatisfiable()) {
             if (search_bound_) {
                 lower_bound_ = *search_bound_ + 1;
             }
@@ -88,25 +102,25 @@ void Optimizer::solve(Clingo::Control &ctl) {
     }
 }
 
-void Optimizer::on_statistics(Clingo::UserStatistics step, Clingo::UserStatistics accu) {
+void Optimizer::do_stats(Clingo::Stats step, Clingo::Stats accu) {
     add_stats(step);
     add_stats(accu);
-    handler_.on_statistics(step, accu);
+    handler_.stats(step, accu);
 }
 
-void Optimizer::add_stats(Clingo::UserStatistics root) const {
+void Optimizer::add_stats(Clingo::Stats root) const {
     if (optimization || lower_bound_) {
-        Clingo::UserStatistics diff = root.add_subkey("DifferenceLogic", Clingo::StatisticsType::Map);
+        auto diff = root.map().insert("DifferenceLogic", Clingo::StatsType::map).map();
         if (optimization) {
-            diff.add_subkey("Optimization", Clingo::StatisticsType::Value).set_value(*optimization);
+            diff.insert("Optimization", Clingo::StatsType::value).value(*optimization);
         }
         if (lower_bound_) {
-            diff.add_subkey("Lower bound", Clingo::StatisticsType::Value).set_value(*lower_bound_);
+            diff.insert("Lower bound", Clingo::StatsType::value).value(*lower_bound_);
         }
     }
 }
 
-auto Optimizer::on_model(Clingo::Model &model) -> bool {
+auto Optimizer::do_model(Clingo::Model &model) -> bool {
     // update (upper) bound
     optimization = get_bound(model);
     upper_bound_ = *optimization - 1;
@@ -125,44 +139,52 @@ auto Optimizer::on_model(Clingo::Model &model) -> bool {
     adjust_ = adjust_ * opt_cfg_.factor;
 
     // pass model to theory
-    handler_.on_model(model);
+    handler_.model(model);
     return false;
 }
 
 auto Optimizer::get_bound(Clingo::Model &model) -> int_value_t {
     // get bound
+    bool found = false;
     if (opt_cfg_.index == 0) {
-        if (!clingodl_lookup_symbol(theory_, opt_cfg_.symbol.to_c(), &opt_cfg_.index)) {
-            throw std::runtime_error("variable to minimize not found");
+        handle_error(theory_->lookup_symbol(theory_->self, c_cast(opt_cfg_.symbol), &opt_cfg_.index, &found));
+        if (!found) {
+            throw std::logic_error{"bound symbol not found"};
         }
     }
-    if (!clingodl_assignment_has_value(theory_, model.thread_id(), opt_cfg_.index)) {
-        throw std::runtime_error("variable to minimize is unassigned");
+    clingo_theory_value_t value;
+    handle_error(
+        theory_->assignment_get_value(theory_->self, model.thread_id(), opt_cfg_.index, nullptr, &value, &found));
+    if (!found) {
+        throw std::logic_error{"bound value not found"};
     }
-    clingodl_value_t value;
-    clingodl_assignment_get_value(theory_, model.thread_id(), opt_cfg_.index, &value);
     // NOTE: minimizinig real values would require an epsilon
-    if (value.type != clingodl_value_type_int) {
+    if (value.type != clingo_theory_value_type_int) {
         throw std::runtime_error("only integer minimization is supported");
     }
-    return value.int_number; // NOLINT
+    return value.int_number;
 }
 
-void Optimizer::prepare_(Clingo::Control &ctl) {
+void Optimizer::prepare_(Clingo::Control const &ctl) {
+    std::vector<Clingo::Part> parts = {};
+    parts.reserve(3);
     if (upper_bound_ && upper_bound_ != upper_bound_last_) {
         upper_bound_last_ = upper_bound_;
-        ctl.ground({{"__ub", {opt_cfg_.symbol, Clingo::Number(*upper_bound_)}}});
+        parts.push_back({"__ub", {opt_cfg_.symbol, Clingo::Number(*upper_bound_)}});
     }
     if (search_bound_ != search_bound_last_) {
         if (search_bound_last_) {
-            ctl.release_external(Clingo::Function("__sb", {Clingo::Number(*search_bound_last_)}));
+            parts.push_back({"__rb", {Clingo::Number(*search_bound_last_)}});
         }
         if (search_bound_ && search_bound_ != upper_bound_) {
             search_bound_last_ = search_bound_;
-            ctl.ground({{"__sb", {opt_cfg_.symbol, Clingo::Number(*search_bound_)}}});
+            parts.push_back({"__sb", {opt_cfg_.symbol, Clingo::Number(*search_bound_)}});
         } else {
             search_bound_last_ = Bound{};
         }
+    }
+    if (!parts.empty()) {
+        ctl.ground(parts);
     }
 }
 

@@ -26,7 +26,10 @@
 #define CLINGODL_APP_HH
 
 #include <clingo-dl.h>
+
+#include <clingo/ast.hh>
 #include <clingo/control.hh>
+
 #include <optional>
 
 namespace ClingoDL {
@@ -34,25 +37,11 @@ namespace ClingoDL {
 //! Type used for integer values.
 using int_value_t = int;
 
-//! Helper class to rewrite logic programs to use with the clingo DL theory.
-class Rewriter {
-  public:
-    Rewriter(clingodl_theory_t *theory, clingo_program_builder_t *builder);
-    //! Rewrite the given files.
-    void rewrite(Clingo::Control &ctl, Clingo::StringSpan files);
-    //! Rewrite the given program.
-    void rewrite(Clingo::Control &ctl, char const *str);
-
-  private:
-    //! C callback to add a statement using the builder.
-    static auto add_(clingo_ast_t *stm, void *data) -> bool;
-
-    //! C callback to rewrite a statement and add it via the builder.
-    static auto rewrite_(clingo_ast_t *stm, void *data) -> bool;
-
-    clingodl_theory_t *theory_;         //!< A theory handle to rewrite statements.
-    clingo_program_builder_t *builder_; //!< The builder to add rewritten statements to.
-};
+// NOTE: candidate for a c++ theory
+void rewrite(Clingo::Library const &lib, clingo_theory_t *theory, Clingo::AST::Program const &program,
+             Clingo::StringSpan files);
+void rewrite(Clingo::Library const &lib, clingo_theory_t *theory, Clingo::AST::Program const &program,
+             std::string_view str);
 
 //! The configuration of the optimization algorithm.
 struct OptimizerConfig {
@@ -72,34 +61,36 @@ class Optimizer : private Clingo::SolveEventHandler {
     using EventHandler = Clingo::SolveEventHandler;
 
   public:
-    Optimizer(OptimizerConfig const &opt_cfg, EventHandler &handler, clingodl_theory_t *theory);
+    Optimizer(Clingo::Library const &lib, OptimizerConfig const &opt_cfg, EventHandler &handler,
+              clingo_theory_t *theory);
     //! Run the optimization algorithm.
     //!
     //! \note
     //! With an API extension to implement a custom enumerator, one could
     //! implement this more nicely. Right now, this implementation is
     //! restricted to the application.
-    void solve(Clingo::Control &ctl);
+    void solve(Clingo::Control const &ctl);
 
   private:
     //! Function to add DL specific statistics.
-    void on_statistics(Clingo::UserStatistics step, Clingo::UserStatistics accu) override;
+    void do_stats(Clingo::Stats step, Clingo::Stats accu) override;
     //! Add information about bounds to the given root statistics object and
     //! pass call the theory specific handler.
-    void add_stats(Clingo::UserStatistics root) const;
+    void add_stats(Clingo::Stats root) const;
     //! Function to extract the current bound and pass the model to the theory.
-    auto on_model(Clingo::Model &model) -> bool override;
+    auto do_model(Clingo::Model &model) -> bool override;
     //! Extract the bound from the given model.
     auto get_bound(Clingo::Model &model) -> int_value_t;
     //! Prepare the program for solving.
     //!
     //! This adds constraints to enforce the current upper or search bound as
     //! well as removes no longer required bounds.
-    void prepare_(Clingo::Control &ctl);
+    void prepare_(Clingo::Control const &ctl);
 
+    Clingo::Library lib_;
     OptimizerConfig const &opt_cfg_; //!< Configuration of the optimization algorithm.
     EventHandler &handler_;          //!< Theory specific solve event handler.
-    clingodl_theory_t *theory_;      //!< The underlying DL theory.
+    clingo_theory_t *theory_;        //!< The underlying DL theory.
     Bound search_bound_;             //!< The current (volatile) search bound.
     Bound search_bound_last_;        //!< The previous search bound.
     Bound lower_bound_;              //!< The current lower bound (from UNSAT results).
