@@ -47,7 +47,7 @@ class App : public Clingo::App, private Clingo::SolveEventHandler {
     //! Set the version.
     auto do_version() noexcept -> std::string_view override { return CLINGODL_VERSION; }
     //! Pass models to the theory.
-    auto do_model(Clingo::Model &model) -> bool override {
+    auto do_model(Clingo::Model model) -> bool override {
         handle_error(theory_->on_model(theory_->self, c_cast(model)));
         return true;
     }

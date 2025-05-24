@@ -120,7 +120,7 @@ void Optimizer::add_stats(Clingo::Stats root) const {
     }
 }
 
-auto Optimizer::do_model(Clingo::Model &model) -> bool {
+auto Optimizer::do_model(Clingo::Model model) -> bool {
     // update (upper) bound
     optimization = get_bound(model);
     upper_bound_ = *optimization - 1;
@@ -143,7 +143,7 @@ auto Optimizer::do_model(Clingo::Model &model) -> bool {
     return false;
 }
 
-auto Optimizer::get_bound(Clingo::Model &model) -> int_value_t {
+auto Optimizer::get_bound(Clingo::Model model) -> int_value_t {
     // get bound
     bool found = false;
     if (opt_cfg_.index == 0) {

@@ -78,9 +78,9 @@ class Optimizer : private Clingo::SolveEventHandler {
     //! pass call the theory specific handler.
     void add_stats(Clingo::Stats root) const;
     //! Function to extract the current bound and pass the model to the theory.
-    auto do_model(Clingo::Model &model) -> bool override;
+    auto do_model(Clingo::Model model) -> bool override;
     //! Extract the bound from the given model.
-    auto get_bound(Clingo::Model &model) -> int_value_t;
+    auto get_bound(Clingo::Model model) -> int_value_t;
     //! Prepare the program for solving.
     //!
     //! This adds constraints to enforce the current upper or search bound as

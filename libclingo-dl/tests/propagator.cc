@@ -42,7 +42,7 @@ template <class N> class MCB : public Clingo::SolveEventHandler {
     ~MCB() override { std::ranges::sort(*models_); }
 
   private:
-    auto do_model(Clingo::Model &model) -> bool override {
+    auto do_model(Clingo::Model model) -> bool override {
         prp_->extend_model(model);
         if (!proven && model.optimality_proven()) {
             models_->clear();
