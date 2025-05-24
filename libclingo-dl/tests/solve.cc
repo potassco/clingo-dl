@@ -27,7 +27,6 @@
 #include <clingo-dl/propagator.hh>
 
 #include <catch2/catch_test_macros.hpp>
-#include <iostream>
 
 namespace ClingoDL {
 
@@ -35,8 +34,137 @@ using namespace std::string_view_literals;
 
 namespace {
 
-struct Fixture {
+class TheoryAssignment {
+  public:
+    struct sentinel {};
+    class iterator {
+      public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = std::pair<Clingo::Symbol, std::variant<int, double, Clingo::Symbol>>;
+        using difference_type = std::ptrdiff_t;
+        using pointer = value_type *;
+        using reference = value_type &;
 
+        iterator(clingo_theory_t *theory, uint32_t thread_id) : theory_{theory}, thread_id_{thread_id} { advance(); }
+
+        iterator() = default;
+
+        reference operator*() const { return current_; }
+
+        iterator &operator++() {
+            advance();
+            return *this;
+        }
+
+        iterator operator++(int) { return std::exchange(*this, ++iterator(*this)); }
+
+        bool operator==([[maybe_unused]] sentinel const &other) const { return !has_value_; }
+
+      private:
+        void advance() {
+            Clingo::Detail::handle_error(
+                theory_->assignment_next(theory_->self, thread_id_, &init_, &index_, &has_value_));
+            if (has_value_) {
+                clingo_symbol_t symbol;
+                clingo_theory_value_t value;
+                Clingo::Detail::handle_error(
+                    theory_->assignment_get_value(theory_->self, thread_id_, index_, &symbol, &value, nullptr));
+                current_.first = Clingo::Symbol{symbol, false};
+                switch (value.type) {
+                    case clingo_theory_value_type_int: {
+                        current_.second = value.int_number;
+                        break;
+                    }
+                    case clingo_theory_value_type_double: {
+                        current_.second = value.double_number;
+                        break;
+                    }
+                    case clingo_theory_value_type_symbol: {
+                        current_.second = Clingo::Symbol{value.symbol, false};
+                        break;
+                    }
+                }
+            }
+        }
+
+        mutable value_type current_;
+        clingo_theory_t *theory_ = nullptr;
+        size_t index_ = 0;
+        uint32_t thread_id_ = 0;
+        bool init_ = true;
+        bool has_value_ = true;
+    };
+    static_assert(std::input_iterator<iterator>);
+    static_assert(std::sentinel_for<sentinel, iterator>);
+
+    explicit TheoryAssignment(clingo_theory_t *theory, uint32_t thread_id) : theory_{theory}, thread_id_{thread_id} {}
+
+    iterator begin() const { return iterator(theory_, thread_id_); }
+    sentinel end() const { return sentinel(); }
+
+  private:
+    clingo_theory_t *theory_;
+    uint32_t thread_id_;
+};
+
+class Theory {
+  public:
+    Theory(Clingo::Library lib) { clingodl_create(c_cast(lib), &theory_); }
+    Theory(Theory &&other) = delete;
+    ~Theory() {
+        if (theory_.destroy != nullptr) {
+            theory_.destroy(theory_.self);
+        }
+    }
+
+    void prepare(Clingo::Control const &ctl) {
+        Clingo::Detail::handle_error(theory_.prepare(theory_.self, c_cast(ctl)));
+    }
+
+    template <class F> void rewrite(Clingo::AST::Node stm, F fun) {
+        constexpr auto add = [](clingo_ast_t *stm, void *data) -> bool {
+            CLINGO_TRY {
+                auto *fun = static_cast<F *>(data);
+                std::invoke<F &>(*fun, Clingo::AST::Node{stm, true});
+            }
+            CLINGO_CATCH;
+        };
+        Clingo::Detail::handle_error(theory_.rewrite_ast(theory_.self, c_cast(stm), +add, static_cast<void *>(&fun)));
+    }
+
+    void rewrite(Clingo::Library const &lib, Clingo::Control const &ctl, std::string_view str) {
+        auto scanner = Clingo::AST::Scanner{lib, str};
+        auto prg = Clingo::AST::Program{lib};
+        for (auto &stm : scanner) {
+            rewrite(std::move(stm), [&](Clingo::AST::Node node) { prg.add(std::move(node)); });
+        }
+        ctl.join(prg);
+    }
+
+    void rewrite(Clingo::Library const &lib, Clingo::Control const &ctl, Clingo::StringSpan files) {
+        auto scanner = Clingo::AST::Scanner{lib, files};
+        auto prg = Clingo::AST::Program{lib};
+        for (auto &stm : scanner) {
+            rewrite(std::move(stm), [&](Clingo::AST::Node node) { prg.add(std::move(node)); });
+        }
+        ctl.join(prg);
+    }
+
+    auto assignment(uint32_t thread_id) -> TheoryAssignment { return TheoryAssignment{&theory_, thread_id}; }
+
+    void stats(Clingo::Stats step, [[maybe_unused]] Clingo::Stats accu) {
+        Clingo::Detail::handle_error(theory_.on_stats(theory_.self, c_cast(step)));
+    }
+
+    void register_theory(Clingo::Control const &ctl) {
+        Clingo::Detail::handle_error(theory_.register_theory(theory_.self, c_cast(ctl)));
+    }
+
+  private:
+    clingo_theory_t theory_;
+};
+
+struct Fixture {
     //! A DL assignment.
     using A = std::pair<Clingo::Symbol, double>;
     //! A vector of DL assignments.
@@ -146,42 +274,28 @@ bound(104).
     //! A handler to gather statistics in a DL theory.
     class Handler : public Clingo::SolveEventHandler {
       public:
-        Handler(clingo_theory_t *theory) : theory_{theory} {}
+        Handler(Theory &theory) : theory_{&theory} {}
         //! Add theory specific statistics.
-        void do_stats(Clingo::Stats step, [[maybe_unused]] Clingo::Stats accu) override {
-            theory_->on_stats(theory_->self, c_cast(step));
-        }
+        void do_stats(Clingo::Stats step, Clingo::Stats accu) override { theory_->stats(step, accu); }
 
       private:
-        clingo_theory_t *theory_; //!< The DL theory.
+        Theory *theory_; //!< The DL theory.
     };
 
     //! Solve a given DL problem returning all models.
     auto solve(Clingo::Control &ctl) -> RV {
-        Handler h{&theory};
         using namespace Clingo;
+        Handler h{theory};
         RV result;
         for (auto &&m : ctl.solve(h, {}, SolveFlags::yield)) {
             result.emplace_back();
             auto &sol = result.back().first;
             auto &sol_bool = result.back().second;
-            auto id = m.thread_id();
-            bool init = true;
-            bool found = true;
-            size_t index = 0;
-            while (true) {
-                REQUIRE(theory.assignment_next(theory.self, id, &init, &index, &found));
-                if (!found) {
-                    break;
-                }
-                clingo_symbol_t c_sym = 0;
-                clingo_theory_value_t value;
-                REQUIRE(theory.assignment_get_value(theory.self, id, index, &c_sym, &value, nullptr));
-                auto sym = Symbol{c_sym, false};
-                if (value.type == clingo_theory_value_type_int) {
-                    sol.emplace_back(std::move(sym), value.int_number); // NOLINT
-                } else if (value.type == clingo_theory_value_type_double) {
-                    sol.emplace_back(std::move(sym), value.double_number); // NOLINT
+            for (auto &[key, value] : theory.assignment(m.thread_id())) {
+                if (auto *num = std::get_if<int>(&value)) {
+                    sol.emplace_back(key, *num);
+                } else if (auto *num = std::get_if<double>(&value)) {
+                    sol.emplace_back(key, *num);
                 } else {
                     REQUIRE(false);
                 }
@@ -196,15 +310,8 @@ bound(104).
         return result;
     }
 
-    //! Parse and rewrite a DL problem.
-    void parse_program(Clingo::Control &ctl, std::string_view str) {
-        Clingo::AST::Program prg{lib};
-        rewrite(lib, &theory, prg, str);
-        ctl.join(prg);
-    }
-
     Clingo::Library lib;
-    clingo_theory_t theory;
+    Theory theory{lib};
 };
 
 } // namespace
@@ -218,16 +325,17 @@ TEST_CASE_METHOD(Fixture, "solving", "[clingo]") { // NOLINT
         auto b = Function(lib, "b");
         auto c = Function(lib, "c");
         auto ctl = Control{lib, {"0"}};
-        REQUIRE(clingodl_create(c_cast(lib), &theory));
         SECTION("solve") {
-            REQUIRE(theory.register_theory(theory.self, c_cast(ctl)));
-            parse_program(ctl, "#program base.\n"
-                               "1 { a; b } 1. &diff { a - b } <= 3.\n"
-                               "&diff { 0 - a } <= -5 :- a.\n"
-                               "&diff { 0 - b } <= -7 :- b.\n");
+            theory.register_theory(ctl);
+            theory.rewrite(lib, ctl,
+                           "#program base.\n"
+                           "1 { a; b } 1. &diff { a - b } <= 3.\n"
+                           "&diff { 0 - a } <= -5 :- a.\n"
+                           "&diff { 0 - b } <= -7 :- b.\n");
             ctl.ground();
-            REQUIRE(theory.prepare(theory.self, c_cast(ctl)));
+            theory.prepare(ctl);
             auto result = solve(ctl);
+            /*
             for (auto const &[ass, syms] : result) {
                 std::cerr << "solution:\n";
                 std::cerr << "  symbols:";
@@ -241,12 +349,14 @@ TEST_CASE_METHOD(Fixture, "solving", "[clingo]") { // NOLINT
                 }
                 std::cerr << std::endl;
             }
+            */
             REQUIRE(result == (RV{{{{a, 0}, {b, 7}}, {b}}, {{{a, 5}, {b, 2}}, {a}}}));
 
-            parse_program(ctl, "#program ext.\n"
-                               "&diff { a - 0 } <= 4.\n");
+            theory.rewrite(lib, ctl,
+                           "#program ext.\n"
+                           "&diff { a - 0 } <= 4.\n");
             ctl.ground({{"ext", {}}});
-            REQUIRE(theory.prepare(theory.self, c_cast(ctl)));
+            theory.prepare(ctl);
             result = solve(ctl);
             REQUIRE(result == (RV{{{{a, 0}, {b, 7}}, {b}}}));
         }
@@ -378,7 +488,6 @@ TEST_CASE_METHOD(Fixture, "solving", "[clingo]") { // NOLINT
             REQUIRE(result == (RV{{{{Function("", {String("foo\\\nbar\"foo"), Number(123)}), 0}}, {}}}));
         }
         */
-        theory.destroy(theory.self);
     }
     /*
     SECTION("task-assignment") {

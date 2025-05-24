@@ -621,11 +621,9 @@ struct clingodl_theory {
         CLINGODL_TRY {
             auto theory = static_cast<clingodl_theory *>(self);
             if (std::exchange(*init, false)) {
-                *index = 1;
-                *has_value = theory->clingodl->has_value(thread_id, *index);
-            } else {
-                *has_value = theory->clingodl->next(thread_id, *index);
+                *index = 0;
             }
+            *has_value = theory->clingodl->next(thread_id, *index);
         }
         CLINGODL_CATCH;
     }
@@ -667,7 +665,6 @@ struct clingodl_theory {
 
 extern "C" bool clingodl_create(clingo_lib_t *lib, clingo_theory_t *theory) {
     CLINGODL_TRY {
-        auto self = std::make_unique<clingodl_theory>(lib);
         *theory = clingo_theory_t{
             clingodl_theory::info,
             clingodl_theory::destroy,
@@ -682,8 +679,9 @@ extern "C" bool clingodl_create(clingo_lib_t *lib, clingo_theory_t *theory) {
             clingodl_theory::lookup_symbol,
             clingodl_theory::assignment_next,
             clingodl_theory::assignment_get_value,
-            self.release(),
+            nullptr,
         };
+        theory->self = std::make_unique<clingodl_theory>(lib).release();
     }
     CLINGODL_CATCH;
 }
