@@ -27,6 +27,9 @@
 #include <clingo-dl/propagator.hh>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+
+#include <iostream>
 
 namespace ClingoDL {
 
@@ -34,6 +37,7 @@ using namespace std::string_view_literals;
 
 namespace {
 
+// TODO: move to cxx api
 class TheoryAssignment {
   public:
     struct sentinel {};
@@ -107,6 +111,7 @@ class TheoryAssignment {
     uint32_t thread_id_;
 };
 
+// TODO: move to cxx api
 class Theory {
   public:
     Theory(Clingo::Library lib) { clingodl_create(c_cast(lib), &theory_); }
@@ -158,6 +163,11 @@ class Theory {
 
     void register_theory(Clingo::Control const &ctl) {
         Clingo::Detail::handle_error(theory_.register_theory(theory_.self, c_cast(ctl)));
+    }
+
+    void configure(std::string_view key, std::string_view value) {
+        Clingo::Detail::handle_error(
+            theory_.configure(theory_.self, key.data(), key.size(), value.data(), value.size()));
     }
 
   private:
@@ -300,219 +310,194 @@ bound(104).
                     REQUIRE(false);
                 }
             }
-            std::sort(sol.begin(), sol.end());
+            std::ranges::sort(sol);
             for (auto s : m.symbols()) {
                 sol_bool.emplace_back(s);
             }
-            std::sort(sol_bool.begin(), sol_bool.end());
+            std::ranges::sort(sol_bool);
         }
-        std::sort(result.begin(), result.end());
+        std::ranges::sort(result);
         return result;
+    }
+
+    void print(RV const &result) {
+        for (auto const &[ass, syms] : result) {
+            std::cerr << "solution:\n";
+            std::cerr << "  symbols:";
+            for (auto sym : syms) {
+                std::cerr << " " << sym;
+            }
+            std::cerr << std::endl;
+            std::cerr << "  assignment:";
+            for (auto [sym, val] : ass) {
+                std::cerr << " " << sym << "=" << val;
+            }
+            std::cerr << std::endl;
+        }
     }
 
     Clingo::Library lib;
     Theory theory{lib};
+    Clingo::Control ctl{lib, {"0"}};
+    Clingo::Symbol sym_a = Function(lib, "a");
+    Clingo::Symbol sym_b = Function(lib, "b");
+    Clingo::Symbol sym_c = Function(lib, "c");
+    Clingo::Symbol sym_d = Function(lib, "d");
+    Clingo::Symbol sym_e = Function(lib, "e");
+    Clingo::Symbol sym_f = Tuple(lib, {Function(lib, "f"), Function(lib, "f")});
 };
 
 } // namespace
 
-TEST_CASE_METHOD(Fixture, "solving", "[clingo]") { // NOLINT
-    SECTION("with control") {
-        using namespace Clingo;
-        auto test = Clingo::Tuple(lib, {Clingo::Number(1), Clingo::Number(2)});
+TEST_CASE_METHOD(Fixture, "solving base", "[clingo]") { // NOLINT
+    theory.register_theory(ctl);
+    theory.rewrite(lib, ctl,
+                   "#program base.\n"
+                   "1 { a; b } 1. &diff { a - b } <= 3.\n"
+                   "&diff { 0 - a } <= -5 :- a.\n"
+                   "&diff { 0 - b } <= -7 :- b.\n");
+    ctl.ground();
+    theory.prepare(ctl);
+    auto result = solve(ctl);
+    REQUIRE(result == (RV{{{{sym_a, 0}, {sym_b, 7}}, {sym_b}}, {{{sym_a, 5}, {sym_b, 2}}, {sym_a}}}));
 
-        auto a = Function(lib, "a");
-        auto b = Function(lib, "b");
-        auto c = Function(lib, "c");
-        auto ctl = Control{lib, {"0"}};
-        SECTION("solve") {
-            theory.register_theory(ctl);
-            theory.rewrite(lib, ctl,
-                           "#program base.\n"
-                           "1 { a; b } 1. &diff { a - b } <= 3.\n"
-                           "&diff { 0 - a } <= -5 :- a.\n"
-                           "&diff { 0 - b } <= -7 :- b.\n");
-            ctl.ground();
-            theory.prepare(ctl);
-            auto result = solve(ctl);
-            /*
-            for (auto const &[ass, syms] : result) {
-                std::cerr << "solution:\n";
-                std::cerr << "  symbols:";
-                for (auto sym : syms) {
-                    std::cerr << " " << sym;
-                }
-                std::cerr << std::endl;
-                std::cerr << "  assignment:";
-                for (auto [sym, val] : ass) {
-                    std::cerr << " " << sym << "=" << val;
-                }
-                std::cerr << std::endl;
-            }
-            */
-            REQUIRE(result == (RV{{{{a, 0}, {b, 7}}, {b}}, {{{a, 5}, {b, 2}}, {a}}}));
+    theory.rewrite(lib, ctl,
+                   "#program ext.\n"
+                   "&diff { a - 0 } <= 4.\n");
+    ctl.ground({{"ext", {}}});
+    theory.prepare(ctl);
+    result = solve(ctl);
+    REQUIRE(result == (RV{{{{sym_a, 0}, {sym_b, 7}}, {sym_b}}}));
+}
 
-            theory.rewrite(lib, ctl,
-                           "#program ext.\n"
-                           "&diff { a - 0 } <= 4.\n");
-            ctl.ground({{"ext", {}}});
-            theory.prepare(ctl);
-            result = solve(ctl);
-            REQUIRE(result == (RV{{{{a, 0}, {b, 7}}, {b}}}));
-        }
-        /*
-        SECTION("unequal") {
-            REQUIRE(clingodl_register(theory, ctl.to_c()));
-            parse_program(theory, ctl,
-                          "#program base.\n"
-                          "{ a }. &diff { b } != 5 :- not a.\n");
-            ctl.ground({{"base", {}}});
-            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
-            auto result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{}, {a}}, {{{b, 0}}, {}}, {{{b, 6}}, {}}}));
-        }
+TEST_CASE_METHOD(Fixture, "solving not_equal", "[clingo]") {
+    theory.register_theory(ctl);
+    theory.rewrite(lib, ctl,
+                   "#program base.\n"
+                   "{ a }. &diff { b } != 5 :- not a.\n");
+    ctl.ground();
+    theory.prepare(ctl);
+    auto result = solve(ctl);
+    REQUIRE(result == (RV{{{}, {sym_a}}, {{{sym_b, 0}}, {}}, {{{sym_b, 6}}, {}}}));
+}
 
-        SECTION("cc") {
-            REQUIRE(clingodl_register(theory, ctl.to_c()));
-            parse_program(theory, ctl,
-                          "#program base.\n"
-                          "&diff { 0 - a } <= -5.\n"
-                          "&diff { 0 - b } <= -10.\n");
-            ctl.ground({{"base", {}}});
-            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
-            auto result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{{a, 5}, {b, 10}}, {}}}));
-            REQUIRE(ctl.statistics()["user_step"]["DifferenceLogic"]["CCs"] == 2);
+TEST_CASE_METHOD(Fixture, "solving cc", "[clingo]") {
+    theory.register_theory(ctl);
+    theory.rewrite(lib, ctl,
+                   "#program base.\n"
+                   "&diff { 0 - a } <= -5.\n"
+                   "&diff { 0 - b } <= -10.\n");
+    ctl.ground();
+    theory.prepare(ctl);
+    auto result = solve(ctl);
+    REQUIRE(result == (RV{{{{sym_a, 5}, {sym_b, 10}}, {}}}));
+    REQUIRE(ctl.stats()["user_step"]["DifferenceLogic"]["CCs"].value() == 2);
 
-            parse_program(theory, ctl,
-                          "#program ext.\n"
-                          "&diff { b - a } <= 3.\n");
-            ctl.ground({{"ext", {}}});
-            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
-            result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{{a, 7}, {b, 10}}, {}}}));
-            REQUIRE(ctl.statistics()["user_step"]["DifferenceLogic"]["CCs"] == 1);
-        }
+    theory.rewrite(lib, ctl,
+                   "#program ext.\n"
+                   "&diff { b - a } <= 3.\n");
+    ctl.ground({{"ext", {}}});
+    theory.prepare(ctl);
+    result = solve(ctl);
+    REQUIRE(result == (RV{{{{sym_a, 7}, {sym_b, 10}}, {}}}));
+    REQUIRE(ctl.stats()["user_step"]["DifferenceLogic"]["CCs"].value() == 1);
+}
 
-        SECTION("configure") {
-            REQUIRE(clingodl_configure(theory, "propagate", "full"));
-            REQUIRE(clingodl_register(theory, ctl.to_c()));
+TEST_CASE_METHOD(Fixture, "solving configure", "[clingo]") {
+    theory.configure("propagate", "full");
+    theory.register_theory(ctl);
+    theory.rewrite(lib, ctl,
+                   "#program base.\n"
+                   "&diff { a - 0 } <= 0.\n"
+                   "a :- &diff { a - 0 } <=  0.\n"
+                   "b :- &diff { 0 - a } <= -1.\n"
+                   "c :- &diff { a } <= -1.\n");
+    ctl.ground();
+    theory.prepare(ctl);
+    auto result = solve(ctl);
+    REQUIRE(result == (RV{{{{sym_a, -1}}, {sym_a, sym_c}}, {{{sym_a, 0}}, {sym_a}}}));
+}
 
-            parse_program(theory, ctl,
-                          "#program base.\n"
-                          "&diff { a - 0 } <= 0.\n"
-                          "a :- &diff { a - 0 } <=  0.\n"
-                          "b :- &diff { 0 - a } <= -1.\n"
-                          "c :- &diff { a } <= -1.\n");
-            ctl.ground({{"base", {}}});
-            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
+TEST_CASE_METHOD(Fixture, "solving rdl", "[clingo]") {
+    theory.configure("rdl", "yes");
+    theory.register_theory(ctl);
+    theory.rewrite(lib, ctl,
+                   "#program base.\n"
+                   "&diff { a } >= \"0.5\" * 3.\n");
+    ctl.ground();
+    theory.prepare(ctl);
+    auto result = solve(ctl);
+    REQUIRE(result == (RV{{{{sym_a, 1.5}}, {}}})); // NOLINT
+}
 
-            auto result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{{a, -1}}, {a, c}}, {{{a, 0}}, {a}}}));
-        }
-        SECTION("rdl") {
-            REQUIRE(clingodl_configure(theory, "rdl", "yes"));
-            REQUIRE(clingodl_register(theory, ctl.to_c()));
+TEST_CASE_METHOD(Fixture, "solving parse", "[clingo]") {
+    theory.register_theory(ctl);
+    theory.rewrite(lib, ctl,
+                   "#program base.\n"
+                   "&diff { p( 1 + 2 ) - q( 3 * 4 - 7 ) } <= 3 - 9.\n");
+    ctl.ground();
+    theory.prepare(ctl);
+    auto result = solve(ctl);
+    auto p = Clingo::parse_term(lib, "p(3)");
+    auto q = Clingo::parse_term(lib, "q(5)");
+    REQUIRE(result == (RV{{{{p, 0}, {q, 6}}, {}}}));
+}
 
-            parse_program(theory, ctl,
-                          "#program base.\n"
-                          "&diff { a } >= \"0.5\" * 3.\n");
-            ctl.ground({{"base", {}}});
-            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
+TEST_CASE_METHOD(Fixture, "solving normalize", "[clingo]") {
+    theory.register_theory(ctl);
+    theory.rewrite(lib, ctl,
+                   "#program base.\n"
+                   "&diff { a } = b.\n"
+                   "&diff { 5 } >= 0.\n"
+                   "&diff { b } > c.\n"
+                   "&diff { c } >= d + 1.\n"
+                   "&diff { e } != (f,f).\n");
+    ctl.ground();
+    theory.prepare(ctl);
+    auto result = solve(ctl);
+    REQUIRE(result == RV{
+                          {{{sym_f, 0}, {sym_a, 2}, {sym_b, 2}, {sym_c, 1}, {sym_d, 0}, {sym_e, 1}}, {}},
+                          {{{sym_f, 1}, {sym_a, 2}, {sym_b, 2}, {sym_c, 1}, {sym_d, 0}, {sym_e, 0}}, {}},
+                      });
+}
 
-            auto result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{{a, 1.5}}, {}}})); // NOLINT
-        }
+TEST_CASE_METHOD(Fixture, "solving empty", "[clingo]") {
+    theory.register_theory(ctl);
+    theory.rewrite(lib, ctl,
+                   "#program base.\n"
+                   "a :- &diff { a - a } <= 5.\n"
+                   "{ b }.\n"
+                   "&diff { 0 } < -4 :- b.\n");
+    ctl.ground();
+    theory.prepare(ctl);
+    auto result = solve(ctl);
+    REQUIRE(result == (RV{{{}, {sym_a}}}));
+    REQUIRE(ctl.stats()["solving"]["solvers"]["choices"].value() == 0);
+}
 
-        SECTION("parse") {
-            REQUIRE(clingodl_register(theory, ctl.to_c()));
+TEST_CASE_METHOD(Fixture, "solving symbols", "[clingo]") {
+    theory.register_theory(ctl);
+    theory.rewrite(lib, ctl,
+                   "#program base.\n"
+                   "&diff{ (\"foo\\\\\\nbar\\\"foo\",123) - 0 } <= 17.\n");
+    ctl.ground();
+    theory.prepare(ctl);
+    auto result = solve(ctl);
+    REQUIRE(result == (RV{{{{Tuple(lib, {String(lib, "foo\\\nbar\"foo"), Clingo::Number(123)}), 0}}, {}}}));
+}
 
-            parse_program(theory, ctl,
-                          "#program base.\n"
-                          "&diff { p( 1 + 2 ) - q( 3 * 4 - 7 ) } <= 3 - \"9.0\".\n");
-            ctl.ground({{"base", {}}});
-            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
-
-            auto result = solve(theory, ctl);
-            auto p = Clingo::parse_term("p(3)");
-            auto q = Clingo::parse_term("q(5)");
-            REQUIRE(result == (RV{{{{p, 0}, {q, 6}}, {}}}));
-        }
-        SECTION("normalize") {
-            REQUIRE(clingodl_register(theory, ctl.to_c()));
-
-            parse_program(theory, ctl,
-                          "#program base.\n"
-                          "&diff { a } = b.\n"
-                          "&diff { 5 } >= 0.\n"
-                          "&diff { b } > c.\n"
-                          "&diff { c } >= d + 1.\n"
-                          "&diff { e } != (f,f).\n");
-            ctl.ground({{"base", {}}});
-            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
-
-            auto result = solve(theory, ctl);
-            auto b = Id("b");
-            auto c = Id("c");
-            auto d = Id("d");
-            auto e = Id("e");
-            auto f = Function("", {Id("f"), Id("f")});
-            REQUIRE(result == (RV{{{{a, 2}, {b, 2}, {c, 1}, {d, 0}, {e, 0}, {f, 1}}, {}},
-                                  {{{a, 2}, {b, 2}, {c, 1}, {d, 0}, {e, 1}, {f, 0}}, {}}}));
-        }
-        SECTION("empty constraints") {
-            REQUIRE(clingodl_register(theory, ctl.to_c()));
-
-            parse_program(theory, ctl,
-                          "#program base.\n"
-                          "a :- &diff { a - a } <= 5.\n"
-                          "{ b }.\n"
-                          "&diff { 0 } < -4 :- b.\n");
-            ctl.ground({{"base", {}}});
-            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
-
-            auto result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{}, {a}}}));
-            REQUIRE(ctl.statistics()["solving"]["solvers"]["choices"] == 0);
-        }
-        SECTION("symbols") {
-            REQUIRE(clingodl_register(theory, ctl.to_c()));
-
-            parse_program(theory, ctl,
-                          "#program base.\n"
-                          "&diff{ (\"foo\\\\\\nbar\\\"foo\",123) - 0 } <= 17.\n");
-            ctl.ground({{"base", {}}});
-            REQUIRE(clingodl_prepare(theory, ctl.to_c()));
-
-            auto result = solve(theory, ctl);
-            REQUIRE(result == (RV{{{{Function("", {String("foo\\\nbar\"foo"), Number(123)}), 0}}, {}}}));
-        }
-        */
-    }
-    /*
-    SECTION("task-assignment") {
-        for (char const *mode : {"no", "inverse", "partial", "partial+", "zero", "full"}) {
-            for (char const *mutex : {"0", "10,100"}) {
-                for (char const *sort_edges : {"no", "weight", "potential"}) {
-                    Clingo::Control ctl{{"0"}};
-                    clingodl_theory_t *theory{nullptr};
-                    REQUIRE(clingodl_create(&theory));
-                    REQUIRE(clingodl_configure(theory, "propagate", mode));
-                    REQUIRE(clingodl_configure(theory, "add-mutexes", mutex));
-                    REQUIRE(clingodl_configure(theory, "sort-edges", sort_edges));
-                    REQUIRE(clingodl_register(theory, ctl.to_c()));
-
-                    parse_program(theory, ctl, ENC);
-                    ctl.ground({{"base", {}}});
-                    REQUIRE(clingodl_prepare(theory, ctl.to_c()));
-
-                    REQUIRE(solve(theory, ctl) == SOLS);
-                    clingodl_destroy(theory);
-                }
-            }
-        }
-    }
-    */
+TEST_CASE_METHOD(Fixture, "solving task-assignment", "[clingo]") {
+    auto mode = GENERATE("no", "inverse", "partial", "partial+", "zero", "full");
+    auto mutex = GENERATE("0", "10,100");
+    auto sort_edges = GENERATE("no", "weight", "potential");
+    theory.configure("propagate", mode);
+    theory.configure("add-mutexes", mutex);
+    theory.configure("sort-edges", sort_edges);
+    theory.register_theory(ctl);
+    theory.rewrite(lib, ctl, ENC);
+    ctl.ground();
+    theory.prepare(ctl);
+    REQUIRE(solve(ctl) == sols());
 }
 
 } // namespace ClingoDL

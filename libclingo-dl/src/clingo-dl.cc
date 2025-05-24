@@ -404,7 +404,6 @@ auto parse_bool(const char *value, size_t size, void *data, bool *result) -> boo
             flag = true;
         }
         *result = res;
-        return false;
     }
     CLINGODL_CATCH;
 }
@@ -432,7 +431,7 @@ struct clingodl_theory {
     Clingo::Library lib;
     std::unique_ptr<PropagatorFacade> clingodl{nullptr};
     PropagatorConfig config;
-    bool rdl;
+    bool rdl{false};
     bool shift_constraints{false};
 
     static auto info([[maybe_unused]] void *self, clingo_string_t *name, int *major, int *minor, int *patch) -> bool {

@@ -298,7 +298,9 @@ template <class N> auto evaluate(Clingo::Library &lib, Clingo::TheoryTerm const 
         for (auto const &arg : term.arguments()) {
             args.emplace_back(evaluate<N>(lib, arg));
         }
-        return Clingo::Function(lib, term.type() == Clingo::TheoryTermType::function ? term.name() : "", args);
+
+        return term.type() == Clingo::TheoryTermType::function ? Clingo::Function(lib, term.name(), args)
+                                                               : Clingo::Tuple(lib, args);
     }
     return throw_syntax_error<Clingo::Symbol>();
 }
