@@ -94,43 +94,40 @@ auto decide(clingo_id_t thread_id, clingo_assignment_t const *assignment, clingo
 class PropagatorFacade {
   public:
     PropagatorFacade() = default;
-    PropagatorFacade(PropagatorFacade const &other) = default;
     PropagatorFacade(PropagatorFacade &&other) = default;
-    auto operator=(PropagatorFacade const &other) -> PropagatorFacade & = default;
-    auto operator=(PropagatorFacade &&other) noexcept -> PropagatorFacade & = default;
     virtual ~PropagatorFacade() = default;
 
     //! Look up the index of a symbol.
     //!
     //! The function returns false if the symbol could not be found.
-    virtual auto lookup_symbol(clingo_symbol_t name, size_t *index) -> bool = 0;
+    virtual auto lookup_symbol(Clingo::Symbol const &name, size_t &index) -> bool = 0;
     //! Get the symbol associated with an index.
-    virtual auto get_symbol(size_t index) -> clingo_symbol_t = 0;
+    virtual auto get_symbol(size_t index) -> Clingo::Symbol const & = 0;
     //! Check if a symbol has a value in a thread.
     virtual auto has_value(uint32_t thread_id, size_t index) -> bool = 0;
     //! Get the value of a symbol in a thread.
-    virtual void get_value(uint32_t thread_id, size_t index, clingo_theory_value_t *value) = 0;
+    virtual void get_value(uint32_t thread_id, size_t index, clingo_theory_value_t &value) = 0;
     //! Function to iterato over the thread specific assignment of symbols and values.
     //!
     //! Argument current should initially be set to 0. The function returns
     //! false if no more values are available.
-    virtual auto next(uint32_t thread_id, size_t *current) -> bool = 0;
+    virtual auto next(uint32_t thread_id, size_t &current) -> bool = 0;
     //! Extend the given model with the assignment stored in the propagator.
-    virtual void extend_model(Clingo::Model &m) = 0;
+    virtual void extend_model(Clingo::Model m) = 0;
     //! Add the propagator statistics to clingo's statistics.
-    virtual void on_statistics(Clingo::Stats &step, Clingo::Stats &accu) = 0;
+    virtual void on_statistics(Clingo::StatsMap step, Clingo::StatsMap accu) = 0;
 };
 
 //! Set variant to an integer value.
-void set_value(clingo_theory_value_t *variant, int value) {
-    variant->type = clingo_theory_value_type_int;
-    variant->int_number = value; // NOLINT
+void set_value(clingo_theory_value_t &variant, int value) {
+    variant.type = clingo_theory_value_type_int;
+    variant.int_number = value; // NOLINT
 }
 
 //! Set variant to a double value.
-void set_value(clingo_theory_value_t *variant, double value) {
-    variant->type = clingo_theory_value_type_double;
-    variant->double_number = value; // NOLINT
+void set_value(clingo_theory_value_t &variant, double value) {
+    variant.type = clingo_theory_value_type_double;
+    variant.double_number = value; // NOLINT
 }
 
 //! High level interface to use the DL propagator.
@@ -144,42 +141,39 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
         handle_error(clingo_control_register_propagator(control, &prop, &prop_));
     }
 
-    auto lookup_symbol(clingo_symbol_t name, size_t *index) -> bool override {
-        *index = prop_.lookup(Clingo::Symbol{name, true}) + 1;
-        return *index <= prop_.num_vertices();
+    auto lookup_symbol(Clingo::Symbol const &name, size_t &index) -> bool override {
+        index = prop_.lookup(name) + 1;
+        return index <= prop_.num_vertices();
     }
 
-    auto get_symbol(size_t index) -> clingo_symbol_t override {
-        auto sym = prop_.symbol(numeric_cast<vertex_t>(index - 1));
-        auto c_sym = c_cast(sym);
-        clingo_symbol_acquire(sym);
-        return c_sym;
+    auto get_symbol(size_t index) -> Clingo::Symbol const & override {
+        return prop_.symbol(numeric_cast<vertex_t>(index - 1));
     }
 
     auto has_value(uint32_t thread_id, size_t index) -> bool override {
         return prop_.has_lower_bound(thread_id, numeric_cast<vertex_t>(index - 1));
     }
 
-    void get_value(uint32_t thread_id, size_t index, clingo_theory_value_t *value) override {
+    void get_value(uint32_t thread_id, size_t index, clingo_theory_value_t &value) override {
         assert(index > 0 && index <= prop_.num_vertices());
         set_value(value, prop_.lower_bound(thread_id, numeric_cast<vertex_t>(index - 1)));
     }
 
-    auto next(uint32_t thread_id, size_t *current) -> bool override {
-        for (++*current; *current <= prop_.num_vertices(); ++*current) {
-            if (prop_.has_lower_bound(thread_id, numeric_cast<vertex_t>(*current - 1))) {
+    auto next(uint32_t thread_id, size_t &current) -> bool override {
+        for (++current; current <= prop_.num_vertices(); ++current) {
+            if (prop_.has_lower_bound(thread_id, numeric_cast<vertex_t>(current - 1))) {
                 return true;
             }
         }
         return false;
     }
 
-    void extend_model(Clingo::Model &m) override { prop_.extend_model(m); }
+    void extend_model(Clingo::Model m) override { prop_.extend_model(m); }
 
-    void on_statistics(Clingo::Stats &step, Clingo::Stats &accu) override {
+    void on_statistics(Clingo::StatsMap step, Clingo::StatsMap accu) override {
         accu_.accu(step_);
-        add_statistics_(step.map(), step_);
-        add_statistics_(accu.map(), accu_);
+        add_statistics_(step, step_);
+        add_statistics_(accu, accu_);
         step_.reset();
     }
 
@@ -284,8 +278,6 @@ template <typename F, typename G> auto set_config(std::string_view value, void *
 }
 
 //! Parse a level to limit full propagation.
-//!
-//! Return false if there is a parse error.
 auto parse_root(char const *value, size_t size, void *data, bool *result) -> bool {
     CLINGODL_TRY {
         auto res = parse_uint64_pre({value, size});
@@ -296,131 +288,139 @@ auto parse_root(char const *value, size_t size, void *data, bool *result) -> boo
     CLINGODL_CATCH;
 }
 
-//! Parse the propagation budget and store it data.
-//!
-//! Return false if there is a parse error.
-auto parse_budget(const char *value, void *data) -> bool {
-    uint64_t x = 0;
-    return (value = parse_uint64_pre(value, &x)) != nullptr &&
-           set_config(
-               value, data, [x](PropagatorConfig &config) { config.propagate_budget = x; },
-               [x](ThreadConfig &config) { config.propagate_budget = x; });
+//! Parse the propagation budget and store it in data.
+auto parse_budget(const char *value, size_t size, void *data, bool *result) -> bool {
+    CLINGODL_TRY {
+        auto res = parse_uint64_pre({value, size});
+        *result = res && set_config(
+                             res->second, data, [&](PropagatorConfig &config) { config.propagate_budget = res->first; },
+                             [&](ThreadConfig &config) { config.propagate_budget = res->first; });
+    }
+    CLINGODL_CATCH;
 }
 
-//! Parse the mutex detection mode and store it data.
-//!
-//! Return false if there is a parse error.
-auto parse_mutex(const char *value, void *data) -> bool {
-    auto &pc = *static_cast<PropagatorConfig *>(data);
-    uint64_t x = 0;
-    if ((value = parse_uint64_pre(value, &x)) == nullptr) {
-        return false;
-    }
-    pc.mutex_size = x;
-    if (*value == '\0') {
-        pc.mutex_cutoff = 10 * x; // NOLINT
-        return true;
-    }
-    if (*value == ',') {
-        if (!parse_uint64(value + 1, &x)) {
-            return false;
-        } // NOLINT
-        pc.mutex_cutoff = x;
-    }
-    return true;
-}
-
-//! Parse the propagation mode and store it data.
-//!
-//! Return false if there is a parse error.
-auto parse_mode(char const *value, size_t size, void *data, bool *result) -> bool {
-    PropagationMode mode = PropagationMode::Check;
-    char const *rem = nullptr;
-    if (rem = iequals_pre(value, "no"); rem != nullptr) {
-        mode = PropagationMode::Check;
-    } else if (rem = iequals_pre(value, "inverse"); rem != nullptr) {
-        mode = PropagationMode::Trivial;
-    } else if (rem = iequals_pre(value, "partial+"); rem != nullptr) {
-        mode = PropagationMode::WeakPlus;
-    } else if (rem = iequals_pre(value, "partial"); rem != nullptr) {
-        mode = PropagationMode::Weak;
-    } else if (rem = iequals_pre(value, "zero"); rem != nullptr) {
-        mode = PropagationMode::Zero;
-    } else if (rem = iequals_pre(value, "full"); rem != nullptr) {
-        mode = PropagationMode::Strong;
-    } else {
+//! Parse the mutex detection mode and store it in data.
+auto parse_mutex(const char *value, size_t size, void *data, bool *result) -> bool {
+    CLINGODL_TRY {
+        auto &pc = *static_cast<PropagatorConfig *>(data);
         *result = false;
-        return true;
+        if (auto fst = parse_uint64_pre({value, size})) {
+            pc.mutex_size = fst->first;
+            if (fst->second.empty()) {
+                pc.mutex_cutoff = 10 * fst->first;
+                *result = true;
+            } else if (auto snd = fst->second.starts_with(',') ? parse_uint64(fst->second.substr(1)) : std::nullopt) {
+                pc.mutex_cutoff = *snd;
+                *result = true;
+            }
+        }
     }
-    return set_config(
-        rem, data, result, [mode](PropagatorConfig &config) { config.propagate_mode = mode; },
-        [mode](ThreadConfig &config) { config.propagate_mode = mode; });
+    CLINGODL_CATCH;
+}
+
+//! Parse the propagation mode and store it in data.
+auto parse_mode(char const *value, size_t size, void *data, bool *result) -> bool {
+    CLINGODL_TRY {
+        auto mode = PropagationMode::Check;
+        auto str = std::string_view{value, size};
+        auto res = std::optional<std::string_view>{};
+        if (res = iequals_pre(str, "no"), res) {
+            mode = PropagationMode::Check;
+        } else if (res = iequals_pre(str, "inverse"); res) {
+            mode = PropagationMode::Trivial;
+        } else if (res = iequals_pre(str, "partial+"); res) {
+            mode = PropagationMode::WeakPlus;
+        } else if (res = iequals_pre(str, "partial"); res) {
+            mode = PropagationMode::Weak;
+        } else if (res = iequals_pre(str, "zero"); res) {
+            mode = PropagationMode::Zero;
+        } else if (res = iequals_pre(str, "full"); res) {
+            mode = PropagationMode::Strong;
+        }
+        *result = res && set_config(
+                             *res, data, [mode](PropagatorConfig &config) { config.propagate_mode = mode; },
+                             [mode](ThreadConfig &config) { config.propagate_mode = mode; });
+    }
+    CLINGODL_CATCH;
 }
 
 //! Parse the sort mode and store it data.
 //!
 //! Return false if there is a parse error.
-auto parse_sort(const char *value, void *data) -> bool {
-    SortMode sort = SortMode::Weight;
-    char const *rem = nullptr;
-    if (rem = iequals_pre(value, "no"); rem != nullptr) {
-        sort = SortMode::No;
-    } else if (rem = iequals_pre(value, "weight-reversed"); rem != nullptr) {
-        sort = SortMode::WeightRev;
-    } else if (rem = iequals_pre(value, "weight"); rem != nullptr) {
-        sort = SortMode::Weight;
-    } else if (rem = iequals_pre(value, "potential-reversed"); rem != nullptr) {
-        sort = SortMode::PotentialRev;
-    } else if (rem = iequals_pre(value, "potential"); rem != nullptr) {
-        sort = SortMode::Potential;
+auto parse_sort(char const *value, size_t size, void *data, bool *result) -> bool {
+    CLINGODL_TRY {
+        auto sort = SortMode::Weight;
+        auto str = std::string_view{value, size};
+        auto res = std::optional<std::string_view>{};
+        if (res = iequals_pre(str, "no"); res) {
+            sort = SortMode::No;
+        } else if (res = iequals_pre(str, "weight-reversed"); res) {
+            sort = SortMode::WeightRev;
+        } else if (res = iequals_pre(str, "weight"); res) {
+            sort = SortMode::Weight;
+        } else if (res = iequals_pre(str, "potential-reversed"); res) {
+            sort = SortMode::PotentialRev;
+        } else if (res = iequals_pre(str, "potential"); res) {
+            sort = SortMode::Potential;
+        }
+        *result = res && set_config(
+                             *res, data, [sort](PropagatorConfig &config) { config.sort_mode = sort; },
+                             [sort](ThreadConfig &config) { config.sort_mode = sort; });
     }
-    return rem != nullptr && set_config(
-                                 rem, data, [sort](PropagatorConfig &config) { config.sort_mode = sort; },
-                                 [sort](ThreadConfig &config) { config.sort_mode = sort; });
+    CLINGODL_CATCH;
 }
 
 //! Parse the decision mode.
-//!
-//! Return false if there is a parse error.
-auto parse_decide(const char *value, void *data) -> bool {
-    DecisionMode mode = DecisionMode::Disabled;
-    if (iequals(value, "no")) {
-        mode = DecisionMode::Disabled;
-    } else if (iequals(value, "min")) {
-        mode = DecisionMode::MinConflict;
-    } else if (iequals(value, "max")) {
-        mode = DecisionMode::MaxConflict;
+auto parse_decide(char const *value, size_t size, void *data, bool *result) -> bool {
+    CLINGODL_TRY {
+        auto &mode = static_cast<PropagatorConfig *>(data)->decision_mode;
+        auto str = std::string_view{value, size};
+        auto res = false;
+        if (res = iequals(str, "no"); res) {
+            mode = DecisionMode::Disabled;
+        } else if (res = iequals(str, "min"); res) {
+            mode = DecisionMode::MinConflict;
+        } else if (res = iequals(str, "max"); res) {
+            mode = DecisionMode::MaxConflict;
+        }
+        *result = res;
     }
-    static_cast<PropagatorConfig *>(data)->decision_mode = mode;
-    return true;
+    CLINGODL_CATCH;
 }
 
 //! Parse a Boolean and store it in data.
-//!
-//! Return false if there is a parse error.
-auto parse_bool(const char *value, void *data) -> bool {
-    auto &result = *static_cast<bool *>(data);
-    if (iequals(value, "no") || iequals(value, "off") || iequals(value, "0")) {
-        result = false;
-        return true;
+auto parse_bool(const char *value, size_t size, void *data, bool *result) -> bool {
+    CLINGODL_TRY {
+        auto &flag = *static_cast<bool *>(data);
+        auto str = std::string_view{value, size};
+        auto res = false;
+        if (res = iequals(str, "no") || iequals(str, "off") || iequals(str, "0"); res) {
+            flag = false;
+        } else if (res = iequals(str, "yes") || iequals(str, "on") || iequals(str, "1"); res) {
+            flag = true;
+        }
+        *result = res;
+        return false;
     }
-    if (iequals(value, "yes") || iequals(value, "on") || iequals(value, "1")) {
-        result = true;
-        return true;
-    }
-    return false;
+    CLINGODL_CATCH;
 }
 
 //! Set the given error message if the Boolean is false.
 //!
 //! Return false if there is a parse error.
-auto check_parse(char const *key, bool ret) -> bool {
-    if (!ret) {
-        std::ostringstream msg;
-        msg << "invalid value for '" << key << "'";
-        clingo_set_error(clingo_result_runtime, msg.view().data(), msg.view().size());
+template <class F, class... As> auto check_parse(char const *key, F fun, As &&...as) -> bool {
+    CLINGODL_TRY {
+        bool res = false;
+        if (!fun(std::forward<As>(as)..., &res)) {
+            return false;
+        }
+        if (!res) {
+            auto msg = std::ostringstream{};
+            msg << "invalid value for '" << key << "'";
+            clingo_set_error(clingo_result_invalid, msg.view().data(), msg.view().size());
+        }
     }
-    return ret;
+    CLINGODL_CATCH;
 }
 
 struct clingodl_theory {
@@ -432,16 +432,25 @@ struct clingodl_theory {
     bool shift_constraints{false};
 };
 
-extern "C" void clingodl_version(int *major, int *minor, int *patch) {
-    if (major != nullptr) {
-        *major = CLINGODL_VERSION_MAJOR;
+auto clingodl_info([[maybe_unused]] void *self, clingo_string_t *name, int *major, int *minor, int *patch) -> bool {
+    using namespace std::string_view_literals;
+    CLINGODL_TRY {
+        if (name != nullptr) {
+            constexpr auto str = "xyz"sv;
+            name->data = str.data();
+            name->size = str.size();
+        }
+        if (major != nullptr) {
+            *major = CLINGODL_VERSION_MAJOR;
+        }
+        if (minor != nullptr) {
+            *minor = CLINGODL_VERSION_MINOR;
+        }
+        if (patch != nullptr) {
+            *patch = CLINGODL_VERSION_REVISION;
+        }
     }
-    if (minor != nullptr) {
-        *minor = CLINGODL_VERSION_MINOR;
-    }
-    if (patch != nullptr) {
-        *patch = CLINGODL_VERSION_REVISION;
-    }
+    CLINGODL_CATCH;
 }
 
 auto clingodl_register(void *self, clingo_control_t *control) -> bool {
@@ -474,166 +483,174 @@ void clingodl_destroy(void *self) {
     std::unique_ptr<clingodl_theory>{theory};
 }
 
-extern "C" auto clingodl_configure(void *self, char const *key, size_t key_size, char const *value, size_t value_size)
-    -> bool {
-    auto theory = static_cast<clingodl_theory *>(self);
+auto clingodl_configure(void *self, char const *key, size_t key_size, char const *value, size_t value_size) -> bool {
     CLINGODL_TRY {
+        auto theory = static_cast<clingodl_theory *>(self);
         auto sv_key = std::string_view{key, key_size};
         if (sv_key == "propagate") {
-            // TODO: adapt to new interface
-            return check_parse("propagate", parse_mode(value, value_size, &theory->config));
+            return check_parse("propagate", parse_mode, value, value_size, &theory->config);
         }
         if (sv_key == "propagate-root") {
-            return check_parse("propagate-root", parse_root(value, &theory->config));
+            return check_parse("propagate-root", parse_root, value, value_size, &theory->config);
         }
         if (sv_key == "propagate-budget") {
-            return check_parse("propgate-budget", parse_budget(value, &theory->config));
+            return check_parse("propgate-budget", parse_budget, value, value_size, &theory->config);
         }
         if (sv_key == "add-mutexes") {
-            return check_parse("add-mutexes", parse_mutex(value, &theory->config));
+            return check_parse("add-mutexes", parse_mutex, value, value_size, &theory->config);
         }
         if (sv_key == "sort-edges") {
-            return check_parse("sort-edges", parse_sort(value, &theory->config));
+            return check_parse("sort-edges", parse_sort, value, value_size, &theory->config);
         }
         if (sv_key == "rdl") {
-            return check_parse("rdl", parse_bool(value, &theory->rdl));
+            return check_parse("rdl", parse_bool, value, value_size, &theory->rdl);
         }
         if (sv_key == "dl-heuristic") {
-            return check_parse("dl-heuristic", parse_decide(value, &theory->config));
+            return check_parse("dl-heuristic", parse_decide, value, value_size, &theory->config);
         }
         if (sv_key == "shift-constraints") {
-            return check_parse("shift-constraints", parse_bool(value, &theory->shift_constraints));
+            return check_parse("shift-constraints", parse_bool, value, value_size, &theory->shift_constraints);
         }
         if (sv_key == "compute-components") {
-            return check_parse("compute-components", parse_bool(value, &theory->config.calculate_cc));
+            return check_parse("compute-components", parse_bool, value, value_size, &theory->config.calculate_cc);
         }
         std::ostringstream msg;
         msg << "invalid configuration key '" << key << "'";
-        clingo_set_error(clingo_result_runtime, msg.view().data(), msg.view().size());
+        clingo_set_error(clingo_result_invalid, msg.view().data(), msg.view().size());
         return false;
     }
     CLINGODL_CATCH;
 }
 
-extern "C" auto clingodl_register_options(void *self, clingo_options_t *options) -> bool {
+auto clingodl_register_options(void *self, clingo_options_t *options) -> bool {
     auto theory = static_cast<clingodl_theory *>(self);
     CLINGODL_TRY {
         using namespace std::string_view_literals;
         auto group = "Clingo.DL Options"sv;
-        auto add = [&](std::string_view name, std::string_view desc, clingo_option_parser_t parser, bool multi = false,
+        auto opt = [&](std::string_view name, std::string_view desc, clingo_option_parser_t parser, bool multi = false,
                        std::string_view arg = {}) {
             handle_error(clingo_options_add(options, group.data(), group.size(), name.data(), name.size(), desc.data(),
                                             desc.size(), parser, &theory->config, true,
                                             arg.empty() ? nullptr : arg.data(), arg.size()));
         };
-        handle_error(add("propagate",
-                         "Set propagation mode [no]\n"
-                         "      <mode>  : {no,inverse,partial,partial+,zero,full}[,<thread>]\n"
-                         "        no      : No propagation; only detect conflicts\n"
-                         "        inverse : Check inverse constraints\n"
-                         "        partial : Detect some conflicts\n"
-                         "        partial+: Detect some more conflicts\n"
-                         "        zero    : Detect all immediate conflicts through zero nodes\n"
-                         "        full    : Detect all immediate conflicts\n"
-                         "      <thread>: Restrict to thread",
-                         &parse_mode, true, "<mode>"));
-        handle_error(clingo_options_add(options, group, "propagate-root",
-                                        "Enable full propagation below decision level [0]\n"
-                                        "      <arg>   : <n>[,<thread>]\n"
-                                        "      <n>     : Upper bound for decision level\n"
-                                        "      <thread>: Restrict to thread",
-                                        &parse_root, &theory->config, true, "<arg>"));
-        handle_error(clingo_options_add(options, group, "propagate-budget",
-                                        "Enable full propagation limiting to budget [0]\n"
-                                        "      <arg>   : <n>[,<thread>]\n"
-                                        "      <n>     : Budget roughly corresponding to cost of consistency checks\n"
-                                        "                (if possible use with --propagate-root greater 0)\n"
-                                        "      <thread>: Restrict to thread",
-                                        &parse_budget, &theory->config, true, "<arg>"));
-        handle_error(clingo_options_add(options, group, "add-mutexes",
-                                        "Add mutexes in a preprocessing step [0]\n"
-                                        "      <arg>: <max>[,<cut>]\n"
-                                        "      <max>: Maximum size of mutexes to add\n"
-                                        "      <cut>: Limit costs to calculate mutexes",
-                                        &parse_mutex, &theory->config, true, "<arg>"));
-        handle_error(clingo_options_add(options, group, "sort-edges",
-                                        "Sort edges for propagation [weight]\n"
-                                        "      <arg>: {no, weight, weight-reversed, potential, potential-reversed}\n"
-                                        "        no                : No sorting\n"
-                                        "        weight            : Sort by edge weight\n"
-                                        "        weight-reversed   : Sort by negative edge weight\n"
-                                        "        potential         : Sort by relative potential\n"
-                                        "        potential-reversed: Sort by relative negative potential",
-                                        &parse_sort, &theory->config, true, "<arg>"));
-        handle_error(clingo_options_add(options, group, "dl-heuristic",
-                                        "Decision heuristic for difference constraints\n"
-                                        "      <arg>: {none, min, max}\n"
-                                        "        no : Use default decision heuristic\n"
-                                        "        min: Try to minimize conflicts\n"
-                                        "        max: Try to maximize conflicts",
-                                        &parse_decide, &theory->config, false, "<arg>"));
-        handle_error(
-            clingo_options_add_flag(options, group, "rdl", "Enable support for real numbers [no]", &theory->rdl));
-        handle_error(clingo_options_add_flag(options, group, "shift-constraints",
-                                             "Shift constraints into head of integrity constraints [no]",
-                                             &theory->shift_constraints));
-        handle_error(clingo_options_add_flag(options, group, "compute-components", "Compute connected components [yes]",
-                                             &theory->config.calculate_cc));
+        auto flag = [&](std::string_view name, std::string_view desc, bool &target) {
+            handle_error(clingo_options_add_flag(options, group.data(), group.size(), name.data(), name.size(),
+                                                 desc.data(), desc.size(), &target));
+        };
+        opt("propagate",
+            "Set propagation mode [no]\n"
+            "      <mode>  : {no,inverse,partial,partial+,zero,full}[,<thread>]\n"
+            "        no      : No propagation; only detect conflicts\n"
+            "        inverse : Check inverse constraints\n"
+            "        partial : Detect some conflicts\n"
+            "        partial+: Detect some more conflicts\n"
+            "        zero    : Detect all immediate conflicts through zero nodes\n"
+            "        full    : Detect all immediate conflicts\n"
+            "      <thread>: Restrict to thread",
+            &parse_mode, true, "<mode>");
+        opt("propagate-root",
+            "Enable full propagation below decision level [0]\n"
+            "      <arg>   : <n>[,<thread>]\n"
+            "      <n>     : Upper bound for decision level\n"
+            "      <thread>: Restrict to thread",
+            &parse_root, true, "<arg>");
+        opt("propagate-budget",
+            "Enable full propagation limiting to budget [0]\n"
+            "      <arg>   : <n>[,<thread>]\n"
+            "      <n>     : Budget roughly corresponding to cost of consistency checks\n"
+            "                (if possible use with --propagate-root greater 0)\n"
+            "      <thread>: Restrict to thread",
+            &parse_budget, true, "<arg>");
+        opt("add-mutexes",
+            "Add mutexes in a preprocessing step [0]\n"
+            "      <arg>: <max>[,<cut>]\n"
+            "      <max>: Maximum size of mutexes to add\n"
+            "      <cut>: Limit costs to calculate mutexes",
+            &parse_mutex, true, "<arg>");
+        opt("sort-edges",
+            "Sort edges for propagation [weight]\n"
+            "      <arg>: {no, weight, weight-reversed, potential, potential-reversed}\n"
+            "        no                : No sorting\n"
+            "        weight            : Sort by edge weight\n"
+            "        weight-reversed   : Sort by negative edge weight\n"
+            "        potential         : Sort by relative potential\n"
+            "        potential-reversed: Sort by relative negative potential",
+            &parse_sort, true, "<arg>");
+        opt("dl-heuristic",
+            "Decision heuristic for difference constraints\n"
+            "      <arg>: {none, min, max}\n"
+            "        no : Use default decision heuristic\n"
+            "        min: Try to minimize conflicts\n"
+            "        max: Try to maximize conflicts",
+            &parse_decide, false, "<arg>");
+        flag("rdl", "Enable support for real numbers [no]", theory->rdl);
+        flag("shift-constraints", "Shift constraints into head of integrity constraints [no]",
+             theory->shift_constraints);
+        flag("compute-components", "Compute connected components [yes]", theory->config.calculate_cc);
     }
     CLINGODL_CATCH;
 }
 
-extern "C" auto clingodl_validate_options(clingodl_theory_t *theory) -> bool {
-    static_cast<void>(theory);
-    return true;
-}
+auto clingodl_validate_options([[maybe_unused]] void *self) -> bool { return true; }
 
-extern "C" auto clingodl_on_model(clingodl_theory_t *theory, clingo_model_t *model) -> bool {
+auto clingodl_on_model(void *self, clingo_model_t *model) -> bool {
     CLINGODL_TRY {
+        auto theory = static_cast<clingodl_theory *>(self);
         Clingo::Model m(model);
         theory->clingodl->extend_model(m);
     }
     CLINGODL_CATCH;
 }
 
-extern "C" auto clingodl_lookup_symbol(clingodl_theory_t *theory, clingo_symbol_t symbol, size_t *index) -> bool {
-    return theory->clingodl->lookup_symbol(symbol, index);
-}
-
-extern "C" auto clingodl_get_symbol(clingodl_theory_t *theory, size_t index) -> clingo_symbol_t {
-    return theory->clingodl->get_symbol(index);
-}
-
-extern "C" void clingodl_assignment_begin(clingodl_theory_t *theory, uint32_t thread_id, size_t *index) {
-    // Note: the first vertex is always 0 and can be skipped because its value is 0
-    static_cast<void>(theory);
-    static_cast<void>(thread_id);
-    *index = 1;
-}
-
-extern "C" auto clingodl_assignment_next(clingodl_theory_t *theory, uint32_t thread_id, size_t *index) -> bool {
-    return theory->clingodl->next(thread_id, index);
-}
-
-extern "C" auto clingodl_assignment_has_value(clingodl_theory_t *theory, uint32_t thread_id, size_t index) -> bool {
-    return theory->clingodl->has_value(thread_id, index);
-}
-
-extern "C" void clingodl_assignment_get_value(clingodl_theory_t *theory, uint32_t thread_id, size_t index,
-                                              clingodl_value_t *value) {
-    theory->clingodl->get_value(thread_id, index, value);
-}
-
-extern "C" auto clingodl_on_statistics(clingodl_theory_t *theory, clingo_statistics_t *step, clingo_statistics_t *accu)
-    -> bool {
+auto clingodl_lookup_symbol(void *self, clingo_symbol_t symbol, size_t *index, bool *found) -> bool {
     CLINGODL_TRY {
-        uint64_t root_s{0};
-        uint64_t root_a{0};
-        handle_error(clingo_statistics_root(step, &root_s));
-        handle_error(clingo_statistics_root(accu, &root_a));
-        Clingo::Stats s(step, root_s);
-        Clingo::Stats a(accu, root_a);
-        theory->clingodl->on_statistics(s, a);
+        auto theory = static_cast<clingodl_theory *>(self);
+        *found = theory->clingodl->lookup_symbol(Clingo::Symbol{symbol, true}, *index);
+    }
+    CLINGODL_CATCH;
+}
+
+auto clingodl_assignment_next(void *self, uint32_t thread_id, bool *init, size_t *index, bool *has_value) -> bool {
+    CLINGODL_TRY {
+        auto theory = static_cast<clingodl_theory *>(self);
+        if (std::exchange(*init, false)) {
+            *index = 1;
+            *has_value = theory->clingodl->has_value(thread_id, *index);
+        } else {
+            *has_value = theory->clingodl->next(thread_id, *index);
+        }
+    }
+    CLINGODL_CATCH;
+}
+
+auto clingodl_assignment_get_value(void *self, uint32_t thread_id, size_t index, clingo_symbol_t *symbol,
+                                   clingo_theory_value_t *value, bool *has_value) -> bool {
+    CLINGODL_TRY {
+        auto theory = static_cast<clingodl_theory *>(self);
+        bool hv = theory->clingodl->has_value(thread_id, index);
+        if (has_value != nullptr) {
+            *has_value = hv;
+        }
+        if (hv) {
+            if (symbol != nullptr) {
+                *symbol = c_cast(theory->clingodl->get_symbol(index));
+                clingo_symbol_acquire(*symbol);
+            }
+            if (value != nullptr) {
+                theory->clingodl->get_value(thread_id, index, *value);
+            }
+        }
+    }
+    CLINGODL_CATCH;
+}
+
+auto clingodl_on_statistics(void *self, clingo_stats_t *stats) -> bool {
+    CLINGODL_TRY {
+        auto theory = static_cast<clingodl_theory *>(self);
+        uint64_t root = 0;
+        handle_error(clingo_stats_root(stats, &root));
+        auto cpp_stats = Clingo::Stats{stats, root};
+        theory->clingodl->on_statistics(cpp_stats["user_step"].map(), cpp_stats["user_accu"].map());
     }
     CLINGODL_CATCH;
 }
@@ -644,10 +661,20 @@ extern "C" bool clingodl_create(clingo_lib_t *lib, clingo_theory_t *theory) {
     CLINGODL_TRY {
         auto self = std::make_unique<clingodl_theory>(lib);
         *theory = clingo_theory_t{
-            nullptr,          clingodl_destroy, clingodl_register, clingodl_rewrite_ast,
-            clingodl_prepare, nullptr,          nullptr,           nullptr,
-            nullptr,          nullptr,          nullptr,           nullptr,
-            nullptr,          self.release(),
+            clingodl_info,
+            clingodl_destroy,
+            clingodl_register,
+            clingodl_rewrite_ast,
+            clingodl_prepare,
+            clingodl_register_options,
+            clingodl_validate_options,
+            clingodl_configure,
+            clingodl_on_model,
+            clingodl_on_statistics,
+            clingodl_lookup_symbol,
+            clingodl_assignment_next,
+            clingodl_assignment_get_value,
+            self.release(),
         };
     }
     CLINGODL_CATCH;
