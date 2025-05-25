@@ -37,8 +37,6 @@ namespace ClingoDL {
     }                                                                                                                  \
     return true // NOLINT
 
-using Clingo::Detail::handle_error;
-
 namespace {
 auto add_(clingo_ast_t *stm, void *data) -> bool {
     auto *program = static_cast<clingo_program_t *>(data);
@@ -46,40 +44,22 @@ auto add_(clingo_ast_t *stm, void *data) -> bool {
 }
 } // namespace
 
-void rewrite(Clingo::Library const &lib, clingo_theory_t *theory, Clingo::AST::Program const &program,
-             Clingo::StringSpan files) {
-    auto scanner = Clingo::AST::Scanner{lib, files};
-    for (auto &stm : scanner) {
-        handle_error(theory->rewrite_ast(theory->self, c_cast(stm), add_, c_cast(program)));
-    }
-}
-
-void rewrite(Clingo::Library const &lib, clingo_theory_t *theory, Clingo::AST::Program const &program,
-             std::string_view str) {
-    auto scanner = Clingo::AST::Scanner{lib, str};
-    for (auto &stm : scanner) {
-        handle_error(theory->rewrite_ast(theory->self, c_cast(stm), add_, c_cast(program)));
-    }
-}
-
 Optimizer::Optimizer(Clingo::Library const &lib, OptimizerConfig const &opt_cfg, Clingo::SolveEventHandler &handler,
-                     clingo_theory_t *theory)
+                     Clingo::Theory const &theory)
     : lib_{lib}, opt_cfg_{opt_cfg}, handler_{handler}, theory_{theory} {}
 
 void Optimizer::solve(Clingo::Control const &ctl) {
-    auto prg = Clingo::AST::Program{lib_};
-    rewrite(lib_, theory_, prg,
-            // add a fixed bound
-            "#program __ub(s,b)."
-            "&diff { s-0 } <= b."
-            // retract previous bound
-            "#program __rb(b)."
-            "#external __sb(b). [release]"
-            // add a retractable bound
-            "#program __sb(s,b)."
-            "#external __sb(b). [true]"
-            "&diff { s-0 } <= b :- __sb(b).");
-    ctl.join(prg);
+    theory_.rewrite(lib_, ctl,
+                    // add a fixed bound
+                    "#program __ub(s,b)."
+                    "&diff { s-0 } <= b."
+                    // retract previous bound
+                    "#program __rb(b)."
+                    "#external __sb(b). [release]"
+                    // add a retractable bound
+                    "#program __sb(s,b)."
+                    "#external __sb(b). [true]"
+                    "&diff { s-0 } <= b :- __sb(b).");
     if (opt_cfg_.has_initial) {
         upper_bound_ = opt_cfg_.initial;
     }
@@ -146,23 +126,20 @@ auto Optimizer::do_model(Clingo::Model model) -> bool {
 auto Optimizer::get_bound(Clingo::Model model) -> int_value_t {
     // get bound
     bool found = false;
+    auto ass = theory_.assignment(model.thread_id());
     if (opt_cfg_.index == 0) {
-        handle_error(theory_->lookup_symbol(theory_->self, c_cast(opt_cfg_.symbol), &opt_cfg_.index, &found));
-        if (!found) {
+        if (auto index = ass.lookup(opt_cfg_.symbol)) {
+            opt_cfg_.index = *index;
+        } else {
             throw std::logic_error{"bound symbol not found"};
         }
     }
-    clingo_theory_value_t value;
-    handle_error(
-        theory_->assignment_get_value(theory_->self, model.thread_id(), opt_cfg_.index, nullptr, &value, &found));
-    if (!found) {
-        throw std::logic_error{"bound value not found"};
-    }
+    auto value = ass.at(opt_cfg_.index);
     // NOTE: minimizinig real values would require an epsilon
-    if (value.type != clingo_theory_value_type_int) {
-        throw std::runtime_error("only integer minimization is supported");
+    if (auto *ret = std::get_if<int>(&value.second); ret != nullptr) {
+        return *ret;
     }
-    return value.int_number;
+    throw std::runtime_error("only integer minimization is supported");
 }
 
 void Optimizer::prepare_(Clingo::Control const &ctl) {

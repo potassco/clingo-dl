@@ -34,32 +34,27 @@
 
 namespace ClingoDL {
 
-using Clingo::Detail::handle_error;
-
 //! Application class to run clingo-dl.
 class App : public Clingo::App, private Clingo::SolveEventHandler {
   public:
-    App() { handle_error(clingodl_create(c_cast(lib_), theory_)); }
+    App() = default;
     App(App &&other) = delete;
-    ~App() override { theory_->destroy(theory_->self); }
     //! Set program name to clingo-dl.
     auto do_program_name() noexcept -> std::string_view override { return "clingo-dl"; }
     //! Set the version.
     auto do_version() noexcept -> std::string_view override { return CLINGODL_VERSION; }
     //! Pass models to the theory.
     auto do_model(Clingo::Model model) -> bool override {
-        handle_error(theory_->on_model(theory_->self, c_cast(model)));
+        theory_.model(model);
         return true;
     }
     //! Pass statistics to the theory.
-    void do_stats(Clingo::Stats step, Clingo::Stats accu) override {
-        handle_error(theory_->on_stats(theory_->self, c_cast(accu)));
-    }
+    void do_stats(Clingo::Stats step, Clingo::Stats accu) override { theory_.stats(step, accu); }
     //! Run main solving function.
     void do_main(Clingo::Control const &ctl, Clingo::StringSpan files) override { // NOLINT
-        handle_error(theory_->register_theory(theory_->self, c_cast(ctl)));
+        theory_.register_theory(ctl);
         auto prg = Clingo::AST::Program{lib_};
-        rewrite(lib_, theory_, prg, files);
+        theory_.rewrite(lib_, ctl, files);
         ctl.join(prg);
         ctl.ground();
 #ifdef CLINGODL_PROFILE
@@ -108,7 +103,7 @@ class App : public Clingo::App, private Clingo::SolveEventHandler {
     //! Register options of the theory and optimization related options.
     void do_register_options(Clingo::Options options) override {
         using namespace std::string_view_literals;
-        handle_error(theory_->register_options(theory_->self, c_cast(options)));
+        theory_.register_options(options);
         auto group = "Clingo.DL Options"sv;
         options.add(group, "minimize-variable",
                     "Minimize the given variable\n"
@@ -121,12 +116,12 @@ class App : public Clingo::App, private Clingo::SolveEventHandler {
             [this](std::string_view value) { return parse_factor(value); }, false, "<factor>");
     }
     //! Validate options of the theory.
-    void do_validate_options() override { handle_error(theory_->validate_options(theory_->self)); }
+    void do_validate_options() override { theory_.validate_options(); }
 
   private:
     Clingo::Library lib_;
-    clingo_theory_t *theory_{nullptr}; //!< The underlying DL theory.
-    OptimizerConfig opt_cfg_;          //!< The optimization configuration.
+    Clingo::Theory theory_{lib_, clingodl_create};
+    OptimizerConfig opt_cfg_; //!< The optimization configuration.
 };
 
 } // namespace ClingoDL

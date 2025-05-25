@@ -27,8 +27,7 @@
 
 #include <clingo-dl.h>
 
-#include <clingo/ast.hh>
-#include <clingo/control.hh>
+#include <clingo/theory.hh>
 
 #include <optional>
 
@@ -36,12 +35,6 @@ namespace ClingoDL {
 
 //! Type used for integer values.
 using int_value_t = int;
-
-// NOTE: candidate for a c++ theory
-void rewrite(Clingo::Library const &lib, clingo_theory_t *theory, Clingo::AST::Program const &program,
-             Clingo::StringSpan files);
-void rewrite(Clingo::Library const &lib, clingo_theory_t *theory, Clingo::AST::Program const &program,
-             std::string_view str);
 
 //! The configuration of the optimization algorithm.
 struct OptimizerConfig {
@@ -62,7 +55,7 @@ class Optimizer : private Clingo::SolveEventHandler {
 
   public:
     Optimizer(Clingo::Library const &lib, OptimizerConfig const &opt_cfg, EventHandler &handler,
-              clingo_theory_t *theory);
+              Clingo::Theory const &theory);
     //! Run the optimization algorithm.
     //!
     //! \note
@@ -88,9 +81,9 @@ class Optimizer : private Clingo::SolveEventHandler {
     void prepare_(Clingo::Control const &ctl);
 
     Clingo::Library lib_;
+    Clingo::Theory const &theory_;   //!< The underlying DL theory.
     OptimizerConfig const &opt_cfg_; //!< Configuration of the optimization algorithm.
     EventHandler &handler_;          //!< Theory specific solve event handler.
-    clingo_theory_t *theory_;        //!< The underlying DL theory.
     Bound search_bound_;             //!< The current (volatile) search bound.
     Bound search_bound_last_;        //!< The previous search bound.
     Bound lower_bound_;              //!< The current lower bound (from UNSAT results).
