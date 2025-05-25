@@ -14,3 +14,4 @@ MANIFEST
 .mypy_cache/
 .conda-environment
 .cache
+.venv
