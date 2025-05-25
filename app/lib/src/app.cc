@@ -29,21 +29,6 @@
 
 namespace ClingoDL {
 
-#define CLINGODL_TRY try // NOLINT
-#define CLINGODL_CATCH                                                                                                 \
-    catch (...) {                                                                                                      \
-        Clingo::Detail::store_error();                                                                                 \
-        return false;                                                                                                  \
-    }                                                                                                                  \
-    return true // NOLINT
-
-namespace {
-auto add_(clingo_ast_t *stm, void *data) -> bool {
-    auto *program = static_cast<clingo_program_t *>(data);
-    return clingo_program_add(program, stm);
-}
-} // namespace
-
 Optimizer::Optimizer(Clingo::Library const &lib, OptimizerConfig const &opt_cfg, Clingo::SolveEventHandler &handler,
                      Clingo::Theory const &theory)
     : lib_{lib}, opt_cfg_{opt_cfg}, handler_{handler}, theory_{theory} {}
@@ -65,6 +50,7 @@ void Optimizer::solve(Clingo::Control const &ctl) {
     }
     for (;;) {
         prepare_(ctl);
+        theory_.prepare(ctl);
         auto ret = ctl.solve(*this).get();
         if (ret.interrupted()) {
             break;

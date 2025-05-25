@@ -37,7 +37,7 @@ namespace ClingoDL {
 //! Application class to run clingo-dl.
 class App : public Clingo::App, private Clingo::SolveEventHandler {
   public:
-    App() = default;
+    App(Clingo::Library const &lib) : lib_{lib} {}
     App(App &&other) = delete;
     //! Set program name to clingo-dl.
     auto do_program_name() noexcept -> std::string_view override { return "clingo-dl"; }
@@ -53,14 +53,13 @@ class App : public Clingo::App, private Clingo::SolveEventHandler {
     //! Run main solving function.
     void do_main(Clingo::Control const &ctl, Clingo::StringSpan files) override { // NOLINT
         theory_.register_theory(ctl);
-        auto prg = Clingo::AST::Program{lib_};
         theory_.rewrite(lib_, ctl, files);
-        ctl.join(prg);
         ctl.ground();
 #ifdef CLINGODL_PROFILE
         ProfilerStart("clingodl.solve.prof");
 #endif
         if (!opt_cfg_.active) {
+            theory_.prepare(ctl);
             std::ignore = ctl.solve(*this).get();
         } else {
             Optimizer{lib_, opt_cfg_, *this, theory_}.solve(ctl);
@@ -129,7 +128,7 @@ class App : public Clingo::App, private Clingo::SolveEventHandler {
 //! Run the clingo-dl application.
 auto main(int argc, char *argv[]) -> int { // NOLINT(bugprone-exception-escape)
     Clingo::Library lib;
-    ClingoDL::App app;
-    auto args = std::vector<std::string_view>{argv + 1, argv + argc - 1};
+    ClingoDL::App app{lib};
+    auto args = std::vector<std::string_view>{argv + 1, argv + argc};
     return Clingo::main(lib, args, &app);
 }
