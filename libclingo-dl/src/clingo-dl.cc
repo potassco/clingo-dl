@@ -429,7 +429,7 @@ template <class F, class... As> auto check_parse(char const *key, F fun, As &&..
 struct clingodl_theory {
     clingodl_theory(clingo_lib_t *lib) : lib{lib, true} {}
     Clingo::Library lib;
-    std::unique_ptr<PropagatorFacade> clingodl{nullptr};
+    std::unique_ptr<PropagatorFacade> clingodl;
     PropagatorConfig config;
     bool rdl{false};
     bool shift_constraints{false};
