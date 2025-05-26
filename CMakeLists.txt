@@ -100,3 +100,27 @@ add_subdirectory(lib libclingo-dl)
 if (CLINGODL_BUILD_APP)
     add_subdirectory(app)
 endif()
+
+if (CLINGODL_INSTALL_DEFAULT)
+    configure_package_config_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/clingo-dl-config.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/clingo-dl-config.cmake"
+        INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/clingo-dl"
+    )
+    write_basic_package_version_file(
+        "${CMAKE_CURRENT_BINARY_DIR}/clingo-dl-config-version.cmake"
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY AnyNewerVersion
+    )
+    install(
+        FILES
+            "${CMAKE_CURRENT_BINARY_DIR}/clingo-dl-config.cmake"
+            "${CMAKE_CURRENT_BINARY_DIR}/clingo-dl-config-version.cmake"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/clingo-dl"
+    )
+    install(EXPORT clingo-dl-targets
+        FILE clingo-dl-targets.cmake
+        NAMESPACE clingo-dl::
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/clingo-dl"
+    )
+endif()

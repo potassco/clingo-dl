@@ -27,7 +27,7 @@ function(clingodl_target_properties)
     if(clingodl_TYPE STREQUAL "extra" AND CLINGODL_INSTALL_EXTRA)
         install(
             TARGETS "${clingodl_TARGET}"
-            EXPORT clingo-targets
+            EXPORT clingo-dl-targets
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -36,7 +36,7 @@ function(clingodl_target_properties)
     elseif((clingodl_TYPE STREQUAL "default" OR clingodl_TYPE STREQUAL "binary") AND CLINGODL_INSTALL_DEFAULT)
         install(
             TARGETS "${clingodl_TARGET}"
-            EXPORT clingo-targets
+            EXPORT clingo-dl-targets
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
