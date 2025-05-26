@@ -7,6 +7,8 @@ if (CLINGODL_BUILD_TESTS AND NOT TARGET Catch2::Catch2WithMain)
     else()
         find_package(Catch2 3.1 REQUIRED)
     endif()
+    include(CTest)
+    include(Catch)
 endif()
 
 if (NOT DEFINED SKBUILD)

@@ -22,8 +22,8 @@
 //
 // }}}
 
-#include <clingo-dl-app/app.hh>
 #include <clingo-dl.h>
+#include <clingo-dl/optimizer.hh>
 #include <clingo-dl/propagator.hh>
 
 #include <clingo/theory.hh>

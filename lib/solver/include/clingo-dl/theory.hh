@@ -99,6 +99,9 @@ inline auto relation_to_string(Relation rel) -> std::string_view {
         case Relation::no_equal_to: {
             return "!=";
         }
+        default: {
+            throw std::logic_error{"invalid relation"};
+        }
     }
 }
 

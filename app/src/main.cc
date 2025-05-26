@@ -22,9 +22,10 @@
 
 // }}}
 
-#include <clingo-dl-app/app.hh>
-#include <clingo-dl.h>
+#include <clingo-dl/optimizer.hh>
+
 #include <clingo/app.hh>
+
 #include <limits>
 #include <sstream>
 

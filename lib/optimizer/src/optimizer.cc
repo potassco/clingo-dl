@@ -22,7 +22,7 @@
 
 // }}}
 
-#include <clingo-dl-app/app.hh>
+#include <clingo-dl/optimizer.hh>
 
 #include <cmath>
 #include <limits>
@@ -31,7 +31,7 @@ namespace ClingoDL {
 
 Optimizer::Optimizer(Clingo::Library const &lib, OptimizerConfig const &opt_cfg, Clingo::SolveEventHandler &handler,
                      Clingo::Theory const &theory)
-    : lib_{lib}, opt_cfg_{opt_cfg}, handler_{handler}, theory_{theory} {}
+    : lib_{lib}, theory_{theory}, opt_cfg_{opt_cfg}, handler_{handler} {}
 
 void Optimizer::solve(Clingo::Control const &ctl) {
     theory_.rewrite(lib_, ctl,
@@ -111,7 +111,6 @@ auto Optimizer::do_model(Clingo::Model model) -> bool {
 
 auto Optimizer::get_bound(Clingo::Model model) -> int_value_t {
     // get bound
-    bool found = false;
     auto ass = theory_.assignment(model.thread_id());
     if (opt_cfg_.index == 0) {
         if (auto index = ass.lookup(opt_cfg_.symbol)) {

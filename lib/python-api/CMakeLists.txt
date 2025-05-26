@@ -8,5 +8,6 @@ set(source
 # ]]]
 
 pybind11_add_module(pyclingodl ${source})
+clingodl_target_properties(TARGET pyclingodl FOLDER "lib" SUBDIR "python")
 set_target_properties(pyclingodl PROPERTIES OUTPUT_NAME "clingodl")
-target_link_libraries(pyclingodl PRIVATE libclingo-dl Python::Module)
+target_link_libraries(pyclingodl PRIVATE clingo-dl Python::Module)

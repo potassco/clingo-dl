@@ -140,8 +140,12 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
     DLPropagatorFacade(clingo_lib_t *lib, clingo_control_t *control, PropagatorConfig const &conf)
         : prop_{Clingo::Library{lib, true}, step_, conf} {
         handle_error(clingo_control_parse_string(control, THEORY, std::strlen(THEORY)));
-        static clingo_propagator_t prop = {init<T>, propagate<T>, undo<T>, check<T>,
-                                           conf.decision_mode != DecisionMode::Disabled ? decide<T> : nullptr};
+        static clingo_propagator_t prop = {init<T>,
+                                           propagate<T>,
+                                           undo<T>,
+                                           check<T>,
+                                           conf.decision_mode != DecisionMode::Disabled ? decide<T> : nullptr,
+                                           nullptr};
         handle_error(clingo_control_register_propagator(control, &prop, &prop_));
     }
 
@@ -269,7 +273,6 @@ auto parse_uint64(std::string_view value) -> std::optional<uint64_t> {
 //! The thread number is optional and can follow separated with a comma.
 template <typename F, typename G> auto set_config(std::string_view value, void *data, F f, G g) -> bool {
     auto &config = *static_cast<PropagatorConfig *>(data);
-    uint64_t id = 0;
     if (value.empty()) {
         f(config);
         return true;
@@ -536,7 +539,7 @@ struct clingodl_theory {
             auto opt = [&](std::string_view name, std::string_view desc, clingo_option_parser_t parser,
                            bool multi = false, std::string_view arg = {}) {
                 handle_error(clingo_options_add(options, group.data(), group.size(), name.data(), name.size(),
-                                                desc.data(), desc.size(), parser, &theory->config, true,
+                                                desc.data(), desc.size(), parser, &theory->config, multi,
                                                 arg.empty() ? nullptr : arg.data(), arg.size()));
             };
             auto flag = [&](std::string_view name, std::string_view desc, bool &target) {

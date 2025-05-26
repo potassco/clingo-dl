@@ -31,12 +31,12 @@ namespace ClingoDL {
 namespace {
 
 template <typename T, typename std::enable_if<std::is_integral_v<T>, bool>::type = true>
-inline auto to_symbol(Clingo::Library &lib, T value) -> Clingo::Symbol {
+inline auto to_symbol([[maybe_unused]] Clingo::Library const &lib, T value) -> Clingo::Symbol {
     return Clingo::Number(value);
 }
 
 template <typename T, typename std::enable_if<std::is_floating_point_v<T>, bool>::type = true>
-inline auto to_symbol(Clingo::Library &lib, T value) -> Clingo::Symbol {
+inline auto to_symbol(Clingo::Library const &lib, T value) -> Clingo::Symbol {
     return Clingo::String(lib, std::to_string(value));
 }
 
@@ -197,8 +197,8 @@ void DLPropagator<T>::do_propagate(Clingo::PropagateControl ctl, Clingo::SolverL
 }
 
 template <typename T>
-void DLPropagator<T>::do_undo(id_t thread_id, Clingo::Assignment assignment, Clingo::SolverLiteralSpan changes) {
-    static_cast<void>(changes);
+void DLPropagator<T>::do_undo(id_t thread_id, [[maybe_unused]] Clingo::Assignment assignment,
+                              [[maybe_unused]] Clingo::SolverLiteralSpan changes) {
     auto &state = states_[thread_id];
     Timer t{state.stats.time_undo};
     state.graph.backtrack();
@@ -421,7 +421,7 @@ void DLPropagator<T>::add_edge_(Clingo::PropagateInit &init, vertex_t u_id, vert
     auto id = numeric_cast<edge_t>(edges_.size());
     edges_.push_back({u_id, v_id, weight, lit});
     lit_to_edges_.emplace(lit, id);
-    for (int i = 0; i < init.number_of_threads(); ++i) {
+    for (id_t i = 0; i < init.number_of_threads(); ++i) {
         init.add_watch(lit, i);
         if (conf_.get_propagate_mode(i) >= PropagationMode::Zero || conf_.get_propagate_root(i) > 0 ||
             conf_.get_propagate_budget(i) > 0) {

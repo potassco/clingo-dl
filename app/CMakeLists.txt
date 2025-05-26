@@ -7,15 +7,8 @@ set(source
     ${source-group})
 # ]]]
 
-add_subdirectory(lib)
-
-add_executable(clingo-dl ${source})
-target_link_libraries(clingo-dl PRIVATE clingo::clingo libclingo-dl-app)
-set_target_properties(clingo-dl PROPERTIES FOLDER exe)
-
-install(TARGETS clingo-dl
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-
+add_executable(clingo-dl-bin)
+target_sources(clingo-dl-bin PRIVATE ${source})
+clingodl_target_properties(TARGET clingo-dl-bin FOLDER "bin" TYPE default)
+target_link_libraries(clingo-dl-bin PRIVATE clingo-dl-optimizer)
+set_target_properties(clingo-dl-bin PROPERTIES OUTPUT_NAME clingo-dl)

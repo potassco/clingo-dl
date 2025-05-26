@@ -22,7 +22,6 @@
 //
 // }}}
 
-#include <clingo-dl-app/app.hh>
 #include <clingo-dl.h>
 #include <clingo-dl/propagator.hh>
 
