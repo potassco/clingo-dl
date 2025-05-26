@@ -36,11 +36,22 @@ target_include_directories(clingo-dl PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_S
 target_link_libraries(clingo-dl PUBLIC clingo-dl-solver)
 if (CLINGODL_USE_VISIBILITY)
     target_compile_definitions(clingo-dl-solver PRIVATE "$<BUILD_INTERFACE:CLINGODL_BUILD_LIBRARY>")
+else()
+    target_compile_definitions(clingo-dl-solver PUBLIC CLINGODL_NO_VISIBILITY)
+endif()
+
+if (CLINGODL_INSTALL_DEFAULT)
+    install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN "*.h")
+elseif (CLINGODL_INSTALL_WHEEL AND CLINGODL_BUILD_SHARED)
+    install(
+        TARGETS clingodl
+        RUNTIME DESTINATION "."
+        LIBRARY DESTINATION ".")
 endif()
 
 if (CLINGODL_BUILD_TESTS)
     add_library(clingo-dl_t STATIC)
-    clingodl_target_properties(TARGET clingo-dl_t FOLDER "lib" TYPE default)
+    clingodl_target_properties(TARGET clingo-dl_t FOLDER "lib")
     target_sources(clingo-dl_t PRIVATE ${header} ${source})
     target_link_libraries(clingo-dl_t PUBLIC clingo-dl-solver)
     target_include_directories(clingo-dl_t PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")

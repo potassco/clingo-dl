@@ -37,7 +37,7 @@ set(test
 # ]]]
 
 add_library(clingo-dl-solver STATIC)
-clingodl_target_properties(TARGET clingo-dl-solver FOLDER "lib" TYPE default)
+clingodl_target_properties(TARGET clingo-dl-solver FOLDER "lib" TYPE extra)
 target_sources(clingo-dl-solver PRIVATE ${header} ${source})
 target_include_directories(clingo-dl-solver PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
 target_link_libraries(clingo-dl-solver PUBLIC clingo::clingo)
@@ -48,7 +48,7 @@ endif()
 
 if (CLINGODL_BUILD_TESTS)
     add_library(clingo-dl-solver_t STATIC)
-    clingodl_target_properties(TARGET clingo-dl-solver_t FOLDER "lib" TYPE default)
+    clingodl_target_properties(TARGET clingo-dl-solver_t FOLDER "lib")
     target_sources(clingo-dl-solver_t PRIVATE ${header} ${source})
     target_link_libraries(clingo-dl-solver_t PUBLIC clingo::clingo)
     target_include_directories(clingo-dl-solver_t PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
