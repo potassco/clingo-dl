@@ -44,9 +44,20 @@ if (CLINGODL_INSTALL_DEFAULT)
     install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN "*.h")
 elseif (CLINGODL_INSTALL_WHEEL AND CLINGODL_BUILD_SHARED)
     install(
-        TARGETS clingodl
+        TARGETS clingo-dl
         RUNTIME DESTINATION "."
         LIBRARY DESTINATION ".")
+    if (CLINGODL_BUILD_SHARED)
+        if (APPLE)
+            set_target_properties(clingo-dl
+                PROPERTIES INSTALL_RPATH "@loader_path"
+                BUILD_WITH_INSTALL_RPATH TRUE)
+        elseif (UNIX)
+            set_target_properties(clingo-dl
+                PROPERTIES INSTALL_RPATH "$ORIGIN"
+                BUILD_WITH_INSTALL_RPATH TRUE)
+        endif()
+    endif()
 endif()
 
 if (CLINGODL_BUILD_TESTS)

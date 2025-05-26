@@ -19,11 +19,11 @@ if (CLINGODL_INSTALL_WHEEL)
         LIBRARY DESTINATION ".")
     if (CLINGODL_BUILD_SHARED)
         if (APPLE)
-            set_target_properties(clingodl
+            set_target_properties(pyclingodl
                 PROPERTIES INSTALL_RPATH "@loader_path"
                 BUILD_WITH_INSTALL_RPATH TRUE)
         elseif (UNIX)
-            set_target_properties(clingodl
+            set_target_properties(pyclingodl
                 PROPERTIES INSTALL_RPATH "$ORIGIN"
                 BUILD_WITH_INSTALL_RPATH TRUE)
         endif()
@@ -59,3 +59,12 @@ elseif(CLINGODL_INSTALL_DEFAULT)
         LIBRARY DESTINATION "${python_install_dir}")
 endif()
 
+if (PYTEST_EXECUTABLE)
+    pytest_discover_tests(
+        test_pyclingo
+        PYTHON_PATH_PREPEND
+            $<TARGET_FILE_DIR:pyclingodl>
+        DEPENDS
+            pyclingodl
+    )
+endif()

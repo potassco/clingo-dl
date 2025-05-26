@@ -1,2 +1,35 @@
+[project]
+name = "clingo-dl"
+version = "1.5.0"
+dependencies = [
+    "clingo @ file:///home/kaminski/Documents/git/potassco/parsertest/dist/clingo-6.0.0-cp312-cp312-linux_x86_64.whl"
+]
+
+[project.scripts]
+pyclingo = "clingo.app:_pyclingo"
+
 [build-system]
-requires = ["setuptools", "wheel", "scikit-build", "cmake", "ninja", "clingo"]
+requires = ["scikit-build-core", "pybind11", "re2c",
+    "clingo @ file:///home/kaminski/Documents/git/potassco/parsertest/dist/clingo-6.0.0-cp312-cp312-linux_x86_64.whl"]
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build.sdist]
+include = ["lib/*", "third_party/*", "app/*", "CMakeLists.txt"]
+exclude = ["*.pyc"]
+
+[tool.scikit-build.wheel]
+exclude = ["bin/*", "share/*"]
+
+[tool.pytest.ini_options]
+addopts = [
+    "--ignore=third_party",
+    "--ignore=doc",
+    "--ignore=.git",
+]
+testpaths = ["lib"]
+
+[tool.ruff]
+ignore = ["E741"]
+
+[tool.pylint.design]
+min-public-methods = 1
