@@ -133,7 +133,7 @@ auto shift_rule(Clingo::Library &lib, Clingo::AST::Node ast) -> Clingo::AST::Nod
 }
 
 //! Tag terms depending on whether they occur in heads or bodies.
-auto tag_terms(Clingo::Library &lib, Clingo::AST::Node &ast, std::string_view tag) -> Clingo::AST::Node {
+auto tag_terms(Clingo::Library const &lib, Clingo::AST::Node const &ast, std::string_view tag) -> Clingo::AST::Node {
     using namespace Clingo::AST;
     auto tag_string = [tag](std::string_view str) {
         auto res = std::string{"__"};
@@ -158,36 +158,45 @@ auto tag_terms(Clingo::Library &lib, Clingo::AST::Node &ast, std::string_view ta
     return throw_syntax_error<Node>();
 }
 
+// NOTE: msvc cannot handle nested templated lambdas
+template <Clingo::AST::NodeType N> struct Update {
+    template <Clingo::AST::Attribute attr> auto operator()() const {
+        using namespace Clingo::AST;
+        if constexpr (attr == Attribute::elements) {
+            auto elements = ast.nodes(attr);
+            check_syntax(elements.size() == 1);
+            Clingo::AST::Node element = *elements.begin();
+            auto tuple = element.nodes(Attribute::terms);
+            check_syntax(tuple.size() == 1);
+            auto condition = element.nodes(Attribute::condition);
+            check_syntax(condition.empty());
+        }
+        if constexpr (attr == Attribute::name) {
+            return tag_terms(lib, term, N == NodeType::body_theory_atom ? "_b" : "_h");
+        }
+    }
+    Clingo::Library const &lib;
+    Clingo::AST::Node const &ast;
+    Clingo::AST::Node const &term;
+};
+
 auto rewrite_theory(Clingo::Library &lib, Clingo::AST::Node const &ast) -> std::optional<Clingo::AST::Node> {
     using namespace Clingo::AST;
     using T = NodeType;
     using A = Attribute;
+    auto transform = [&]<T N>(Clingo::AST::Node const &ast) -> std::optional<Node> {
+        auto term = ast.node(A::name);
+        if (match_constant(term, "diff")) {
+            return ast.update<N>(lib, Update<N>{lib, ast, term});
+        }
+        return std::nullopt;
+    };
     Transformer trans = [&](Clingo::AST::Node const &ast) -> std::optional<Node> {
-        auto update = [&]<T N>() -> std::optional<Node> {
-            auto term = ast.node(A::name);
-            if (match_constant(term, "diff")) {
-                return ast.update<N>(lib, [&]<A attr>() {
-                    if constexpr (attr == A::elements) {
-                        auto elements = ast.nodes(attr);
-                        check_syntax(elements.size() == 1);
-                        Clingo::AST::Node element = *elements.begin();
-                        auto tuple = element.nodes(A::terms);
-                        check_syntax(tuple.size() == 1);
-                        auto condition = element.nodes(Attribute::condition);
-                        check_syntax(condition.empty());
-                    }
-                    if constexpr (attr == A::name) {
-                        return tag_terms(lib, term, N == T::body_theory_atom ? "_b" : "_h");
-                    }
-                });
-            }
-            return std::nullopt;
-        };
         if (ast.type() == T::body_theory_atom) {
-            return update.template operator()<T::body_theory_atom>();
+            return transform.template operator()<T::body_theory_atom>(ast);
         }
         if (ast.type() == T::head_theory_atom) {
-            return update.template operator()<T::head_theory_atom>();
+            return transform.template operator()<T::head_theory_atom>(ast);
         }
         return ast.accept(lib, trans);
     };
@@ -202,13 +211,23 @@ constexpr int INVALID_VAR{std::numeric_limits<int>::max()};
 
 //! Parse a string to a number.
 template <class T> [[nodiscard]] auto parse_number(std::string_view name) -> std::optional<T> {
+#if defined(__APPLE__)
+    auto res = T{};
+    auto iss = std::istringstream{std::string{name}};
+    iss >> res;
+    if (!iss || !iss.eof()) {
+        return std::nullopt;
+    }
+    return res;
+#else
     T res = 0;
-    auto end = name.data() + name.size();
+    auto const *end = name.data() + name.size();
     auto [ptr, ec] = std::from_chars(name.data(), end, res);
     if (ec != std::errc{} || ptr != end) {
         return std::nullopt;
     }
     return res;
+#endif
 }
 
 //! Convert a symbol to a double or integer.

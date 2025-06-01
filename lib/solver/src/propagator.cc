@@ -85,7 +85,7 @@ template <typename T> struct DLPropagator<T>::VertexInfo {
 //! Struct to store thread specific state.
 template <typename T> struct DLPropagator<T>::ThreadState {
     ThreadState(ThreadStatistics &stats, const std::vector<Edge> &edges, PropagationMode propagate,
-                level_t propagate_root, uint64_t propagate_budget)
+                uint64_t propagate_root, uint64_t propagate_budget)
         : stats{stats}, graph{stats, edges, propagate}, propagate_root{propagate_root},
           propagate_budget{propagate_budget} {}
 
