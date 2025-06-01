@@ -5,24 +5,27 @@ function(clingodl_target_properties)
     cmake_parse_arguments(clingodl "${options}" "${single_values}" "${multi_values}" ${ARGV})
 
     set(binary_subdir "bin")
+    set(library_subdir "lib")
     if(clingodl_SUBDIR)
         set(binary_subdir "bin/${clingodl_SUBDIR}")
+        set(library_subdir "lib/${clingodl_SUBDIR}")
     endif()
 
     get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
-    set(base_dir "${CMAKE_BINARY_DIR}")
     if(is_multi_config)
-        set(base_dir "${base_dir}/$<CONFIG>")
+        set(binary_subdir "${binary_subdir}/$<CONFIG>")
+        set(library_subdir "${library_subdir}/$<CONFIG>")
     endif()
 
-    set_target_properties("${clingodl_TARGET}" PROPERTIES
-        FOLDER "${clingodl_FOLDER}"
-        POSITION_INDEPENDENT_CODE ON
-        RUNTIME_OUTPUT_DIRECTORY "${base_dir}/${binary_subdir}"
-        LIBRARY_OUTPUT_DIRECTORY "${base_dir}/${binary_subdir}"
-        ARCHIVE_OUTPUT_DIRECTORY "${base_dir}/lib"
-        PDB_OUTPUT_DIRECTORY "${base_dir}/bin"
-    )
+    if (clingodl_FOLDER)
+        set_target_properties(${clingo_TARGETS} PROPERTIES
+            FOLDER "${clingodl_FOLDER}"
+            POSITION_INDEPENDENT_CODE ON
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${binary_subdir}"
+            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${binary_subdir}"
+            ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${library_subdir}"
+            PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${binary_subdir}")
+    endif()
 
     if(clingodl_TYPE STREQUAL "extra" AND CLINGODL_INSTALL_EXTRA)
         install(

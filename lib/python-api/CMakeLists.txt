@@ -60,7 +60,8 @@ elseif(CLINGODL_INSTALL_DEFAULT)
 endif()
 
 if (CLINGODL_BUILD_TESTS AND PYTEST_EXECUTABLE)
-    if (WIN32 AND CLINGODL_BUILD_SHARED)
+    if (WIN32)
+        # NOTE: python from conda-forge with more than one element in the path fails for whatever reason
         set(python_subdir "${CMAKE_BINARY_DIR}/bin/python/")
         get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
         if(is_multi_config)
@@ -72,11 +73,19 @@ if (CLINGODL_BUILD_TESTS AND PYTEST_EXECUTABLE)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:pyclingodl>" "${python_subdir}"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:clingo::pyclingo>" "${python_subdir}"
         )
+        pytest_discover_tests(
+            test_pyclingo
+            PYTHON_PATH_PREPEND "$<TARGET_FILE_DIR:pyclingodl>"
+            WORKING_DIRECTORY "tests"
+            DEPENDS pyclingodl
+        )
+    else()
+        pytest_discover_tests(
+            test_pyclingo
+            PYTHON_PATH_PREPEND "$<TARGET_FILE_DIR:pyclingodl>" "$<TARGET_FILE_DIR:clingo::pyclingo>"
+            LIBRARY_PATH_PREPEND "$<TARGET_FILE_DIR:clingo-dl>" "$<TARGET_FILE_DIR:clingo::clingo>"
+            WORKING_DIRECTORY "tests"
+            DEPENDS pyclingodl
+        )
     endif()
-    pytest_discover_tests(
-        test_pyclingo
-        PYTHON_PATH_PREPEND $<TARGET_FILE_DIR:pyclingodl> $<TARGET_FILE_DIR:clingo::pyclingo>
-        LIBRARY_PATH_PREPEND $<TARGET_FILE_DIR:clingo-dl> $<TARGET_FILE_DIR:clingo::clingo>
-        DEPENDS pyclingodl
-    )
 endif()
