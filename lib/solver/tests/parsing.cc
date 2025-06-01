@@ -65,7 +65,7 @@ template <class N> auto parse(std::string_view str) -> V {
     V ret;
     for (auto atom : ctl.base().theory()) {
         auto edge = ClingoDL::parse<N>(lib, atom, [&](Clingo::Symbol sym) {
-            auto [it, ins] = vertex_map.try_emplace(sym, vertices.size());
+            auto [it, ins] = vertex_map.try_emplace(sym, static_cast<vertex_t>(vertices.size()));
             if (ins) {
                 vertices.emplace_back(it->first);
             }

@@ -18,7 +18,7 @@ function(clingodl_target_properties)
     endif()
 
     if (clingodl_FOLDER)
-        set_target_properties(${clingo_TARGETS} PROPERTIES
+        set_target_properties(${clingodl_TARGET} PROPERTIES
             FOLDER "${clingodl_FOLDER}"
             POSITION_INDEPENDENT_CODE ON
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${binary_subdir}"

@@ -61,7 +61,8 @@ elseif (CLINGODL_INSTALL_WHEEL AND CLINGODL_BUILD_SHARED)
 endif()
 
 if (CLINGODL_BUILD_TESTS)
-    if (WIN32 AND CLINGODL_BUILD_SHARED)
+    if (WIN32)
+        # NOTE: needed to get the test explorer working
         set(test_subdir "${CMAKE_BINARY_DIR}/bin/tests/")
         set(python_subdir "${CMAKE_BINARY_DIR}/bin/python/")
         get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
@@ -69,11 +70,17 @@ if (CLINGODL_BUILD_TESTS)
             set(test_subdir "${test_subdir}$<CONFIG>/")
             set(python_subdir "${python_subdir}$<CONFIG>/")
         endif()
+        if (CLINGODL_BUILD_SHARED)
+            add_custom_command(
+                TARGET clingo-dl POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory "${python_subdir}"
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:clingo-dl>" "${python_subdir}"
+            )
+        endif()
         add_custom_command(
             TARGET clingo-dl POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory "${test_subdir}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${python_subdir}"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:clingo-dl>" "${python_subdir}"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:clingo::clingo>" "${test_subdir}"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:clingo::clingo>" "${python_subdir}"
         )
@@ -90,5 +97,5 @@ if (CLINGODL_BUILD_TESTS)
     clingodl_target_properties(TARGET test_c-api FOLDER "test" SUBDIR "tests")
     target_sources(test_c-api PRIVATE ${test})
     target_link_libraries(test_c-api PRIVATE clingo-dl_t Catch2::Catch2WithMain)
-    catch_discover_tests(test_c-api)
+    catch_discover_tests(test_c-api DL_PATH "$<TARGET_FILE_DIR:clingo::clingo>")
 endif()
