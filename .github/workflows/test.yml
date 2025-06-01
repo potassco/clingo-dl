@@ -47,14 +47,6 @@ jobs:
             -DCLINGODL_BUILD_TESTS=On \
             -DCLINGODL_BUILD_APP=On
 
-      - name: Debug Env
-        run: |
-          env
-
-      - name: Debug Python
-        run: |
-          python -c "import sys; print('\n'.join(sys.path))"
-
       - name: Build
         run: |
           cmake --build build --config Release
