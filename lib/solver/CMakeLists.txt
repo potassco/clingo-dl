@@ -55,7 +55,7 @@ if (CLINGODL_BUILD_TESTS)
     target_compile_definitions(clingo-dl-solver_t PUBLIC CLINGODL_CROSSCHECK)
 
     add_executable(test_solver)
-    clingodl_target_properties(TARGET test_solver FOLDER "test" SUBDIR "test")
+    clingodl_target_properties(TARGET test_solver FOLDER "test" SUBDIR "tests")
     target_sources(test_solver PRIVATE ${test})
     target_link_libraries(test_solver PRIVATE clingo-dl-solver_t Catch2::Catch2WithMain)
     catch_discover_tests(test_solver)

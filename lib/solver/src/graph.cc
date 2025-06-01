@@ -1092,7 +1092,7 @@ template <typename T> template <bool full> bool Graph<T>::propagate_edge_true_(e
             static_cast<void>(bf_cost_uy);
             static_cast<void>(bf_cost_xv);
             assert(bf_cost_uy != bf_costs_from_u->end());
-            assert(bf_cost_xv != bf_costs_from_u->end());
+            assert(bf_cost_xv != bf_costs_from_x->end());
             assert(bf_cost_uy->second == cost_uy);
             assert(bf_cost_xv->second == cost_xv);
 #endif

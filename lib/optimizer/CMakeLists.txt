@@ -37,7 +37,7 @@ if (CLINGODL_BUILD_TESTS)
     target_link_libraries(clingo-dl-optimizer_t PUBLIC clingo-dl_t)
 
     add_executable(test_optimizer)
-    clingodl_target_properties(TARGET test_optimizer FOLDER "test" SUBDIR "test")
+    clingodl_target_properties(TARGET test_optimizer FOLDER "test" SUBDIR "tests")
     target_sources(test_optimizer PRIVATE ${test})
     target_link_libraries(test_optimizer PRIVATE clingo-dl-optimizer_t Catch2::Catch2WithMain)
     catch_discover_tests(test_optimizer)

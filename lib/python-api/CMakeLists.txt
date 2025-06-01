@@ -59,12 +59,24 @@ elseif(CLINGODL_INSTALL_DEFAULT)
         LIBRARY DESTINATION "${python_install_dir}")
 endif()
 
-if (PYTEST_EXECUTABLE)
+if (CLINGODL_BUILD_TESTS AND PYTEST_EXECUTABLE)
+    if (WIN32 AND CLINGODL_BUILD_SHARED)
+        set(python_subdir "${CMAKE_BINARY_DIR}/bin/python/")
+        get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+        if(is_multi_config)
+            set(python_subdir "${python_subdir}$<CONFIG>/")
+        endif()
+        add_custom_command(
+            TARGET pyclingodl POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${python_subdir}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:pyclingodl>" "${python_subdir}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:clingo::pyclingo>" "${python_subdir}"
+        )
+    endif()
     pytest_discover_tests(
         test_pyclingo
-        PYTHON_PATH_PREPEND
-            $<TARGET_FILE_DIR:pyclingodl>
-        DEPENDS
-            pyclingodl
+        PYTHON_PATH_PREPEND $<TARGET_FILE_DIR:pyclingodl> $<TARGET_FILE_DIR:clingo::pyclingo>
+        LIBRARY_PATH_PREPEND $<TARGET_FILE_DIR:clingo-dl> $<TARGET_FILE_DIR:clingo::clingo>
+        DEPENDS pyclingodl
     )
 endif()
