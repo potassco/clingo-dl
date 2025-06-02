@@ -30,7 +30,6 @@ if (CLINGODL_INSTALL_WHEEL)
     endif()
 elseif(CLINGODL_INSTALL_DEFAULT)
     if (PYCLINGODL_INSTALL_DIR STREQUAL "")
-        MESSAGE(STATUS "heer!!!")
         if (PYCLINGODL_INSTALL STREQUAL "user")
             execute_process(
                 COMMAND "${Python_EXECUTABLE}" "${CLINGODL_SOURCE_DIR}/cmake/python-site.py" target --user
