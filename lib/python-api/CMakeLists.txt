@@ -7,29 +7,30 @@ set(source
     ${source-group})
 # ]]]
 
-pybind11_add_module(pyclingodl)
-target_sources(pyclingodl PRIVATE ${source})
-clingodl_target_properties(TARGET pyclingodl FOLDER "lib" SUBDIR "python")
-set_target_properties(pyclingodl PROPERTIES OUTPUT_NAME "clingodl")
-target_link_libraries(pyclingodl PRIVATE clingo-dl Python::Module)
+pybind11_add_module(clingo-dl-python-api)
+target_sources(clingo-dl-python-api PRIVATE ${source})
+clingodl_target_properties(TARGET clingo-dl-python-api FOLDER "lib" SUBDIR "python")
+set_target_properties(clingo-dl-python-api PROPERTIES OUTPUT_NAME "clingodl")
+target_link_libraries(clingo-dl-python-api PRIVATE clingo-dl Python::Module)
 
 if (CLINGODL_INSTALL_WHEEL)
-    install(TARGETS pyclingodl
+    install(TARGETS clingo-dl-python-api
         RUNTIME DESTINATION "."
         LIBRARY DESTINATION ".")
     if (CLINGODL_BUILD_SHARED)
         if (APPLE)
-            set_target_properties(pyclingodl
+            set_target_properties(clingo-dl-python-api
                 PROPERTIES INSTALL_RPATH "@loader_path"
                 BUILD_WITH_INSTALL_RPATH TRUE)
         elseif (UNIX)
-            set_target_properties(pyclingodl
+            set_target_properties(clingo-dl-python-api
                 PROPERTIES INSTALL_RPATH "$ORIGIN"
                 BUILD_WITH_INSTALL_RPATH TRUE)
         endif()
     endif()
 elseif(CLINGODL_INSTALL_DEFAULT)
     if (PYCLINGODL_INSTALL_DIR STREQUAL "")
+        MESSAGE(STATUS "heer!!!")
         if (PYCLINGODL_INSTALL STREQUAL "user")
             execute_process(
                 COMMAND "${Python_EXECUTABLE}" "${CLINGODL_SOURCE_DIR}/cmake/python-site.py" target --user
@@ -54,7 +55,7 @@ elseif(CLINGODL_INSTALL_DEFAULT)
         FILES "${CMAKE_CURRENT_BINARY_DIR}/INSTALLER" "${CMAKE_CURRENT_BINARY_DIR}/METADATA"
         DESTINATION "${python_install_dir}/clingodl-${CLINGODL_VERSION}.dist-info")
     install(
-        TARGETS pyclingodl
+        TARGETS clingo-dl-python-api
         RUNTIME DESTINATION "${python_install_dir}"
         LIBRARY DESTINATION "${python_install_dir}")
 endif()
@@ -68,24 +69,24 @@ if (CLINGODL_BUILD_TESTS AND PYTEST_EXECUTABLE)
             set(python_subdir "${python_subdir}$<CONFIG>/")
         endif()
         add_custom_command(
-            TARGET pyclingodl POST_BUILD
+            TARGET clingo-dl-python-api POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory "${python_subdir}"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:pyclingodl>" "${python_subdir}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:clingo-dl-python-api>" "${python_subdir}"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:clingo::pyclingo>" "${python_subdir}"
         )
         pytest_discover_tests(
             test_pyclingo
             PYTHON_PATH_PREPEND "${python_subdir}"
             WORKING_DIRECTORY "tests"
-            DEPENDS pyclingodl
+            DEPENDS clingo-dl-python-api
         )
     else()
         pytest_discover_tests(
             test_pyclingo
-            PYTHON_PATH_PREPEND "$<TARGET_FILE_DIR:pyclingodl>" "$<TARGET_FILE_DIR:clingo::pyclingo>"
+            PYTHON_PATH_PREPEND "$<TARGET_FILE_DIR:clingo-dl-python-api>" "$<TARGET_FILE_DIR:clingo::pyclingo>"
             LIBRARY_PATH_PREPEND "$<TARGET_FILE_DIR:clingo-dl>" "$<TARGET_FILE_DIR:clingo::clingo>"
             WORKING_DIRECTORY "tests"
-            DEPENDS pyclingodl
+            DEPENDS clingo-dl-python-api
         )
     endif()
 endif()
