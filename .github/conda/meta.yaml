@@ -28,7 +28,7 @@ build:
 test:
   commands:
   - clingo-dl --version
-  - python -c 'import clingodl'
+  - python -c "import clingodl"
 
 about:
   home: https://potassco.org/

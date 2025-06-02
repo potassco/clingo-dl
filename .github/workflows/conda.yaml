@@ -1,7 +1,6 @@
 name: Conda
 
 on:
-  push:
   workflow_dispatch:
     inputs:
       label:
@@ -59,6 +58,7 @@ jobs:
         shell: bash -l {0}
         run: |
           conda build .github/conda \
+            -c potassco/label/dev-20 \
             --output-folder ./artifacts \
             --python "${{ matrix.python-version }}"
           find artifacts -type f ! -name "*.conda" -delete
@@ -94,7 +94,6 @@ jobs:
           conda install anaconda-client
 
       - name: Upload
-        if: false
         shell: bash -l {0}
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}

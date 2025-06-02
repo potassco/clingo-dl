@@ -12,7 +12,7 @@ REPO = "clingo-dl"
 OWNER = "potassco"
 API_URL = f"https://api.github.com/repos/{OWNER}/{REPO}"
 TOKEN_FILE = os.path.expanduser("~/.tokens")
-WORKFLOW_ID_CONDA = "TODO"
+WORKFLOW_ID_CONDA = "165699066"
 
 
 def get_token():
