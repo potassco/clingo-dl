@@ -7,23 +7,23 @@ set(source
     ${source-group})
 # ]]]
 
-pybind11_add_module(clingo-dl-python-api)
-target_sources(clingo-dl-python-api PRIVATE ${source})
-clingodl_target_properties(TARGET clingo-dl-python-api FOLDER "lib" SUBDIR "python")
-set_target_properties(clingo-dl-python-api PROPERTIES OUTPUT_NAME "clingodl")
-target_link_libraries(clingo-dl-python-api PRIVATE clingo-dl Python::Module)
+pybind11_add_module(pyclingo-dl)
+target_sources(pyclingo-dl PRIVATE ${source})
+clingodl_target_properties(TARGET pyclingo-dl FOLDER "lib" SUBDIR "python")
+set_target_properties(pyclingo-dl PROPERTIES OUTPUT_NAME "clingodl")
+target_link_libraries(pyclingo-dl PRIVATE clingo-dl Python::Module)
 
 if (CLINGODL_INSTALL_WHEEL)
-    install(TARGETS clingo-dl-python-api
+    install(TARGETS pyclingo-dl
         RUNTIME DESTINATION "."
         LIBRARY DESTINATION ".")
-    if (CLINGODL_BUILD_SHARED)
+    if(CLINGODL_BUILD_SHARED)
         if (APPLE)
-            set_target_properties(clingo-dl-python-api
+            set_target_properties(pyclingo-dl
                 PROPERTIES INSTALL_RPATH "@loader_path"
                 BUILD_WITH_INSTALL_RPATH TRUE)
-        elseif (UNIX)
-            set_target_properties(clingo-dl-python-api
+        elseif(UNIX)
+            set_target_properties(pyclingo-dl
                 PROPERTIES INSTALL_RPATH "$ORIGIN"
                 BUILD_WITH_INSTALL_RPATH TRUE)
         endif()
@@ -54,13 +54,13 @@ elseif(CLINGODL_INSTALL_DEFAULT)
         FILES "${CMAKE_CURRENT_BINARY_DIR}/INSTALLER" "${CMAKE_CURRENT_BINARY_DIR}/METADATA"
         DESTINATION "${python_install_dir}/clingodl-${CLINGODL_VERSION}.dist-info")
     install(
-        TARGETS clingo-dl-python-api
+        TARGETS pyclingo-dl
         RUNTIME DESTINATION "${python_install_dir}"
         LIBRARY DESTINATION "${python_install_dir}")
 endif()
 
 if (CLINGODL_BUILD_TESTS)
-    if (WIN32)
+    if(WIN32)
         # NOTE: python from conda-forge with more than one element in the path fails for whatever reason
         set(python_subdir "${CMAKE_BINARY_DIR}/bin/python/")
         get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
@@ -68,24 +68,21 @@ if (CLINGODL_BUILD_TESTS)
             set(python_subdir "${python_subdir}$<CONFIG>/")
         endif()
         add_custom_command(
-            TARGET clingo-dl-python-api POST_BUILD
+            TARGET pyclingo-dl POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory "${python_subdir}"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:clingo-dl-python-api>" "${python_subdir}"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:clingo::pyclingo>" "${python_subdir}"
-        )
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:pyclingo-dl>" "${python_subdir}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:clingo::pyclingo>" "${python_subdir}")
         pytest_discover_tests(
             test_pyclingo
             PYTHON_PATH_PREPEND "${python_subdir}"
             WORKING_DIRECTORY "tests"
-            DEPENDS clingo-dl-python-api
-        )
+            DEPENDS pyclingo-dl)
     else()
         pytest_discover_tests(
             test_pyclingo
-            PYTHON_PATH_PREPEND "$<TARGET_FILE_DIR:clingo-dl-python-api>" "$<TARGET_FILE_DIR:clingo::pyclingo>"
+            PYTHON_PATH_PREPEND "$<TARGET_FILE_DIR:pyclingo-dl>" "$<TARGET_FILE_DIR:clingo::pyclingo>"
             LIBRARY_PATH_PREPEND "$<TARGET_FILE_DIR:clingo-dl>" "$<TARGET_FILE_DIR:clingo::clingo>"
             WORKING_DIRECTORY "tests"
-            DEPENDS clingo-dl-python-api
-        )
+            DEPENDS pyclingo-dl)
     endif()
 endif()
