@@ -59,7 +59,7 @@ elseif(CLINGODL_INSTALL_DEFAULT)
         LIBRARY DESTINATION "${python_install_dir}")
 endif()
 
-if (CLINGODL_BUILD_TESTS AND PYTEST_EXECUTABLE)
+if (CLINGODL_BUILD_TESTS)
     if (WIN32)
         # NOTE: python from conda-forge with more than one element in the path fails for whatever reason
         set(python_subdir "${CMAKE_BINARY_DIR}/bin/python/")
