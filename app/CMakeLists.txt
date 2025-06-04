@@ -9,6 +9,6 @@ set(source
 
 add_executable(clingo-dl-app)
 target_sources(clingo-dl-app PRIVATE ${source})
-clingodl_target_properties(TARGET clingo-dl-app FOLDER "bin" TYPE default)
+clingodl_target_properties(TARGET clingo-dl-app FOLDER "exe" TYPE default)
 target_link_libraries(clingo-dl-app PRIVATE clingo-dl-optimizer)
 set_target_properties(clingo-dl-app PROPERTIES OUTPUT_NAME clingo-dl)

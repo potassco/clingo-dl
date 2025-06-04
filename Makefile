@@ -23,12 +23,12 @@ all: configure
 	$(MAKE) -C "build/$(BUILD_TYPE)"
 
 test: all
-	$(MAKE) -C "build/$(BUILD_TYPE)" test
+	ctest --test-dir "build/$(BUILD_TYPE)" --output-on-failure
 
 %: configure
-	@TERM=dumb MAKEFLAGS= MFLAGS= cmake --build "build/$(BUILD_TYPE)" --target "$@"
+	$(MAKE) -C "build/$(BUILD_TYPE)" "$@"
 
-compdb:
+compdb: configure
 	compdb -p "build/$(BUILD_TYPE)" list -1 > compile_commands.json
 
 configure: build/$(BUILD_TYPE)/Makefile
