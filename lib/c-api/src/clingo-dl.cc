@@ -30,14 +30,6 @@
 
 #include <sstream>
 
-#define CLINGODL_TRY try // NOLINT
-#define CLINGODL_CATCH                                                                                                 \
-    catch (...) {                                                                                                      \
-        Clingo::Detail::store_error();                                                                                 \
-        return false;                                                                                                  \
-    }                                                                                                                  \
-    return true // NOLINT
-
 using namespace ClingoDL;
 
 namespace {
@@ -46,21 +38,21 @@ using Clingo::Detail::handle_error;
 
 //! C initialization callback for the DL propagator.
 template <typename T> auto init(clingo_propagate_init_t *i, void *data) -> bool {
-    CLINGODL_TRY {
+    CLINGO_TRY {
         Clingo::PropagateInit in(i);
         static_cast<DLPropagator<T> *>(data)->init(in);
     }
-    CLINGODL_CATCH;
+    CLINGO_CATCH;
 }
 
 //! C propagation callback for the DL propagator.
 template <typename T>
 auto propagate(clingo_propagate_control_t *i, const clingo_literal_t *changes, size_t size, void *data) -> bool {
-    CLINGODL_TRY {
+    CLINGO_TRY {
         Clingo::PropagateControl in(i);
         static_cast<DLPropagator<T> *>(data)->propagate(in, {changes, size});
     }
-    CLINGODL_CATCH;
+    CLINGO_CATCH;
 }
 
 //! C undo callback for the DL propagator.
@@ -79,19 +71,19 @@ void undo(clingo_propagate_control_t const *control, clingo_literal_t const *cha
 
 //! C check callback for the DL propagator.
 template <typename T> auto check(clingo_propagate_control_t *control, void *data) -> bool {
-    CLINGODL_TRY { static_cast<DLPropagator<T> *>(data)->check(Clingo::PropagateControl{control}); }
-    CLINGODL_CATCH;
+    CLINGO_TRY { static_cast<DLPropagator<T> *>(data)->check(Clingo::PropagateControl{control}); }
+    CLINGO_CATCH;
 }
 
 //! C decide callback for the DL heuristic.
 template <typename T>
 auto decide(clingo_id_t thread_id, clingo_assignment_t const *assignment, clingo_literal_t fallback, void *data,
             clingo_literal_t *decision) -> bool {
-    CLINGODL_TRY {
+    CLINGO_TRY {
         Clingo::Assignment ass(assignment);
         *decision = static_cast<DLPropagator<T> *>(data)->decide(thread_id, ass, fallback);
     }
-    CLINGODL_CATCH;
+    CLINGO_CATCH;
 }
 
 //! High level interface to use the DL propagator hiding the value type.
@@ -286,29 +278,29 @@ template <typename F, typename G> auto set_config(std::string_view value, void *
 
 //! Parse a level to limit full propagation.
 auto parse_root(char const *value, size_t size, void *data, bool *result) -> bool {
-    CLINGODL_TRY {
+    CLINGO_TRY {
         auto res = parse_uint64_pre({value, size});
         *result = res && set_config(
                              res->second, data, [&](PropagatorConfig &config) { config.propagate_root = res->first; },
                              [&](ThreadConfig &config) { config.propagate_root = res->first; });
     }
-    CLINGODL_CATCH;
+    CLINGO_CATCH;
 }
 
 //! Parse the propagation budget and store it in data.
 auto parse_budget(const char *value, size_t size, void *data, bool *result) -> bool {
-    CLINGODL_TRY {
+    CLINGO_TRY {
         auto res = parse_uint64_pre({value, size});
         *result = res && set_config(
                              res->second, data, [&](PropagatorConfig &config) { config.propagate_budget = res->first; },
                              [&](ThreadConfig &config) { config.propagate_budget = res->first; });
     }
-    CLINGODL_CATCH;
+    CLINGO_CATCH;
 }
 
 //! Parse the mutex detection mode and store it in data.
 auto parse_mutex(const char *value, size_t size, void *data, bool *result) -> bool {
-    CLINGODL_TRY {
+    CLINGO_TRY {
         auto &pc = *static_cast<PropagatorConfig *>(data);
         *result = false;
         if (auto fst = parse_uint64_pre({value, size})) {
@@ -322,12 +314,12 @@ auto parse_mutex(const char *value, size_t size, void *data, bool *result) -> bo
             }
         }
     }
-    CLINGODL_CATCH;
+    CLINGO_CATCH;
 }
 
 //! Parse the propagation mode and store it in data.
 auto parse_mode(char const *value, size_t size, void *data, bool *result) -> bool {
-    CLINGODL_TRY {
+    CLINGO_TRY {
         auto mode = PropagationMode::Check;
         auto str = std::string_view{value, size};
         auto res = std::optional<std::string_view>{};
@@ -348,14 +340,14 @@ auto parse_mode(char const *value, size_t size, void *data, bool *result) -> boo
                              *res, data, [mode](PropagatorConfig &config) { config.propagate_mode = mode; },
                              [mode](ThreadConfig &config) { config.propagate_mode = mode; });
     }
-    CLINGODL_CATCH;
+    CLINGO_CATCH;
 }
 
 //! Parse the sort mode and store it data.
 //!
 //! Return false if there is a parse error.
 auto parse_sort(char const *value, size_t size, void *data, bool *result) -> bool {
-    CLINGODL_TRY {
+    CLINGO_TRY {
         auto sort = SortMode::Weight;
         auto str = std::string_view{value, size};
         auto res = std::optional<std::string_view>{};
@@ -374,12 +366,12 @@ auto parse_sort(char const *value, size_t size, void *data, bool *result) -> boo
                              *res, data, [sort](PropagatorConfig &config) { config.sort_mode = sort; },
                              [sort](ThreadConfig &config) { config.sort_mode = sort; });
     }
-    CLINGODL_CATCH;
+    CLINGO_CATCH;
 }
 
 //! Parse the decision mode.
 auto parse_decide(char const *value, size_t size, void *data, bool *result) -> bool {
-    CLINGODL_TRY {
+    CLINGO_TRY {
         auto &mode = static_cast<PropagatorConfig *>(data)->decision_mode;
         auto str = std::string_view{value, size};
         auto res = false;
@@ -392,12 +384,12 @@ auto parse_decide(char const *value, size_t size, void *data, bool *result) -> b
         }
         *result = res;
     }
-    CLINGODL_CATCH;
+    CLINGO_CATCH;
 }
 
 //! Parse a Boolean and store it in data.
 auto parse_bool(const char *value, size_t size, void *data, bool *result) -> bool {
-    CLINGODL_TRY {
+    CLINGO_TRY {
         auto &flag = *static_cast<bool *>(data);
         auto str = std::string_view{value, size};
         auto res = false;
@@ -408,14 +400,14 @@ auto parse_bool(const char *value, size_t size, void *data, bool *result) -> boo
         }
         *result = res;
     }
-    CLINGODL_CATCH;
+    CLINGO_CATCH;
 }
 
 //! Set the given error message if the Boolean is false.
 //!
 //! Return false if there is a parse error.
 template <class F, class... As> auto check_parse(char const *key, F fun, As &&...as) -> bool {
-    CLINGODL_TRY {
+    CLINGO_TRY {
         bool res = false;
         if (!fun(std::forward<As>(as)..., &res)) {
             return false;
@@ -426,7 +418,7 @@ template <class F, class... As> auto check_parse(char const *key, F fun, As &&..
             clingo_set_error(clingo_result_invalid, msg.view().data(), msg.view().size());
         }
     }
-    CLINGODL_CATCH;
+    CLINGO_CATCH;
 }
 
 struct clingodl_theory {
@@ -439,28 +431,28 @@ struct clingodl_theory {
 
     static auto info([[maybe_unused]] void *self, clingo_string_t *name, int *major, int *minor, int *patch) -> bool {
         using namespace std::string_view_literals;
-        CLINGODL_TRY {
+        CLINGO_TRY {
             if (name != nullptr) {
-                constexpr auto str = "xyz"sv;
+                constexpr auto str = "clingo-dl"sv;
                 name->data = str.data();
                 name->size = str.size();
             }
             if (major != nullptr) {
-                *major = CLINGODL_VERSION_MAJOR;
+                *major = CLINGO_VERSION_MAJOR;
             }
             if (minor != nullptr) {
-                *minor = CLINGODL_VERSION_MINOR;
+                *minor = CLINGO_VERSION_MINOR;
             }
             if (patch != nullptr) {
-                *patch = CLINGODL_VERSION_REVISION;
+                *patch = CLINGO_VERSION_REVISION;
             }
         }
-        CLINGODL_CATCH;
+        CLINGO_CATCH;
     }
 
     static auto register_(void *self, clingo_control_t *control) -> bool {
         auto theory = static_cast<clingodl_theory *>(self);
-        CLINGODL_TRY {
+        CLINGO_TRY {
             if (!theory->rdl) {
                 theory->clingodl =
                     std::make_unique<DLPropagatorFacade<int>>(c_cast(theory->lib), control, theory->config);
@@ -469,18 +461,18 @@ struct clingodl_theory {
                     std::make_unique<DLPropagatorFacade<double>>(c_cast(theory->lib), control, theory->config);
             }
         }
-        CLINGODL_CATCH;
+        CLINGO_CATCH;
     }
 
     static auto rewrite_ast(void *self, clingo_ast_t *ast, clingo_theory_ast_callback_t add, void *data) -> bool {
         auto theory = static_cast<clingodl_theory *>(self);
-        CLINGODL_TRY {
+        CLINGO_TRY {
             rewrite(
                 theory->lib, Clingo::AST::Node{ast, true},
                 [add, data](Clingo::AST::Node ast) { handle_error(add(c_cast(ast), data)); },
                 theory->shift_constraints);
         }
-        CLINGODL_CATCH;
+        CLINGO_CATCH;
     }
 
     static auto prepare([[maybe_unused]] void *self, [[maybe_unused]] clingo_control_t *control) -> bool {
@@ -493,7 +485,7 @@ struct clingodl_theory {
     }
 
     static auto configure(void *self, char const *key, size_t key_size, char const *value, size_t value_size) -> bool {
-        CLINGODL_TRY {
+        CLINGO_TRY {
             auto theory = static_cast<clingodl_theory *>(self);
             auto sv_key = std::string_view{key, key_size};
             if (sv_key == "propagate") {
@@ -528,12 +520,12 @@ struct clingodl_theory {
             clingo_set_error(clingo_result_invalid, msg.view().data(), msg.view().size());
             return false;
         }
-        CLINGODL_CATCH;
+        CLINGO_CATCH;
     }
 
     static auto register_options(void *self, clingo_options_t *options) -> bool {
         auto theory = static_cast<clingodl_theory *>(self);
-        CLINGODL_TRY {
+        CLINGO_TRY {
             using namespace std::string_view_literals;
             auto group = "Clingo.DL Options"sv;
             auto opt = [&](std::string_view name, std::string_view desc, clingo_option_parser_t parser,
@@ -597,42 +589,42 @@ struct clingodl_theory {
                  theory->shift_constraints);
             flag("compute-components", "Compute connected components [yes]", theory->config.calculate_cc);
         }
-        CLINGODL_CATCH;
+        CLINGO_CATCH;
     }
 
     static auto validate_options([[maybe_unused]] void *self) -> bool { return true; }
 
     static auto on_model(void *self, clingo_model_t *model) -> bool {
-        CLINGODL_TRY {
+        CLINGO_TRY {
             auto theory = static_cast<clingodl_theory *>(self);
             Clingo::Model m(model);
             theory->clingodl->extend_model(m);
         }
-        CLINGODL_CATCH;
+        CLINGO_CATCH;
     }
 
     static auto lookup_symbol(void *self, clingo_symbol_t symbol, size_t *index, bool *found) -> bool {
-        CLINGODL_TRY {
+        CLINGO_TRY {
             auto theory = static_cast<clingodl_theory *>(self);
             *found = theory->clingodl->lookup_symbol(Clingo::Symbol{symbol, true}, *index);
         }
-        CLINGODL_CATCH;
+        CLINGO_CATCH;
     }
 
     static auto assignment_next(void *self, uint32_t thread_id, bool *init, size_t *index, bool *has_value) -> bool {
-        CLINGODL_TRY {
+        CLINGO_TRY {
             auto theory = static_cast<clingodl_theory *>(self);
             if (std::exchange(*init, false)) {
                 *index = 0;
             }
             *has_value = theory->clingodl->next(thread_id, *index);
         }
-        CLINGODL_CATCH;
+        CLINGO_CATCH;
     }
 
     static auto assignment_get_value(void *self, uint32_t thread_id, size_t index, clingo_symbol_t *symbol,
                                      clingo_theory_value_t *value, bool *has_value) -> bool {
-        CLINGODL_TRY {
+        CLINGO_TRY {
             auto theory = static_cast<clingodl_theory *>(self);
             bool hv = theory->clingodl->has_value(thread_id, index);
             if (has_value != nullptr) {
@@ -648,25 +640,25 @@ struct clingodl_theory {
                 }
             }
         }
-        CLINGODL_CATCH;
+        CLINGO_CATCH;
     }
 
     static auto on_statistics(void *self, clingo_stats_t *stats) -> bool {
-        CLINGODL_TRY {
+        CLINGO_TRY {
             auto theory = static_cast<clingodl_theory *>(self);
             uint64_t root = 0;
             handle_error(clingo_stats_root(stats, &root));
             auto cpp_stats = Clingo::Stats{stats, root};
             theory->clingodl->on_statistics(cpp_stats["user_step"].map(), cpp_stats["user_accu"].map());
         }
-        CLINGODL_CATCH;
+        CLINGO_CATCH;
     }
 };
 
 } // namespace
 
 extern "C" bool clingodl_create(clingo_lib_t *lib, clingo_theory_t *theory) {
-    CLINGODL_TRY {
+    CLINGO_TRY {
         *theory = clingo_theory_t{
             clingodl_theory::info,
             clingodl_theory::destroy,
@@ -685,7 +677,5 @@ extern "C" bool clingodl_create(clingo_lib_t *lib, clingo_theory_t *theory) {
         };
         theory->self = std::make_unique<clingodl_theory>(lib).release();
     }
-    CLINGODL_CATCH;
+    CLINGO_CATCH;
 }
-#undef CLINGODL_TRY
-#undef CLINGODL_CATCH
