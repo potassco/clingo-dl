@@ -69,10 +69,9 @@ template <class N> auto solve(std::string_view str) -> MV {
     auto &prp = ctl.register_propagator(std::make_unique<DLPropagator<N>>(lib, sts, cfg));
     {
         auto prg = Clingo::AST::Program{lib};
-        auto scn = Clingo::AST::Scanner{lib, str};
-        for (auto stm : scn) {
+        Clingo::AST::parse(lib, str, [&](Clingo::AST::Node const &stm) {
             rewrite(lib, std::move(stm), [&]<class T>(T &&stm) { prg.add(std::forward<T>(stm)); }, true);
-        }
+        });
         ctl.join(prg);
     }
     ctl.ground();

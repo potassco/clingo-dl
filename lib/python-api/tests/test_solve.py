@@ -17,11 +17,7 @@ def test_solve():
 
     ctl = Control(lib)
     thy.register(ctl)
-    prg = ast.Program(lib)
-    with ast.Scanner(lib, "a. b. c. &diff{x - y} <= -1.") as scanner:
-        for stm in scanner:
-            thy.rewrite(stm, prg.add)
-    ctl.join(prg)
+    thy.rewrite_string(lib, ctl, "a. b. c. &diff{x - y} <= -1.")
     ctl.ground()
     thy.prepare(ctl)
 
