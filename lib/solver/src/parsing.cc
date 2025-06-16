@@ -211,7 +211,7 @@ constexpr int INVALID_VAR{std::numeric_limits<int>::max()};
 
 //! Parse a string to a number.
 template <class T> [[nodiscard]] auto parse_number(std::string_view name) -> std::optional<T> {
-#if defined(__APPLE__)
+#if defined(_LIBCPP_VERSION)
     auto res = T{};
     auto iss = std::istringstream{std::string{name}};
     iss >> res;

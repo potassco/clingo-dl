@@ -438,13 +438,13 @@ struct clingodl_theory {
                 name->size = str.size();
             }
             if (major != nullptr) {
-                *major = CLINGO_VERSION_MAJOR;
+                *major = CLINGODL_VERSION_MAJOR;
             }
             if (minor != nullptr) {
-                *minor = CLINGO_VERSION_MINOR;
+                *minor = CLINGODL_VERSION_MINOR;
             }
             if (patch != nullptr) {
-                *patch = CLINGO_VERSION_REVISION;
+                *patch = CLINGODL_VERSION_REVISION;
             }
         }
         CLINGO_CATCH;

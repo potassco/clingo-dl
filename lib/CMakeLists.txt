@@ -1,6 +1,6 @@
 add_subdirectory("solver")
 add_subdirectory("c-api")
 add_subdirectory("optimizer")
-if (CLINGODL_BUILD_PYTHON)
+if(CLINGODL_BUILD_PYTHON)
     add_subdirectory("python-api")
 endif()

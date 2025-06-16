@@ -3,8 +3,8 @@ name = "clingo-dl"
 version = "1.5.0"
 dependencies = ["clingo"]
 
-# [project.scripts]
-# pyclingo = "clingo.app:_pyclingodl"
+[project.scripts]
+pyclingo-dl = "clingodl.main"
 
 [build-system]
 requires = ["scikit-build-core", "pybind11", "clingo"]

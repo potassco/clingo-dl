@@ -13,12 +13,12 @@ clingodl_target_properties(TARGET pyclingo-dl FOLDER "lib" SUBDIR "python")
 set_target_properties(pyclingo-dl PROPERTIES OUTPUT_NAME "clingodl")
 target_link_libraries(pyclingo-dl PRIVATE clingo-dl Python::Module)
 
-if (CLINGODL_INSTALL_WHEEL)
+if(CLINGODL_INSTALL_WHEEL)
     install(TARGETS pyclingo-dl
         RUNTIME DESTINATION "."
         LIBRARY DESTINATION ".")
     if(CLINGODL_BUILD_SHARED)
-        if (APPLE)
+        if(APPLE)
             set_target_properties(pyclingo-dl
                 PROPERTIES INSTALL_RPATH "@loader_path"
                 BUILD_WITH_INSTALL_RPATH TRUE)
@@ -29,8 +29,8 @@ if (CLINGODL_INSTALL_WHEEL)
         endif()
     endif()
 elseif(CLINGODL_INSTALL_DEFAULT)
-    if (PYCLINGODL_INSTALL_DIR STREQUAL "")
-        if (PYCLINGODL_INSTALL STREQUAL "user")
+    if(PYCLINGODL_INSTALL_DIR STREQUAL "")
+        if(PYCLINGODL_INSTALL STREQUAL "user")
             execute_process(
                 COMMAND "${Python_EXECUTABLE}" "${CLINGODL_SOURCE_DIR}/cmake/python-site.py" target --user
                 OUTPUT_VARIABLE _python_install_dir OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -47,7 +47,7 @@ elseif(CLINGODL_INSTALL_DEFAULT)
     else()
         set(python_install_dir "${PYCLINGODL_INSTALL_DIR}")
     endif()
-    MESSAGE(STATUS "Python module path: ${python_install_dir}")
+    message(STATUS "Python module path: ${python_install_dir}")
     file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/INSTALLER" "pip\n")
     file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/METADATA" "Metadata-Version: 1.1\nName: clingo\nVersion: ${CLINGODL_VERSION}\n")
     install(
@@ -59,7 +59,7 @@ elseif(CLINGODL_INSTALL_DEFAULT)
         LIBRARY DESTINATION "${python_install_dir}")
 endif()
 
-if (CLINGODL_BUILD_TESTS)
+if(CLINGODL_BUILD_TESTS)
     if(WIN32)
         # NOTE: python from conda-forge with more than one element in the path fails for whatever reason
         set(python_subdir "${CMAKE_BINARY_DIR}/bin/python/")
