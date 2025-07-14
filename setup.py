@@ -39,7 +39,7 @@ setup(
     python_requires=">=3.6",
     entry_points={
         'console_scripts': [
-            'clingo-dl=clingodl.__main__:main',
+            'pyclingo-dl=clingodl.__main__:main',
         ],
     },
 )
