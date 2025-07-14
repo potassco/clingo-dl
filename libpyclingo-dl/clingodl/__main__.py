@@ -99,5 +99,12 @@ class ClingoDLApp(Application):
         return symbol.type == SymbolType.Function and symbol.name.startswith("__")
 
 
-if __name__ == "__main__":
+def main():
+    """
+    Main function to be used as an entry point.
+    """
     sys.exit(int(clingo_main(ClingoDLApp("clingo-dl"), sys.argv[1:])))
+
+
+if __name__ == "__main__":
+    main()
