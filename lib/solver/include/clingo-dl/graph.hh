@@ -124,7 +124,8 @@ template <typename T> class Graph {
     //! Add an edge to the graph and return false if the edge induces a negative cycle.
     //!
     //! This function assumes that the graph is not conflicting.
-    [[nodiscard]] auto add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx) -> bool;
+    [[nodiscard]] auto add_edge(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t uv_idx, vertex_t zero_idx)
+        -> bool;
     //! Backtracks the last decision level established with ensure_decision_level().
     void backtrack();
     //! Return the configured propagation mode.
@@ -136,16 +137,17 @@ template <typename T> class Graph {
     //! The function does not clean up information about found shortest paths.
     //!
     //! \note Has to be called during add_edge().
-    auto check_cycle_(Clingo::PropagateControl &ctl, edge_t uv_idx) -> bool;
+    auto check_cycle_(Clingo::PropagateControl ctl, edge_t uv_idx) -> bool;
     //! Perform configured simple propagations after adding the given edge.
     //!
     //! \note Has to be called during add_edge() and uses temporary state
     //! established during check_cycle_().
-    auto propagate_simple_(Clingo::PropagateControl &ctl, edge_t uv_idx) -> bool;
+    auto propagate_simple_(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t uv_idx) -> bool;
     //! Propagates edges to avoid cycles through the zero node.
     //!
     //! \note Has to be called during add_edge().
-    auto propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx) -> bool;
+    auto propagate_zero_(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t uv_idx, vertex_t zero_idx)
+        -> bool;
     //! Fully propagates the graph after adding the given edge.
     //!
     //! Afterward any of the remaining edges can be added to the graph without
@@ -153,7 +155,7 @@ template <typename T> class Graph {
     //! propagated before the edge was added.
     //!
     //! \note Has to be called during add_edge().
-    [[nodiscard]] auto propagate_full_(Clingo::PropagateControl &ctl, edge_t xy_idx) -> bool;
+    [[nodiscard]] auto propagate_full_(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t xy_idx) -> bool;
     //! Traverse the incoming edges of a vertex.
     //!
     //! Edges that were disabled will be removed during the traversal. The
@@ -161,18 +163,19 @@ template <typename T> class Graph {
     //! the callback returns true. Furthermore, the functions assumes that the
     //! callback provides a clause in this case. If adding the clause causes a
     //! conflict, the traversal will stop and the function returns false.
-    template <class F> [[nodiscard]] auto with_incoming_(Clingo::PropagateControl &ctl, vertex_t s_idx, F f) -> bool;
+    template <class F> [[nodiscard]] auto with_incoming_(Clingo::PropagateControl ctl, vertex_t s_idx, F f) -> bool;
     //! If s has been reached from u, we can use the current potentials to
     //! detect some conflicts involving incoming edges of s.
-    [[nodiscard]] auto cheap_propagate_(Clingo::PropagateControl &ctl, vertex_t u_idx, vertex_t s_idx) -> bool;
+    [[nodiscard]] auto cheap_propagate_(Clingo::Assignment ass, Clingo::PropagateControl ctl, vertex_t u_idx,
+                                        vertex_t s_idx) -> bool;
     //! Helper to add candidate edges initially and during backtracking.
     void add_candidate_edge_(edge_t uv_idx);
     //! Disable edge u -> v, if there is a shorter path u ->* v.
     template <bool full> [[nodiscard]] auto propagate_edge_true_(edge_t uv_idx, edge_t xy_idx) -> bool;
     //! Make edge u -> v false, if there is a negative cycle u ->* v -> u.
     template <bool full>
-    [[nodiscard]] auto propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret)
-        -> bool;
+    [[nodiscard]] auto propagate_edge_false_(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t uv_idx,
+                                             edge_t xy_idx, bool &ret) -> bool;
     //! Sets the potential of a vertex and ensures that it can be backtracked.
     void set_potential_(Vertex &vtx, level_t level, value_t potential);
     //! Returns the current decision level.

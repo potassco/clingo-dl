@@ -37,51 +37,46 @@ namespace {
 using Clingo::Detail::handle_error;
 
 //! C initialization callback for the DL propagator.
-template <typename T> auto init(clingo_propagate_init_t *i, void *data) -> bool {
-    CLINGO_TRY {
-        Clingo::PropagateInit in(i);
-        static_cast<DLPropagator<T> *>(data)->init(in);
-    }
+template <typename T> auto init(clingo_assignment_t const *ass, clingo_propagate_init_t *init, void *data) -> bool {
+    CLINGO_TRY { static_cast<DLPropagator<T> *>(data)->init(Clingo::Assignment{ass}, Clingo::PropagateInit{init}); }
     CLINGO_CATCH;
 }
 
 //! C propagation callback for the DL propagator.
 template <typename T>
-auto propagate(clingo_propagate_control_t *i, const clingo_literal_t *changes, size_t size, void *data) -> bool {
+auto propagate(clingo_assignment_t const *ass, clingo_propagate_control_t *ctl, const clingo_literal_t *changes,
+               size_t size, void *data) -> bool {
     CLINGO_TRY {
-        Clingo::PropagateControl in(i);
-        static_cast<DLPropagator<T> *>(data)->propagate(in, {changes, size});
+
+        static_cast<DLPropagator<T> *>(data)->propagate(Clingo::Assignment{ass}, Clingo::PropagateControl{ctl},
+                                                        {changes, size});
     }
     CLINGO_CATCH;
 }
 
 //! C undo callback for the DL propagator.
 template <typename T>
-void undo(clingo_propagate_control_t const *control, clingo_literal_t const *changes, size_t size, void *data) {
+void undo(clingo_assignment_t const *ass, clingo_literal_t const *changes, size_t size, void *data) {
     try {
-        id_t thread_id = 0;
-        clingo_assignment_t const *assignment = nullptr;
-        handle_error(clingo_propagate_control_thread_id(control, &thread_id));
-        handle_error(clingo_propagate_control_assignment(control, &assignment));
-        static_cast<DLPropagator<T> *>(data)->undo(thread_id, Clingo::Assignment{assignment}, {changes, size});
+        static_cast<DLPropagator<T> *>(data)->undo(Clingo::Assignment{ass}, {changes, size});
     } catch (std::exception const &e) {
         printf("panic: %s\n", e.what());
     }
 }
 
 //! C check callback for the DL propagator.
-template <typename T> auto check(clingo_propagate_control_t *control, void *data) -> bool {
-    CLINGO_TRY { static_cast<DLPropagator<T> *>(data)->check(Clingo::PropagateControl{control}); }
+template <typename T> auto check(clingo_assignment_t const *ass, clingo_propagate_control_t *ctl, void *data) -> bool {
+    CLINGO_TRY { static_cast<DLPropagator<T> *>(data)->check(Clingo::Assignment{ass}, Clingo::PropagateControl{ctl}); }
     CLINGO_CATCH;
 }
 
 //! C decide callback for the DL heuristic.
 template <typename T>
-auto decide(clingo_id_t thread_id, clingo_assignment_t const *assignment, clingo_literal_t fallback, void *data,
-            clingo_literal_t *decision) -> bool {
+auto decide(clingo_assignment_t const *assignment, clingo_literal_t fallback, void *data, clingo_literal_t *decision)
+    -> bool {
     CLINGO_TRY {
         Clingo::Assignment ass(assignment);
-        *decision = static_cast<DLPropagator<T> *>(data)->decide(thread_id, ass, fallback);
+        *decision = static_cast<DLPropagator<T> *>(data)->decide(ass, fallback);
     }
     CLINGO_CATCH;
 }
@@ -132,12 +127,10 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
     DLPropagatorFacade(clingo_lib_t *lib, clingo_control_t *control, PropagatorConfig const &conf)
         : prop_{Clingo::Library{lib, true}, step_, conf} {
         handle_error(clingo_control_parse_string(control, THEORY, std::strlen(THEORY)));
-        static clingo_propagator_t prop = {init<T>,
-                                           propagate<T>,
-                                           undo<T>,
-                                           check<T>,
-                                           conf.decision_mode != DecisionMode::Disabled ? decide<T> : nullptr,
-                                           nullptr};
+        static clingo_propagator_t prop = {
+            init<T>, nullptr,  propagate<T>,
+            undo<T>, check<T>, conf.decision_mode != DecisionMode::Disabled ? decide<T> : nullptr,
+            nullptr};
         handle_error(clingo_control_register_propagator(control, &prop, &prop_));
     }
 

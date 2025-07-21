@@ -82,17 +82,17 @@ template <typename T> class DLPropagator : public Clingo::Heuristic {
 
     // propagator interface
     //! Initialize the propagator.
-    void do_init(Clingo::PropagateInit init) override;
+    void do_init(Clingo::Assignment ass, Clingo::PropagateInit init) override;
     //! Propagate edges.
-    void do_propagate(Clingo::PropagateControl ctl, Clingo::SolverLiteralSpan changes) override;
+    void do_propagate(Clingo::Assignment ass, Clingo::PropagateControl ctl, Clingo::SolverLiteralSpan changes) override;
     //! Undo propgated edges.
-    void do_undo(id_t thread_id, Clingo::Assignment assignment, Clingo::SolverLiteralSpan changes) override;
+    void do_undo(Clingo::Assignment assignment, Clingo::SolverLiteralSpan changes) override;
     //! Check a propagation fixed point.
-    void do_check(Clingo::PropagateControl ctl) override;
+    void do_check(Clingo::Assignment ass, Clingo::PropagateControl ctl) override;
 
     // heuristic interface
     //! Customize the decision heuristic.
-    auto do_decide(id_t thread_id, Clingo::Assignment assign, literal_t fallback) -> literal_t override;
+    auto do_decide(Clingo::Assignment assign, literal_t fallback) -> literal_t override;
 
   private:
     struct VertexInfo;
@@ -114,18 +114,18 @@ template <typename T> class DLPropagator : public Clingo::Heuristic {
     //! Map a symbol to an integer.
     auto map_vertex_(Clingo::Symbol const &symbol) -> vertex_t;
     //! Add constraints in the theory data.
-    [[nodiscard]] auto add_constraints_(Clingo::PropagateInit &init) -> bool;
+    [[nodiscard]] auto add_constraints_(Clingo::Assignment ass, Clingo::PropagateInit init) -> bool;
     //! Normalize constraints to individual edges over `<=`.
-    [[nodiscard]] auto normalize_constraint_(Clingo::PropagateInit &init, literal_t literal, CoVarVec const &elements,
-                                             Relation op, value_t rhs, bool strict) -> bool;
+    [[nodiscard]] auto normalize_constraint_(Clingo::Assignment ass, Clingo::PropagateInit init, literal_t literal,
+                                             CoVarVec const &elements, Relation op, value_t rhs, bool strict) -> bool;
     //! Add up to two edges for the given constraint if the has at most 2 variables and suitable coefficients.
-    [[nodiscard]] auto add_edges_(Clingo::PropagateInit &init, literal_t literal, CoVarVec const &covec, value_t rhs,
-                                  bool strict) -> bool;
+    [[nodiscard]] auto add_edges_(Clingo::Assignment ass, Clingo::PropagateInit init, literal_t literal,
+                                  CoVarVec const &covec, value_t rhs, bool strict) -> bool;
     //! Add up to two edges for a constraint.
-    void add_edges_(Clingo::PropagateInit &init, vertex_t u_id, vertex_t v_id, value_t weight, literal_t lit,
+    void add_edges_(Clingo::PropagateInit init, vertex_t u_id, vertex_t v_id, value_t weight, literal_t lit,
                     bool strict);
     //! Add (up to one) edge for a constraint.
-    void add_edge_(Clingo::PropagateInit &init, vertex_t u_id, vertex_t v_id, value_t weight, literal_t lit);
+    void add_edge_(Clingo::PropagateInit init, vertex_t u_id, vertex_t v_id, value_t weight, literal_t lit);
     //! Reset connected components (to be recalculated with the next call to cc_calculate_).
     void cc_reset_();
     //! Mark a vertex in a component as visited.
@@ -135,9 +135,10 @@ template <typename T> class DLPropagator : public Clingo::Heuristic {
     //! Calculate the connected components.
     void cc_calculate_(AdjacencyMap &outgoing, AdjacencyMap &incoming);
     //! Calculate mutually exclusive edges.
-    void calculate_mutexes_(Clingo::PropagateInit &init, edge_t edge_start, AdjacencyMap &outgoing);
+    void calculate_mutexes_(Clingo::Assignment ass, Clingo::PropagateInit init, edge_t edge_start,
+                            AdjacencyMap &outgoing);
     //! Finalize initialization by initializing thread states for propagation.
-    void initialize_states_(Clingo::PropagateInit &init);
+    void initialize_states_(Clingo::PropagateInit init);
 
     // propagation functions
     //! Disable all edges associated with the given literal in the thread state.
@@ -151,7 +152,7 @@ template <typename T> class DLPropagator : public Clingo::Heuristic {
     //! Sort vertices in the propagation queue according to the given mode.
     void sort_edges(SortMode mode, ThreadState &state);
     //! Propagate the given literals.
-    void propagate_(Clingo::PropagateControl ctl, Clingo::SolverLiteralSpan changes);
+    void propagate_(Clingo::Assignment ass, Clingo::PropagateControl ctl, Clingo::SolverLiteralSpan changes);
 
     Clingo::Library lib_;          //!< The associated library.
     ThreadStateVec states_;        //!< Thread specific state.

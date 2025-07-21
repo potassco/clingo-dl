@@ -535,7 +535,8 @@ template <typename T> template <typename D> struct Graph<T>::Impl : Graph {
     //! Traverse incoming/outgoing edges and disables true edges and propagates
     //! false edges.
     template <bool full>
-    bool propagate_edges(Clingo::PropagateControl &ctl, edge_t xy_idx, bool forward, bool backward) { // NOLINT
+    bool propagate_edges(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t xy_idx, bool forward,
+                         bool backward) {
         if (!forward && !backward) {
             return true;
         }
@@ -563,7 +564,7 @@ template <typename T> template <typename D> struct Graph<T>::Impl : Graph {
                                                       return false;
                                                   }
                                                   if (!edge_states_[uv_idx].enabled ||
-                                                      propagate_edge_false_<full>(ctl, uv_idx, xy_idx, ret)) {
+                                                      propagate_edge_false_<full>(ass, ctl, uv_idx, xy_idx, ret)) {
                                                       remove_outgoing(uv_idx);
                                                       return true;
                                                   }
@@ -635,7 +636,9 @@ template <typename T> void Graph<T>::ensure_decision_level(level_t level, bool e
     }
 }
 
-template <typename T> auto Graph<T>::add_edge(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx) -> bool {
+template <typename T>
+auto Graph<T>::add_edge(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t uv_idx, vertex_t zero_idx)
+    -> bool {
     // This function adds an edge to the graph and returns false if the edge
     // induces a negative cycle.
     //
@@ -653,7 +656,7 @@ template <typename T> auto Graph<T>::add_edge(Clingo::PropagateControl &ctl, edg
     assert(costs_heap_.empty());
 
     // cycle check and simple propagation
-    auto consistent = check_cycle_(ctl, uv_idx) && propagate_simple_(ctl, uv_idx);
+    auto consistent = check_cycle_(ctl, uv_idx) && propagate_simple_(ass, ctl, uv_idx);
 
     // reset visited flags
     for (auto &x : visited_from_) {
@@ -665,19 +668,20 @@ template <typename T> auto Graph<T>::add_edge(Clingo::PropagateControl &ctl, edg
     // propagate cycles through zero node
     // (using equality here intentional because full and zero vertex propagation should be exclusive)
     if (mode() == PropagationMode::Zero) {
-        consistent = consistent && propagate_zero_(ctl, uv_idx, zero_idx);
+        consistent = consistent && propagate_zero_(ass, ctl, uv_idx, zero_idx);
     }
 
     // full propagation
     if (can_propagate()) {
-        consistent = consistent && propagate_full_(ctl, uv_idx);
+        consistent = consistent && propagate_full_(ass, ctl, uv_idx);
     }
 
     return consistent;
 }
 
 template <typename T>
-bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx, vertex_t zero_idx) { // NOLINT
+bool Graph<T>::propagate_zero_(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t uv_idx,
+                               vertex_t zero_idx) { // NOLINT
     ++stats_.edges_propagated;
     disable_edge(uv_idx);
 
@@ -686,15 +690,14 @@ bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx, ver
     static_cast<Impl<To> *>(this)->dijkstra_bounds(uv_idx, zero_idx);
     t.stop();
 
-    bool ret = static_cast<Impl<From> *>(this)->template propagate_edges<false>(ctl, 0, true, true) &&
-               static_cast<Impl<To> *>(this)->template propagate_edges<false>(ctl, 0, true, true);
+    bool ret = static_cast<Impl<From> *>(this)->template propagate_edges<false>(ass, ctl, 0, true, true) &&
+               static_cast<Impl<To> *>(this)->template propagate_edges<false>(ass, ctl, 0, true, true);
 
     visited_from_.clear();
     visited_to_.clear();
 
 #ifdef CLINGODL_CROSSCHECK
     if (ret) {
-        auto ass = ctl.assignment();
         auto cost_from_zero = static_cast<Impl<From> *>(this)->bellman_ford_(changed_edges_, zero_idx);
         auto cost_to_zero = static_cast<Impl<To> *>(this)->bellman_ford_(changed_edges_, zero_idx);
         if (cost_from_zero && cost_to_zero) {
@@ -721,7 +724,7 @@ bool Graph<T>::propagate_zero_(Clingo::PropagateControl &ctl, edge_t uv_idx, ver
     return ret;
 }
 
-template <typename T> bool Graph<T>::check_cycle_(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLINT
+template <typename T> bool Graph<T>::check_cycle_(Clingo::PropagateControl ctl, edge_t uv_idx) { // NOLINT
     // NOTE: would be more efficient if relevant would return statically false here
     //       for the compiler to make comparison cheaper
 
@@ -813,13 +816,14 @@ template <typename T> bool Graph<T>::check_cycle_(Clingo::PropagateControl &ctl,
     return ctl.add_clause(clause_) && ctl.propagate();
 }
 
-template <typename T> bool Graph<T>::propagate_simple_(Clingo::PropagateControl &ctl, edge_t uv_idx) { // NOLINT
+template <typename T>
+bool Graph<T>::propagate_simple_(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t uv_idx) { // NOLINT
     if (propagate_ >= PropagationMode::Trivial) {
         auto &uv = edges_[uv_idx];
         if (visited_from_.empty() || propagate_ == PropagationMode::Trivial) {
             return with_incoming_(ctl, uv.from, [&](vertex_t t_idx, edge_t ts_idx) {
                 auto &ts = edges_[ts_idx];
-                if (t_idx == uv.to && uv.weight + ts.weight < 0 && !ctl.assignment().is_false(ts.lit)) {
+                if (t_idx == uv.to && uv.weight + ts.weight < 0 && !ass.is_false(ts.lit)) {
                     clause_.emplace_back(-edges_[uv_idx].lit);
                     clause_.emplace_back(-edges_[ts_idx].lit);
                     ++stats_.false_edges_trivial;
@@ -829,12 +833,12 @@ template <typename T> bool Graph<T>::propagate_simple_(Clingo::PropagateControl 
             });
         }
         if (propagate_ >= PropagationMode::Weak) {
-            if (!cheap_propagate_(ctl, uv.from, uv.from)) {
+            if (!cheap_propagate_(ass, ctl, uv.from, uv.from)) {
                 return false;
             }
             if (propagate_ >= PropagationMode::WeakPlus) {
                 for (auto &s_idx : visited_from_) {
-                    if (!cheap_propagate_(ctl, uv.from, s_idx)) {
+                    if (!cheap_propagate_(ass, ctl, uv.from, s_idx)) {
                         return false;
                     }
                 }
@@ -844,7 +848,8 @@ template <typename T> bool Graph<T>::propagate_simple_(Clingo::PropagateControl 
     return true;
 }
 
-template <typename T> auto Graph<T>::propagate_full_(Clingo::PropagateControl &ctl, edge_t xy_idx) -> bool {
+template <typename T>
+auto Graph<T>::propagate_full_(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t xy_idx) -> bool {
     // The function is best understood considering the following example graph:
     //
     //   v ->* x -> y ->* u
@@ -885,8 +890,9 @@ template <typename T> auto Graph<T>::propagate_full_(Clingo::PropagateControl &c
     bool backward_from = num_relevant_out_from < num_relevant_in_to;
 
     bool ret =
-        static_cast<Impl<From> *>(this)->template propagate_edges<true>(ctl, xy_idx, forward_from, backward_from) &&
-        static_cast<Impl<To> *>(this)->template propagate_edges<true>(ctl, xy_idx, !forward_from, !backward_from);
+        static_cast<Impl<From> *>(this)->template propagate_edges<true>(ass, ctl, xy_idx, forward_from,
+                                                                        backward_from) &&
+        static_cast<Impl<To> *>(this)->template propagate_edges<true>(ass, ctl, xy_idx, !forward_from, !backward_from);
 
     for (auto &x : visited_from_) {
         vertices_[x].visited_from = 0;
@@ -903,7 +909,7 @@ template <typename T> auto Graph<T>::propagate_full_(Clingo::PropagateControl &c
 
 template <typename T>
 template <class F>
-auto Graph<T>::with_incoming_(Clingo::PropagateControl &ctl, vertex_t s_idx, F f) -> bool {
+auto Graph<T>::with_incoming_(Clingo::PropagateControl ctl, vertex_t s_idx, F f) -> bool {
     auto &s = vertices_[s_idx];
     auto &in = s.candidate_incoming;
     auto jt = in.begin();
@@ -937,7 +943,8 @@ auto Graph<T>::with_incoming_(Clingo::PropagateControl &ctl, vertex_t s_idx, F f
 }
 
 template <typename T>
-[[nodiscard]] auto Graph<T>::cheap_propagate_(Clingo::PropagateControl &ctl, vertex_t u_idx, vertex_t s_idx) -> bool {
+[[nodiscard]] auto Graph<T>::cheap_propagate_(Clingo::Assignment ass, Clingo::PropagateControl ctl, vertex_t u_idx,
+                                              vertex_t s_idx) -> bool {
     // we check for the following case:
     //   u ->* s ->* t
     //         ^----/
@@ -948,7 +955,7 @@ template <typename T>
         auto &ts = edges_[ts_idx];
         if (s.visited_from < t.visited_from) {
             T weight = t.potential() - s.potential();
-            if (weight + ts.weight < 0 && !ctl.assignment().is_false(ts.lit)) {
+            if (weight + ts.weight < 0 && !ass.is_false(ts.lit)) {
                 T check = 0;
                 auto r_idx = t_idx;
                 while (u_idx != r_idx && s_idx != r_idx) {
@@ -1120,7 +1127,8 @@ template <typename T> template <bool full> bool Graph<T>::propagate_edge_true_(e
 
 template <typename T>
 template <bool full>
-bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_idx, edge_t xy_idx, bool &ret) { // NOLINT
+bool Graph<T>::propagate_edge_false_(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t uv_idx, edge_t xy_idx,
+                                     bool &ret) { // NOLINT
     // The function is best understood considering the following example graph:
     //
     //   v ->* x -> y ->* u
@@ -1164,7 +1172,7 @@ bool Graph<T>::propagate_edge_false_(Clingo::PropagateControl &ctl, edge_t uv_id
 
         if (cost_vu + uv.weight < 0) {
             ++stats_.false_edges;
-            if (!ctl.assignment().is_false(uv.lit)) {
+            if (!ass.is_false(uv.lit)) {
 #ifdef CLINGODL_CROSSCHECK
                 value_t sum = uv.weight;
                 if constexpr (full) {
