@@ -89,12 +89,11 @@ template <typename T> struct DLPropagator<T>::ThreadState {
         : stats{stats}, graph{stats, edges, propagate}, propagate_root{propagate_root},
           propagate_budget{propagate_budget} {}
 
-    ThreadStatistics &stats;               //!< Thread specific statistics.
-    Graph graph;                           //!< The incremental graph associated with the thread.
-    std::vector<literal_t> removed_watchs; //!< Literals from which watches have been removed.
-    std::vector<edge_t> todo_edges;        //!< Edges that have to be propagated.
-    uint64_t propagate_root;               //!< Propagation is disabled above this level.
-    uint64_t propagate_budget;             //!< The maximum budget invested into propagation.
+    ThreadStatistics &stats;        //!< Thread specific statistics:
+    Graph graph;                    //!< The incremental graph associated with the thread.
+    std::vector<edge_t> todo_edges; //!< Edges that have to be propagated.
+    uint64_t propagate_root;        //!< Propagation is disabled above this level.
+    uint64_t propagate_budget;      //!< The maximum budget invested into propagation.
 };
 
 //! Struct to store facts to repropagate.
@@ -155,7 +154,7 @@ template <typename T> void DLPropagator<T>::extend_model(Clingo::Model &model) {
     model.extend(vec);
 }
 
-template <typename T> void DLPropagator<T>::do_init(Clingo::PropagateInit init) {
+template <typename T> void DLPropagator<T>::do_init(Clingo::Assignment ass, Clingo::PropagateInit init) {
     if (!edges_.empty()) {
         init.check_mode(Clingo::PropagatorCheckMode::fixpoint);
     }
@@ -163,7 +162,7 @@ template <typename T> void DLPropagator<T>::do_init(Clingo::PropagateInit init) 
     edge_t edge_start = edges_.size();
 
     Timer t{stats_.time_init};
-    if (!add_constraints_(init)) {
+    if (!add_constraints_(ass, init)) {
         return;
     }
 
@@ -181,42 +180,41 @@ template <typename T> void DLPropagator<T>::do_init(Clingo::PropagateInit init) 
     stats_.variables = num_vertices();
 
     if (conf_.mutex_size > 0 && conf_.mutex_cutoff > 0) {
-        calculate_mutexes_(init, edge_start, outgoing);
+        calculate_mutexes_(ass, init, edge_start, outgoing);
     }
     initialize_states_(init);
 }
 
 template <typename T>
-void DLPropagator<T>::do_propagate(Clingo::PropagateControl ctl, Clingo::SolverLiteralSpan changes) {
+void DLPropagator<T>::do_propagate(Clingo::Assignment ass, Clingo::PropagateControl ctl,
+                                   Clingo::SolverLiteralSpan changes) {
     // add facts for propagation at the next step
-    if (ctl.assignment().decision_level() == 0) {
-        auto &facts = facts_[ctl.thread_id()];
+    if (ass.decision_level() == 0) {
+        auto &facts = facts_[ass.thread_id()];
         facts.lits.insert(facts.lits.end(), changes.begin(), changes.end());
     }
-    propagate_(ctl, changes);
+    propagate_(ass, ctl, changes);
 }
 
 template <typename T>
-void DLPropagator<T>::do_undo(id_t thread_id, [[maybe_unused]] Clingo::Assignment assignment,
-                              [[maybe_unused]] Clingo::SolverLiteralSpan changes) {
-    auto &state = states_[thread_id];
+void DLPropagator<T>::do_undo(Clingo::Assignment ass, [[maybe_unused]] Clingo::SolverLiteralSpan changes) {
+    auto &state = states_[ass.thread_id()];
     Timer t{state.stats.time_undo};
     state.graph.backtrack();
 }
 
-template <typename T> void DLPropagator<T>::do_check(Clingo::PropagateControl ctl) {
-    ThreadState &state = states_[ctl.thread_id()];
-    auto &facts = facts_[ctl.thread_id()];
-    auto assignment = ctl.assignment();
+template <typename T> void DLPropagator<T>::do_check(Clingo::Assignment ass, Clingo::PropagateControl ctl) {
+    ThreadState &state = states_[ass.thread_id()];
+    auto &facts = facts_[ass.thread_id()];
     // propagate facts from previous step
-    if (assignment.decision_level() == 0 && facts.limit > 0) {
-        propagate_(ctl, std::span{facts.lits.data(), facts.limit});
+    if (ass.decision_level() == 0 && facts.limit > 0) {
+        propagate_(ass, ctl, std::span{facts.lits.data(), facts.limit});
         facts.limit = 0;
     }
 #if defined(CLINGODL_CHECKSOLUTION) || defined(CLINGODL_CROSSCHECK)
-    if (ctl.assignment().is_total()) {
+    if (ass.is_total()) {
         for (auto &x : edges_) {
-            if (ctl.assignment().is_true(x.lit)) {
+            if (ass.is_true(x.lit)) {
                 if (!state.graph.has_value(x.from) || !state.graph.has_value(x.to) ||
                     !(state.graph.get_value(x.from) - state.graph.get_value(x.to) <= x.weight)) {
                     throw std::logic_error("not a valid solution");
@@ -235,13 +233,14 @@ template <typename T> auto DLPropagator<T>::map_vertex_(Clingo::Symbol const &sy
     return it->second;
 }
 
-template <typename T> auto DLPropagator<T>::add_constraints_(Clingo::PropagateInit &init) -> bool {
+template <typename T>
+auto DLPropagator<T>::add_constraints_(Clingo::Assignment ass, Clingo::PropagateInit init) -> bool {
     for (auto atom : init.base().theory()) {
         auto term = atom.name();
         if (match(term, "__diff_h", 0) || match(term, "__diff_b", 0)) {
             auto edge = parse<T>(lib_, atom, [this](Clingo::Symbol const &sym) { return map_vertex_(sym); });
             literal_t lit = init.solver_literal(atom.literal());
-            if (!normalize_constraint_(init, lit, edge.lhs, edge.rel, edge.rhs, edge.strict)) {
+            if (!normalize_constraint_(ass, init, lit, edge.lhs, edge.rel, edge.rhs, edge.strict)) {
                 return false;
             }
         }
@@ -250,8 +249,9 @@ template <typename T> auto DLPropagator<T>::add_constraints_(Clingo::PropagateIn
 }
 
 template <typename T>
-auto DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, literal_t literal, CoVarVec const &elements,
-                                            Relation op, T rhs, bool strict) -> bool { // NOLINT
+auto DLPropagator<T>::normalize_constraint_(Clingo::Assignment ass, Clingo::PropagateInit init, literal_t literal,
+                                            CoVarVec const &elements, Relation op, T rhs, bool strict)
+    -> bool { // NOLINT
     // rewrite '>', '<', and '>=' into '<='
     if (op == Relation::greater_than) {
         op = Relation::greater_equal;
@@ -267,19 +267,19 @@ auto DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, literal
         for (auto &[co, var] : elements) {
             copy.emplace_back(safe_inv<T>(co), var);
         }
-        return normalize_constraint_(init, literal, copy, Relation::less_equal, safe_inv<T>(rhs), strict);
+        return normalize_constraint_(ass, init, literal, copy, Relation::less_equal, safe_inv<T>(rhs), strict);
     }
 
     // hanle remaining '<=', '=', and '!='
     if (op == Relation::less_equal) {
-        if (!init.assignment().is_true(-literal) && !add_edges_(init, literal, elements, rhs, false)) {
+        if (!ass.is_true(-literal) && !add_edges_(ass, init, literal, elements, rhs, false)) {
             return false;
         }
     } else if (op == Relation::equal_to) {
         literal_t a = 0;
         literal_t b = 0;
         if (strict) {
-            if (init.assignment().is_true(literal)) {
+            if (ass.is_true(literal)) {
                 a = b = 1;
             } else {
                 a = init.add_literal();
@@ -300,10 +300,10 @@ auto DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, literal
             a = b = literal;
         }
 
-        if (!normalize_constraint_(init, a, elements, Relation::less_equal, rhs, strict)) {
+        if (!normalize_constraint_(ass, init, a, elements, Relation::less_equal, rhs, strict)) {
             return false;
         }
-        if (!normalize_constraint_(init, b, elements, Relation::greater_equal, rhs, strict)) {
+        if (!normalize_constraint_(ass, init, b, elements, Relation::greater_equal, rhs, strict)) {
             return false;
         }
 
@@ -312,7 +312,7 @@ auto DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, literal
         }
     } else if (op == Relation::no_equal_to) {
         if (strict) {
-            return normalize_constraint_(init, -literal, elements, Relation::equal_to, rhs, true);
+            return normalize_constraint_(ass, init, -literal, elements, Relation::equal_to, rhs, true);
         }
 
         auto a = init.add_literal();
@@ -331,10 +331,10 @@ auto DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, literal
             return false;
         }
 
-        if (!normalize_constraint_(init, a, elements, Relation::less_than, rhs, false)) {
+        if (!normalize_constraint_(ass, init, a, elements, Relation::less_than, rhs, false)) {
             return false;
         }
-        if (!normalize_constraint_(init, b, elements, Relation::greater_than, rhs, false)) {
+        if (!normalize_constraint_(ass, init, b, elements, Relation::greater_than, rhs, false)) {
             return false;
         }
     }
@@ -348,7 +348,7 @@ auto DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, literal
             op = Relation::equal_to;
         }
 
-        if (!normalize_constraint_(init, -literal, elements, op, rhs, false)) {
+        if (!normalize_constraint_(ass, init, -literal, elements, op, rhs, false)) {
             return false;
         }
     }
@@ -357,11 +357,11 @@ auto DLPropagator<T>::normalize_constraint_(Clingo::PropagateInit &init, literal
 }
 
 template <typename T>
-auto DLPropagator<T>::add_edges_(Clingo::PropagateInit &init, literal_t literal, CoVarVec const &covec, T rhs,
-                                 bool strict) -> bool {
+auto DLPropagator<T>::add_edges_(Clingo::Assignment ass, Clingo::PropagateInit init, literal_t literal,
+                                 CoVarVec const &covec, T rhs, bool strict) -> bool {
     char const *msg =
         "normalizing difference constraint failed: only constraints of form &diff {u - v} <= b are accepted";
-    if (strict && init.assignment().is_false(literal)) {
+    if (strict && ass.is_false(literal)) {
         return true;
     }
     if (covec.size() > 2) {
@@ -407,7 +407,7 @@ auto DLPropagator<T>::add_edges_(Clingo::PropagateInit &init, literal_t literal,
 }
 
 template <typename T>
-void DLPropagator<T>::add_edges_(Clingo::PropagateInit &init, vertex_t u_id, vertex_t v_id, value_t weight,
+void DLPropagator<T>::add_edges_(Clingo::PropagateInit init, vertex_t u_id, vertex_t v_id, value_t weight,
                                  literal_t lit, bool strict) {
     add_edge_(init, u_id, v_id, weight, lit);
     if (strict) {
@@ -416,17 +416,18 @@ void DLPropagator<T>::add_edges_(Clingo::PropagateInit &init, vertex_t u_id, ver
 }
 
 template <typename T>
-void DLPropagator<T>::add_edge_(Clingo::PropagateInit &init, vertex_t u_id, vertex_t v_id, value_t weight,
+void DLPropagator<T>::add_edge_(Clingo::PropagateInit init, vertex_t u_id, vertex_t v_id, value_t weight,
                                 literal_t lit) {
     auto id = numeric_cast<edge_t>(edges_.size());
     edges_.push_back({u_id, v_id, weight, lit});
     lit_to_edges_.emplace(lit, id);
+    init.add_watch(lit);
     for (id_t i = 0; i < init.number_of_threads(); ++i) {
-        init.add_watch(lit, i);
         if (conf_.get_propagate_mode(i) >= PropagationMode::Zero || conf_.get_propagate_root(i) > 0 ||
             conf_.get_propagate_budget(i) > 0) {
             disable_edges_ = true;
-            init.add_watch(-lit, i);
+            init.add_watch(-lit);
+            break;
         }
     }
 }
@@ -522,7 +523,7 @@ template <typename T> void DLPropagator<T>::cc_calculate_(AdjacencyMap &outgoing
 }
 
 template <typename T>
-void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, edge_t edge_start,
+void DLPropagator<T>::calculate_mutexes_(Clingo::Assignment ass, Clingo::PropagateInit init, edge_t edge_start,
                                          AdjacencyMap &outgoing) { // NOLINT
     // let r and s be edge literals and T be the true literal:
     //
@@ -545,8 +546,6 @@ void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, edge_t edg
     static constexpr auto invalid = std::numeric_limits<index_t>::max();
     std::vector<State> queue;
     std::vector<literal_t> clause;
-
-    auto ass = init.assignment();
 
     // traverse graph starting from each edge
     for (edge_t start_id = edge_start, size = numeric_cast<edge_t>(edges_.size()); start_id < size; ++start_id) {
@@ -613,7 +612,7 @@ void DLPropagator<T>::calculate_mutexes_(Clingo::PropagateInit &init, edge_t edg
     }
 }
 
-template <typename T> void DLPropagator<T>::initialize_states_(Clingo::PropagateInit &init) {
+template <typename T> void DLPropagator<T>::initialize_states_(Clingo::PropagateInit init) {
     states_.clear();
     stats_.thread_statistics.resize(init.number_of_threads());
     if (facts_.size() < numeric_cast<size_t>(init.number_of_threads())) {
@@ -671,45 +670,19 @@ template <typename T> void DLPropagator<T>::sort_edges(SortMode mode, ThreadStat
 }
 
 template <typename T>
-void DLPropagator<T>::propagate_(Clingo::PropagateControl ctl, Clingo::SolverLiteralSpan changes) { // NOLINT
+void DLPropagator<T>::propagate_(Clingo::Assignment ass, Clingo::PropagateControl ctl,
+                                 Clingo::SolverLiteralSpan changes) { // NOLINT
     // This function checks for conflicts and propagates edges if enabled. If
     // propagation is enabled, the graph has to be propagated after each edge
     // added. If limited propagation is enabled and the limit is reached,
     // propagation will be disabled for all further calls below the current
     // decision level.
-    auto thread_id = ctl.thread_id();
-    auto ass = ctl.assignment();
+    auto thread_id = ass.thread_id();
     ThreadState &state = states_[thread_id];
     Timer timer{state.stats.time_propagate};
     auto level = ass.decision_level();
     bool propagate = state.graph.mode() >= PropagationMode::Strong || level < state.propagate_root;
     state.graph.ensure_decision_level(level, propagate || state.propagate_budget > 0);
-
-    // re-enable removed watches
-    if (state.graph.can_propagate()) {
-        // Note: If propagation is re-enabled, we re-add watches for literals
-        // that have been removed. Since we removed the watches, some of them
-        // might have become true unnoticed on earlier decision levels. We keep
-        // such edges in the vector and simply disable them again. It would be
-        // more efficient to re-add watches in the undo function.
-        // Unfortunately, this is not supported by the current API.
-        auto it = state.removed_watchs.begin();
-        auto ie = state.removed_watchs.end();
-        for (auto jt = it; jt != ie; ++jt) {
-            auto truth = ass.value(*jt);
-            if (truth == true) {
-                disable_edge_by_lit(state, *jt);
-            }
-            if (!truth.has_value() || ass.level(*jt) == level) {
-                ctl.add_watch(*jt);
-                if (it != jt) {
-                    *it = *jt;
-                }
-                ++it;
-            }
-        }
-        state.removed_watchs.erase(it, ie);
-    }
 
     // fill the todo queue
     state.todo_edges.clear();
@@ -718,9 +691,6 @@ void DLPropagator<T>::propagate_(Clingo::PropagateControl ctl, Clingo::SolverLit
         auto ie = lit_to_edges_.end();
         if (state.graph.can_propagate()) {
             disable_edge_by_lit(state, lit);
-        } else if (it == ie) {
-            state.removed_watchs.emplace_back(lit);
-            ctl.remove_watch(lit);
         }
         for (; it != ie && it->first == lit; ++it) {
             if (state.graph.edge_is_enabled(it->second)) {
@@ -743,21 +713,19 @@ void DLPropagator<T>::propagate_(Clingo::PropagateControl ctl, Clingo::SolverLit
             auto &edge = edges_[edge_idx];
             auto &info = vertex_info_[edge.from];
             // check for conflicts
-            if (!state.graph.add_edge(ctl, edge_idx, info.cc)) {
+            if (!state.graph.add_edge(ass, ctl, edge_idx, info.cc)) {
                 return;
             }
         }
     }
 }
 
-template <typename T>
-auto DLPropagator<T>::do_decide(id_t thread_id, Clingo::Assignment assign, literal_t fallback) -> literal_t {
-    static_cast<void>(assign);
+template <typename T> auto DLPropagator<T>::do_decide(Clingo::Assignment ass, literal_t fallback) -> literal_t {
     if (conf_.decision_mode == DecisionMode::Disabled) {
         return fallback;
     }
     bool phase = conf_.decision_mode == DecisionMode::MinConflict;
-    ThreadState &state = states_[thread_id];
+    ThreadState &state = states_[ass.thread_id()];
     auto it = lit_to_edges_.find(fallback);
     if (it != lit_to_edges_.end() && state.graph.edge_is_negative(it->second) == phase) {
         return -fallback;
