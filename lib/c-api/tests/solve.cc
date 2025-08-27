@@ -97,6 +97,8 @@ assign(3,4,4).
 bound(104).
 )";
 
+    Fixture() { theory.register_theory(ctl); }
+
     //! Create a symbol for sequence atoms of task/machine pairs.
     auto seq(int a, int b, int c, int d, int e) -> Clingo::Symbol {
         return Clingo::Function(lib, "seq",
@@ -214,7 +216,6 @@ bound(104).
 } // namespace
 
 TEST_CASE_METHOD(Fixture, "solving base", "[clingo]") { // NOLINT
-    theory.register_theory(ctl);
     theory.rewrite(lib, ctl,
                    "#program base.\n"
                    "1 { a; b } 1. &diff { a - b } <= 3.\n"
@@ -235,7 +236,6 @@ TEST_CASE_METHOD(Fixture, "solving base", "[clingo]") { // NOLINT
 }
 
 TEST_CASE_METHOD(Fixture, "solving not_equal", "[clingo]") {
-    theory.register_theory(ctl);
     theory.rewrite(lib, ctl,
                    "#program base.\n"
                    "{ a }. &diff { b } != 5 :- not a.\n");
@@ -246,7 +246,6 @@ TEST_CASE_METHOD(Fixture, "solving not_equal", "[clingo]") {
 }
 
 TEST_CASE_METHOD(Fixture, "solving cc", "[clingo]") {
-    theory.register_theory(ctl);
     theory.rewrite(lib, ctl,
                    "#program base.\n"
                    "&diff { 0 - a } <= -5.\n"
@@ -268,8 +267,7 @@ TEST_CASE_METHOD(Fixture, "solving cc", "[clingo]") {
 }
 
 TEST_CASE_METHOD(Fixture, "solving configure", "[clingo]") {
-    theory.configure("propagate", "full");
-    theory.register_theory(ctl);
+    ctl.config()["clingo_dl"]["propagate"] = "full";
     theory.rewrite(lib, ctl,
                    "#program base.\n"
                    "&diff { a - 0 } <= 0.\n"
@@ -283,8 +281,7 @@ TEST_CASE_METHOD(Fixture, "solving configure", "[clingo]") {
 }
 
 TEST_CASE_METHOD(Fixture, "solving rdl", "[clingo]") {
-    theory.configure("rdl", "yes");
-    theory.register_theory(ctl);
+    ctl.config()["clingo_dl"]["rdl"] = "yes";
     theory.rewrite(lib, ctl,
                    "#program base.\n"
                    "&diff { a } >= \"0.5\" * 3.\n");
@@ -295,7 +292,6 @@ TEST_CASE_METHOD(Fixture, "solving rdl", "[clingo]") {
 }
 
 TEST_CASE_METHOD(Fixture, "solving parse", "[clingo]") {
-    theory.register_theory(ctl);
     theory.rewrite(lib, ctl,
                    "#program base.\n"
                    "&diff { p( 1 + 2 ) - q( 3 * 4 - 7 ) } <= 3 - 9.\n");
@@ -308,7 +304,6 @@ TEST_CASE_METHOD(Fixture, "solving parse", "[clingo]") {
 }
 
 TEST_CASE_METHOD(Fixture, "solving normalize", "[clingo]") {
-    theory.register_theory(ctl);
     theory.rewrite(lib, ctl,
                    "#program base.\n"
                    "&diff { a } = b.\n"
@@ -326,7 +321,6 @@ TEST_CASE_METHOD(Fixture, "solving normalize", "[clingo]") {
 }
 
 TEST_CASE_METHOD(Fixture, "solving empty", "[clingo]") {
-    theory.register_theory(ctl);
     theory.rewrite(lib, ctl,
                    "#program base.\n"
                    "a :- &diff { a - a } <= 5.\n"
@@ -340,7 +334,6 @@ TEST_CASE_METHOD(Fixture, "solving empty", "[clingo]") {
 }
 
 TEST_CASE_METHOD(Fixture, "solving symbols", "[clingo]") {
-    theory.register_theory(ctl);
     theory.rewrite(lib, ctl,
                    "#program base.\n"
                    "&diff{ (\"foo\\\\\\nbar\\\"foo\",123) - 0 } <= 17.\n");
@@ -351,17 +344,70 @@ TEST_CASE_METHOD(Fixture, "solving symbols", "[clingo]") {
 }
 
 TEST_CASE_METHOD(Fixture, "solving task-assignment", "[clingo]") {
-    auto mode = GENERATE("no", "inverse", "partial", "partial+", "zero", "full");
-    auto mutex = GENERATE("0", "10,100");
-    auto sort_edges = GENERATE("no", "weight", "potential");
-    theory.configure("propagate", mode);
-    theory.configure("add-mutexes", mutex);
-    theory.configure("sort-edges", sort_edges);
-    theory.register_theory(ctl);
+    auto cfg = ctl.config()["clingo_dl"];
+    cfg["propagate"] = GENERATE("no", "inverse", "partial", "partial+", "zero", "full");
+    cfg["add_mutexes"] = GENERATE("0", "10,100");
+    cfg["sort_edges"] = GENERATE("no", "weight", "potential");
     theory.rewrite(lib, ctl, ENC);
     ctl.ground();
     theory.prepare(ctl);
     REQUIRE(solve(ctl) == sols());
+}
+
+TEST_CASE_METHOD(Fixture, "config", "[clingo]") {
+    auto cfg = ctl.config()["clingo_dl"];
+    // propagation mode
+    REQUIRE(cfg["propagate"].array().size() == 0);
+    REQUIRE(cfg["propagate_root"].array().size() == 0);
+    REQUIRE(cfg["sort_edges"].array().size() == 0);
+    for (auto const &val : std::array{"no", "inverse", "partial", "partial+", "zero", "full"}) {
+        cfg["propagate"] = val;
+        cfg["propagate"][1] = val;
+        REQUIRE(cfg["propagate"].value() == val);
+        REQUIRE(!cfg["propagate"][0].value());
+        REQUIRE(cfg["propagate"][1].value() == val);
+        REQUIRE(cfg["propagate"].array().size() == 2);
+    }
+    // propagation level
+    cfg["propagate_root"] = "10";
+    cfg["propagate_root"][1] = "20";
+    REQUIRE(cfg["propagate_root"].value() == "10");
+    REQUIRE(!cfg["propagate_root"][0].value());
+    REQUIRE(cfg["propagate_root"][1].value() == "20");
+    REQUIRE(cfg["propagate_root"].array().size() == 2);
+    // propagation budget
+    cfg["propagate_budget"] = "10";
+    cfg["propagate_budget"][1] = "20";
+    REQUIRE(cfg["propagate_budget"].value() == "10");
+    REQUIRE(!cfg["propagate_budget"][0].value());
+    REQUIRE(cfg["propagate_budget"][1].value() == "20");
+    REQUIRE(cfg["propagate_budget"].array().size() == 2);
+    // edge sorting
+    for (auto const &val : std::array{"no", "weight", "weight-reversed", "potential", "potential-reversed"}) {
+        cfg["sort_edges"] = val;
+        cfg["sort_edges"][1] = val;
+        REQUIRE(cfg["sort_edges"].value() == val);
+        REQUIRE(!cfg["sort_edges"][0].value());
+        REQUIRE(cfg["sort_edges"][1].value() == val);
+        REQUIRE(cfg["sort_edges"].array().size() == 2);
+    }
+    // add mutexes
+    cfg["add_mutexes"] = "2,300";
+    REQUIRE(cfg["add_mutexes"].value() == "2,300");
+    // decision heuristic
+    for (auto const &val : std::array{"no", "min", "max"}) {
+        cfg["dl_heuristic"] = val;
+        REQUIRE(cfg["dl_heuristic"].value() == val);
+    }
+    // rdl
+    cfg["rdl"] = "yes";
+    REQUIRE(cfg["rdl"].value() == "yes");
+    // shift constraints
+    cfg["shift_constraints"] = "yes";
+    REQUIRE(cfg["shift_constraints"].value() == "yes");
+    // compute components
+    cfg["compute_components"] = "yes";
+    REQUIRE(cfg["compute_components"].value() == "yes");
 }
 
 } // namespace ClingoDL

@@ -34,6 +34,8 @@ using namespace ClingoDL;
 
 namespace {
 
+using namespace std::string_view_literals;
+
 using Clingo::Detail::handle_error;
 
 //! C initialization callback for the DL propagator.
@@ -126,7 +128,6 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
   public:
     DLPropagatorFacade(clingo_lib_t *lib, clingo_control_t *control, PropagatorConfig const &conf)
         : prop_{Clingo::Library{lib, true}, step_, conf} {
-        handle_error(clingo_control_parse_string(control, THEORY, std::strlen(THEORY)));
         static clingo_propagator_t prop = {
             init<T>, nullptr,  propagate<T>,
             undo<T>, check<T>, conf.decision_mode != DecisionMode::Disabled ? decide<T> : nullptr,
@@ -247,10 +248,59 @@ auto parse_uint64_pre(std::string_view value) -> std::optional<std::pair<uint64_
     return err == std::errc{} ? std::make_optional(std::make_pair(res, std::string_view(ptr, last))) : std::nullopt;
 }
 
+//! Turn the largest prefix of value into an unsigned integer and return the value and remainder.
+//!
+//! The function returns a nullopt if there are no leading digits.
+auto parse_thread(std::string_view value) -> std::pair<std::optional<clingo_id_t>, std::string_view> {
+    auto pos = value.find_last_of(",");
+    if (pos != std::string_view::npos) {
+        clingo_id_t res = 0;
+        auto spn = value.substr(pos + 1);
+        auto end = spn.data() + spn.size();
+        auto [ptr, err] = std::from_chars(spn.data(), end, res);
+        if (err == std::errc{} && ptr == end) {
+            return {res, value.substr(0, pos)};
+        }
+        throw std::invalid_argument("invalid thread id");
+    }
+    return {std::nullopt, value};
+}
+
 //! Turn the value into an uint64_t and return it as optional.
 auto parse_uint64(std::string_view value) -> std::optional<uint64_t> {
     auto opt = parse_uint64_pre(value);
     return (opt && opt->second.empty()) ? std::optional{opt->first} : std::nullopt;
+}
+
+template <typename Enum, size_t N> class EnumStringMap {
+  public:
+    constexpr EnumStringMap(const std::array<std::pair<std::string_view, Enum>, N> &map) : map_{map} {}
+
+    Enum from_string(std::string_view value) const {
+        for (const auto &[name, mode] : map_) {
+            if (iequals(value, name)) {
+                return mode;
+            }
+        }
+        throw std::invalid_argument("invalid enum string");
+    }
+
+    std::string_view to_string(Enum mode) const {
+        for (const auto &[name, m] : map_) {
+            if (mode == m) {
+                return name;
+            }
+        }
+        throw std::invalid_argument("invalid enum value");
+    }
+
+  private:
+    std::array<std::pair<std::string_view, Enum>, N> map_;
+};
+
+template <typename Enum, size_t N>
+constexpr auto make_enum_string_map(std::array<std::pair<std::string_view, Enum>, N> const &map) {
+    return EnumStringMap<Enum, N>(map);
 }
 
 //! Parse thread-specific option via a callback.
@@ -269,132 +319,283 @@ template <typename F, typename G> auto set_config(std::string_view value, void *
     return false;
 }
 
-//! Parse a level to limit full propagation.
-auto parse_root(char const *value, size_t size, void *data, bool *result) -> bool {
+template <class T> auto c_parse(const char *value, size_t size, void *data, bool *result) -> bool {
     CLINGO_TRY {
-        auto res = parse_uint64_pre({value, size});
-        *result = res && set_config(
-                             res->second, data, [&](PropagatorConfig &config) { config.propagate_root = res->first; },
-                             [&](ThreadConfig &config) { config.propagate_root = res->first; });
+        T{*static_cast<PropagatorConfig *>(data)}.set({value, size});
+        *result = true;
     }
-    CLINGO_CATCH;
-}
-
-//! Parse the propagation budget and store it in data.
-auto parse_budget(const char *value, size_t size, void *data, bool *result) -> bool {
-    CLINGO_TRY {
-        auto res = parse_uint64_pre({value, size});
-        *result = res && set_config(
-                             res->second, data, [&](PropagatorConfig &config) { config.propagate_budget = res->first; },
-                             [&](ThreadConfig &config) { config.propagate_budget = res->first; });
-    }
-    CLINGO_CATCH;
-}
-
-//! Parse the mutex detection mode and store it in data.
-auto parse_mutex(const char *value, size_t size, void *data, bool *result) -> bool {
-    CLINGO_TRY {
-        auto &pc = *static_cast<PropagatorConfig *>(data);
+    catch (std::invalid_argument const &e) {
+        std::ignore = e;
         *result = false;
-        if (auto fst = parse_uint64_pre({value, size})) {
-            pc.mutex_size = fst->first;
+    }
+    CLINGO_CATCH;
+}
+
+template <class T> auto c_parse_thread(const char *value, size_t size, void *data, bool *result) -> bool {
+    CLINGO_TRY {
+        auto [index, span] = parse_thread({value, size});
+        T{*static_cast<PropagatorConfig *>(data)}.set(index, span);
+        *result = true;
+    }
+    catch (std::invalid_argument const &e) {
+        std::ignore = e;
+        *result = false;
+    }
+    CLINGO_CATCH;
+}
+
+class ConfigRoot {
+  public:
+    ConfigRoot(PropagatorConfig &cfg) : cfg_{&cfg} {}
+
+    void set(std::optional<size_t> index, std::string_view value) {
+        auto root = parse_uint64(value);
+        if (!root) {
+            throw std::invalid_argument("invalid root value");
+        }
+        if (index) {
+            cfg_->ensure(*index).propagate_root = *root;
+        } else {
+            cfg_->propagate_root = *root;
+        }
+    }
+
+    auto get(std::optional<size_t> index) const -> std::optional<std::string> {
+        if (index) {
+            if (index < cfg_->thread_config.size() && cfg_->thread_config[*index].propagate_root) {
+                return std::to_string(*cfg_->thread_config[*index].propagate_root);
+            }
+            return std::nullopt;
+        }
+        return std::to_string(cfg_->propagate_root);
+    }
+
+    auto size() const -> size_t { return cfg_->thread_config.size(); }
+
+    static constexpr auto desc = //
+        "Enable full propagation below decision level [0]\n"
+        "      <arg>   : <n>[,<thread>]\n"
+        "      <n>     : Upper bound for decision level\n"
+        "      <thread>: Restrict to thread"sv;
+
+  private:
+    PropagatorConfig *cfg_;
+};
+
+class ConfigBudget {
+  public:
+    ConfigBudget(PropagatorConfig &cfg) : cfg_{&cfg} {}
+
+    void set(std::optional<size_t> index, std::string_view value) {
+        auto root = parse_uint64(value);
+        if (!root) {
+            throw std::invalid_argument("invalid budget value");
+        }
+        if (index) {
+            cfg_->ensure(*index).propagate_budget = *root;
+        } else {
+            cfg_->propagate_budget = *root;
+        }
+    }
+
+    auto get(std::optional<size_t> index) const -> std::optional<std::string> {
+        if (index) {
+            if (index < cfg_->thread_config.size() && cfg_->thread_config[*index].propagate_budget) {
+                return std::to_string(*cfg_->thread_config[*index].propagate_budget);
+            }
+            return std::nullopt;
+        }
+        return std::to_string(cfg_->propagate_budget);
+    }
+
+    auto size() const -> size_t { return cfg_->thread_config.size(); }
+
+    static constexpr auto desc = //
+        "Enable full propagation limiting to budget [0]\n"
+        "      <arg>   : <n>[,<thread>]\n"
+        "      <n>     : Budget roughly corresponding to cost of consistency checks\n"
+        "                (if possible use with --propagate-root greater 0)\n"
+        "      <thread>: Restrict to thread"sv;
+
+  private:
+    PropagatorConfig *cfg_;
+};
+
+class ConfigMode {
+  public:
+    ConfigMode(PropagatorConfig &cfg) : cfg_{&cfg} {}
+
+    void set(std::optional<size_t> index, std::string_view value) {
+        auto mode = map_.from_string(value);
+        if (index) {
+            cfg_->ensure(*index).propagate_mode = mode;
+        } else {
+            cfg_->propagate_mode = mode;
+        }
+    }
+
+    auto get(std::optional<size_t> index) const -> std::optional<std::string_view> {
+        if (index) {
+            if (index < cfg_->thread_config.size() && cfg_->thread_config[*index].propagate_mode) {
+                return map_.to_string(cfg_->thread_config[*index].propagate_mode.value());
+            }
+            return std::nullopt;
+        }
+        return map_.to_string(cfg_->propagate_mode);
+    }
+
+    auto size() const -> size_t { return cfg_->thread_config.size(); }
+
+    static constexpr auto desc = //
+        "Set propagation mode [no]\n"
+        "      <mode>  : {no,inverse,partial,partial+,zero,full}[,<thread>]\n"
+        "        no      : No propagation; only detect conflicts\n"
+        "        inverse : Check inverse constraints\n"
+        "        partial : Detect some conflicts\n"
+        "        partial+: Detect some more conflicts\n"
+        "        zero    : Detect all immediate conflicts through zero nodes\n"
+        "        full    : Detect all immediate conflicts\n"
+        "      <thread>: Restrict to thread"sv;
+
+  private:
+    static constexpr auto map_ = make_enum_string_map(std::array{
+        std::pair{"no"sv, PropagationMode::Check},
+        std::pair{"inverse"sv, PropagationMode::Trivial},
+        std::pair{"partial"sv, PropagationMode::Weak},
+        std::pair{"partial+"sv, PropagationMode::WeakPlus},
+        std::pair{"zero"sv, PropagationMode::Zero},
+        std::pair{"full"sv, PropagationMode::Strong},
+    });
+
+    PropagatorConfig *cfg_;
+};
+
+class ConfigSort {
+  public:
+    ConfigSort(PropagatorConfig &cfg) : cfg_{&cfg} {}
+
+    void set(std::optional<size_t> index, std::string_view value) {
+        auto mode = map_.from_string(value);
+        if (index) {
+            cfg_->ensure(*index).sort_mode = mode;
+        } else {
+            cfg_->sort_mode = mode;
+        }
+    }
+
+    auto get(std::optional<size_t> index) const -> std::optional<std::string_view> {
+        if (index) {
+            if (index < cfg_->thread_config.size() && cfg_->thread_config[*index].sort_mode) {
+                return map_.to_string(*cfg_->thread_config[*index].sort_mode);
+            }
+            return std::nullopt;
+        }
+        return map_.to_string(cfg_->sort_mode);
+    }
+
+    auto size() const -> size_t { return cfg_->thread_config.size(); }
+
+    static constexpr auto desc = //
+        "Sort edges for propagation [weight]\n"
+        "      <arg>: {no, weight, weight-reversed, potential, potential-reversed}\n"
+        "        no                : No sorting\n"
+        "        weight            : Sort by edge weight\n"
+        "        weight-reversed   : Sort by negative edge weight\n"
+        "        potential         : Sort by relative potential\n"
+        "        potential-reversed: Sort by relative negative potential"sv;
+
+  private:
+    static constexpr auto map_ = make_enum_string_map(std::array{
+        std::pair{"no"sv, SortMode::No},
+        std::pair{"weight-reversed"sv, SortMode::WeightRev},
+        std::pair{"weight"sv, SortMode::Weight},
+        std::pair{"potential-reversed"sv, SortMode::PotentialRev},
+        std::pair{"potential"sv, SortMode::Potential},
+    });
+
+    PropagatorConfig *cfg_;
+};
+
+class ConfigMutex {
+  public:
+    ConfigMutex(PropagatorConfig &cfg) : cfg_{&cfg} {}
+
+    void set(std::string_view value) {
+        if (auto fst = parse_uint64_pre(value)) {
+            cfg_->mutex_size = fst->first;
             if (fst->second.empty()) {
-                pc.mutex_cutoff = 10 * fst->first;
-                *result = true;
+                cfg_->mutex_cutoff = 10 * fst->first;
+                return;
             } else if (auto snd = fst->second.starts_with(',') ? parse_uint64(fst->second.substr(1)) : std::nullopt) {
-                pc.mutex_cutoff = *snd;
-                *result = true;
+                cfg_->mutex_cutoff = *snd;
+                return;
             }
         }
+        throw std::invalid_argument("invalid propagate mutex value");
     }
-    CLINGO_CATCH;
-}
 
-//! Parse the propagation mode and store it in data.
-auto parse_mode(char const *value, size_t size, void *data, bool *result) -> bool {
-    CLINGO_TRY {
-        auto mode = PropagationMode::Check;
-        auto str = std::string_view{value, size};
-        auto res = std::optional<std::string_view>{};
-        if (res = iequals_pre(str, "no"), res) {
-            mode = PropagationMode::Check;
-        } else if (res = iequals_pre(str, "inverse"); res) {
-            mode = PropagationMode::Trivial;
-        } else if (res = iequals_pre(str, "partial+"); res) {
-            mode = PropagationMode::WeakPlus;
-        } else if (res = iequals_pre(str, "partial"); res) {
-            mode = PropagationMode::Weak;
-        } else if (res = iequals_pre(str, "zero"); res) {
-            mode = PropagationMode::Zero;
-        } else if (res = iequals_pre(str, "full"); res) {
-            mode = PropagationMode::Strong;
-        }
-        *result = res && set_config(
-                             *res, data, [mode](PropagatorConfig &config) { config.propagate_mode = mode; },
-                             [mode](ThreadConfig &config) { config.propagate_mode = mode; });
+    auto get() const -> std::optional<std::string> {
+        return std::to_string(cfg_->mutex_size) + "," + std::to_string(cfg_->mutex_cutoff);
     }
-    CLINGO_CATCH;
-}
 
-//! Parse the sort mode and store it data.
-//!
-//! Return false if there is a parse error.
-auto parse_sort(char const *value, size_t size, void *data, bool *result) -> bool {
-    CLINGO_TRY {
-        auto sort = SortMode::Weight;
-        auto str = std::string_view{value, size};
-        auto res = std::optional<std::string_view>{};
-        if (res = iequals_pre(str, "no"); res) {
-            sort = SortMode::No;
-        } else if (res = iequals_pre(str, "weight-reversed"); res) {
-            sort = SortMode::WeightRev;
-        } else if (res = iequals_pre(str, "weight"); res) {
-            sort = SortMode::Weight;
-        } else if (res = iequals_pre(str, "potential-reversed"); res) {
-            sort = SortMode::PotentialRev;
-        } else if (res = iequals_pre(str, "potential"); res) {
-            sort = SortMode::Potential;
-        }
-        *result = res && set_config(
-                             *res, data, [sort](PropagatorConfig &config) { config.sort_mode = sort; },
-                             [sort](ThreadConfig &config) { config.sort_mode = sort; });
-    }
-    CLINGO_CATCH;
-}
+    static constexpr auto desc = //
+        "Add mutexes in a preprocessing step [0]\n"
+        "      <arg>: <max>[,<cut>]\n"
+        "      <max>: Maximum size of mutexes to add\n"
+        "      <cut>: Limit costs to calculate mutexes"sv;
 
-//! Parse the decision mode.
-auto parse_decide(char const *value, size_t size, void *data, bool *result) -> bool {
-    CLINGO_TRY {
-        auto &mode = static_cast<PropagatorConfig *>(data)->decision_mode;
-        auto str = std::string_view{value, size};
-        auto res = false;
-        if (res = iequals(str, "no"); res) {
-            mode = DecisionMode::Disabled;
-        } else if (res = iequals(str, "min"); res) {
-            mode = DecisionMode::MinConflict;
-        } else if (res = iequals(str, "max"); res) {
-            mode = DecisionMode::MaxConflict;
-        }
-        *result = res;
-    }
-    CLINGO_CATCH;
-}
+  private:
+    PropagatorConfig *cfg_;
+};
 
-//! Parse a Boolean and store it in data.
-auto parse_bool(const char *value, size_t size, void *data, bool *result) -> bool {
-    CLINGO_TRY {
-        auto &flag = *static_cast<bool *>(data);
-        auto str = std::string_view{value, size};
-        auto res = false;
-        if (res = iequals(str, "no") || iequals(str, "off") || iequals(str, "0"); res) {
-            flag = false;
-        } else if (res = iequals(str, "yes") || iequals(str, "on") || iequals(str, "1"); res) {
-            flag = true;
+class ConfigDecide {
+  public:
+    ConfigDecide(PropagatorConfig &cfg) : cfg_{&cfg} {}
+
+    void set(std::string_view value) { cfg_->decision_mode = map_.from_string(value); }
+
+    auto get() const -> std::optional<std::string_view> { return map_.to_string(cfg_->decision_mode); }
+
+    static constexpr auto desc = //
+        "Decision heuristic for difference constraints\n"
+        "      <arg>: {none, min, max}\n"
+        "        no : Use default decision heuristic\n"
+        "        min: Try to minimize conflicts\n"
+        "        max: Try to maximize conflicts"sv;
+
+  private:
+    static constexpr auto map_ = make_enum_string_map(std::array{
+        std::pair{"no"sv, DecisionMode::Disabled},
+        std::pair{"min"sv, DecisionMode::MinConflict},
+        std::pair{"max"sv, DecisionMode::MaxConflict},
+    });
+
+    PropagatorConfig *cfg_;
+};
+
+class ConfigBool {
+  public:
+    ConfigBool(bool &target) : target_{&target} {}
+
+    void set(std::string_view value) {
+        if (iequals(value, "no") || iequals(value, "off") || iequals(value, "0")) {
+            *target_ = false;
+        } else if (iequals(value, "yes") || iequals(value, "on") || iequals(value, "1")) {
+            *target_ = true;
+        } else {
+            throw std::invalid_argument("invalid boolean value");
         }
-        *result = res;
     }
-    CLINGO_CATCH;
-}
+
+    auto get() const -> std::optional<std::string_view> { return *target_ ? "yes" : "no"; }
+
+  private:
+    bool *target_;
+};
+
+static constexpr auto desc_rdl = "Enable support for real numbers [no]"sv;
+static constexpr auto desc_shift = "Shift constraints into head of integrity constraints [no]"sv;
+static constexpr auto desc_comp = "Compute connected components [yes]"sv;
 
 //! Set the given error message if the Boolean is false.
 //!
@@ -446,13 +647,19 @@ struct clingodl_theory {
     static auto register_(void *self, clingo_control_t *control) -> bool {
         auto theory = static_cast<clingodl_theory *>(self);
         CLINGO_TRY {
-            if (!theory->rdl) {
-                theory->clingodl =
-                    std::make_unique<DLPropagatorFacade<int>>(c_cast(theory->lib), control, theory->config);
-            } else {
-                theory->clingodl =
-                    std::make_unique<DLPropagatorFacade<double>>(c_cast(theory->lib), control, theory->config);
-            }
+            handle_error(clingo_control_parse_string(control, THEORY, std::strlen(THEORY)));
+            auto ctl = Clingo::Control{control, true};
+            auto cfg = ctl.config();
+            cfg.add("clingo_dl", "ClingoDL configuration");
+            cfg.add("clingo_dl.propagate[]", "Set propagation mode", ConfigMode{theory->config});
+            cfg.add("clingo_dl.propagate_root[]", ConfigRoot::desc, ConfigRoot{theory->config});
+            cfg.add("clingo_dl.propagate_budget[]", ConfigBudget::desc, ConfigBudget{theory->config});
+            cfg.add("clingo_dl.sort_edges[]", ConfigSort::desc, ConfigSort{theory->config});
+            cfg.add("clingo_dl.add_mutexes", ConfigMutex::desc, ConfigMutex{theory->config});
+            cfg.add("clingo_dl.dl_heuristic", ConfigDecide::desc, ConfigDecide{theory->config});
+            cfg.add("clingo_dl.rdl", desc_rdl, ConfigBool{theory->rdl});
+            cfg.add("clingo_dl.shift_constraints", desc_shift, ConfigBool{theory->shift_constraints});
+            cfg.add("clingo_dl.compute_components", desc_comp, ConfigBool{theory->config.calculate_cc});
         }
         CLINGO_CATCH;
     }
@@ -468,8 +675,20 @@ struct clingodl_theory {
         CLINGO_CATCH;
     }
 
-    static auto prepare([[maybe_unused]] void *self, [[maybe_unused]] clingo_control_t *control) -> bool {
-        return true;
+    static auto prepare(void *self, clingo_control_t *control) -> bool {
+        auto theory = static_cast<clingodl_theory *>(self);
+        CLINGO_TRY {
+            if (theory->clingodl == nullptr) {
+                if (!theory->rdl) {
+                    theory->clingodl =
+                        std::make_unique<DLPropagatorFacade<int>>(c_cast(theory->lib), control, theory->config);
+                } else {
+                    theory->clingodl =
+                        std::make_unique<DLPropagatorFacade<double>>(c_cast(theory->lib), control, theory->config);
+                }
+            }
+        }
+        CLINGO_CATCH;
     }
 
     static void destroy(void *self) {
@@ -477,39 +696,12 @@ struct clingodl_theory {
         std::unique_ptr<clingodl_theory>{theory};
     }
 
-    static auto configure(void *self, char const *key, size_t key_size, char const *value, size_t value_size) -> bool {
+    // TODO: legacy will be removed with next clingo update
+    static auto configure([[maybe_unused]] void *self, char const *key, size_t key_size,
+                          [[maybe_unused]] char const *value, [[maybe_unused]] size_t value_size) -> bool {
         CLINGO_TRY {
-            auto theory = static_cast<clingodl_theory *>(self);
-            auto sv_key = std::string_view{key, key_size};
-            if (sv_key == "propagate") {
-                return check_parse("propagate", parse_mode, value, value_size, &theory->config);
-            }
-            if (sv_key == "propagate-root") {
-                return check_parse("propagate-root", parse_root, value, value_size, &theory->config);
-            }
-            if (sv_key == "propagate-budget") {
-                return check_parse("propgate-budget", parse_budget, value, value_size, &theory->config);
-            }
-            if (sv_key == "add-mutexes") {
-                return check_parse("add-mutexes", parse_mutex, value, value_size, &theory->config);
-            }
-            if (sv_key == "sort-edges") {
-                return check_parse("sort-edges", parse_sort, value, value_size, &theory->config);
-            }
-            if (sv_key == "rdl") {
-                return check_parse("rdl", parse_bool, value, value_size, &theory->rdl);
-            }
-            if (sv_key == "dl-heuristic") {
-                return check_parse("dl-heuristic", parse_decide, value, value_size, &theory->config);
-            }
-            if (sv_key == "shift-constraints") {
-                return check_parse("shift-constraints", parse_bool, value, value_size, &theory->shift_constraints);
-            }
-            if (sv_key == "compute-components") {
-                return check_parse("compute-components", parse_bool, value, value_size, &theory->config.calculate_cc);
-            }
             std::ostringstream msg;
-            msg << "invalid configuration key '" << key << "'";
+            msg << "invalid configuration key '" << std::string_view{key, key_size} << "'";
             clingo_set_error(clingo_result_invalid, msg.view().data(), msg.view().size());
             return false;
         }
@@ -531,56 +723,15 @@ struct clingodl_theory {
                 handle_error(clingo_options_add_flag(options, group.data(), group.size(), name.data(), name.size(),
                                                      desc.data(), desc.size(), &target));
             };
-            opt("propagate",
-                "Set propagation mode [no]\n"
-                "      <mode>  : {no,inverse,partial,partial+,zero,full}[,<thread>]\n"
-                "        no      : No propagation; only detect conflicts\n"
-                "        inverse : Check inverse constraints\n"
-                "        partial : Detect some conflicts\n"
-                "        partial+: Detect some more conflicts\n"
-                "        zero    : Detect all immediate conflicts through zero nodes\n"
-                "        full    : Detect all immediate conflicts\n"
-                "      <thread>: Restrict to thread",
-                &parse_mode, true, "<mode>");
-            opt("propagate-root",
-                "Enable full propagation below decision level [0]\n"
-                "      <arg>   : <n>[,<thread>]\n"
-                "      <n>     : Upper bound for decision level\n"
-                "      <thread>: Restrict to thread",
-                &parse_root, true, "<arg>");
-            opt("propagate-budget",
-                "Enable full propagation limiting to budget [0]\n"
-                "      <arg>   : <n>[,<thread>]\n"
-                "      <n>     : Budget roughly corresponding to cost of consistency checks\n"
-                "                (if possible use with --propagate-root greater 0)\n"
-                "      <thread>: Restrict to thread",
-                &parse_budget, true, "<arg>");
-            opt("add-mutexes",
-                "Add mutexes in a preprocessing step [0]\n"
-                "      <arg>: <max>[,<cut>]\n"
-                "      <max>: Maximum size of mutexes to add\n"
-                "      <cut>: Limit costs to calculate mutexes",
-                &parse_mutex, true, "<arg>");
-            opt("sort-edges",
-                "Sort edges for propagation [weight]\n"
-                "      <arg>: {no, weight, weight-reversed, potential, potential-reversed}\n"
-                "        no                : No sorting\n"
-                "        weight            : Sort by edge weight\n"
-                "        weight-reversed   : Sort by negative edge weight\n"
-                "        potential         : Sort by relative potential\n"
-                "        potential-reversed: Sort by relative negative potential",
-                &parse_sort, true, "<arg>");
-            opt("dl-heuristic",
-                "Decision heuristic for difference constraints\n"
-                "      <arg>: {none, min, max}\n"
-                "        no : Use default decision heuristic\n"
-                "        min: Try to minimize conflicts\n"
-                "        max: Try to maximize conflicts",
-                &parse_decide, false, "<arg>");
-            flag("rdl", "Enable support for real numbers [no]", theory->rdl);
-            flag("shift-constraints", "Shift constraints into head of integrity constraints [no]",
-                 theory->shift_constraints);
-            flag("compute-components", "Compute connected components [yes]", theory->config.calculate_cc);
+            opt("propagate", ConfigMode::desc, &c_parse_thread<ConfigMode>, true, "<mode>");
+            opt("propagate-root", ConfigRoot::desc, &c_parse_thread<ConfigRoot>, true, "<arg>");
+            opt("propagate-budget", ConfigBudget::desc, &c_parse_thread<ConfigBudget>, true, "<arg>");
+            opt("sort-edges", ConfigSort::desc, &c_parse_thread<ConfigSort>, true, "<arg>");
+            opt("add-mutexes", ConfigMutex::desc, &c_parse<ConfigMutex>, false, "<arg>");
+            opt("dl-heuristic", ConfigDecide::desc, &c_parse<ConfigDecide>, false, "<arg>");
+            flag("rdl", desc_rdl, theory->rdl);
+            flag("shift-constraints", desc_shift, theory->shift_constraints);
+            flag("compute-components", desc_comp, theory->config.calculate_cc);
         }
         CLINGO_CATCH;
     }
