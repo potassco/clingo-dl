@@ -183,7 +183,7 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
         root.insert(name, Clingo::StatsType::value).value(value);
     }
 
-    //!< Helper function to add the DL statistics to clingo's statistics.
+    //! Helper function to add the DL statistics to clingo's statistics.
     void add_statistics_(Clingo::StatsMap root, Statistics const &stats) {
         auto diff = root.insert("DifferenceLogic", Clingo::StatsType::map).map();
         add_subkey_(diff, "Time init(s)", stats.time_init.count());
@@ -596,24 +596,6 @@ class ConfigBool {
 static constexpr auto desc_rdl = "Enable support for real numbers [no]"sv;
 static constexpr auto desc_shift = "Shift constraints into head of integrity constraints [no]"sv;
 static constexpr auto desc_comp = "Compute connected components [yes]"sv;
-
-//! Set the given error message if the Boolean is false.
-//!
-//! Return false if there is a parse error.
-template <class F, class... As> auto check_parse(char const *key, F fun, As &&...as) -> bool {
-    CLINGO_TRY {
-        bool res = false;
-        if (!fun(std::forward<As>(as)..., &res)) {
-            return false;
-        }
-        if (!res) {
-            auto msg = std::ostringstream{};
-            msg << "invalid value for '" << key << "'";
-            clingo_set_error(clingo_result_invalid, msg.view().data(), msg.view().size());
-        }
-    }
-    CLINGO_CATCH;
-}
 
 struct clingodl_theory {
     clingodl_theory(clingo_lib_t *lib) : lib{lib, true} {}
