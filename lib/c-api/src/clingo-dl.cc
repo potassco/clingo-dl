@@ -258,7 +258,7 @@ auto parse_thread(std::string_view value) -> std::pair<std::optional<clingo_id_t
         auto spn = value.substr(pos + 1);
         auto end = spn.data() + spn.size();
         auto [ptr, err] = std::from_chars(spn.data(), end, res);
-        if (err == std::errc{} && ptr == end) {
+        if (err == std::errc{} && ptr == end && res < 64) {
             return {res, value.substr(0, pos)};
         }
         throw std::invalid_argument("invalid thread id");
@@ -301,22 +301,6 @@ template <typename Enum, size_t N> class EnumStringMap {
 template <typename Enum, size_t N>
 constexpr auto make_enum_string_map(std::array<std::pair<std::string_view, Enum>, N> const &map) {
     return EnumStringMap<Enum, N>(map);
-}
-
-//! Parse thread-specific option via a callback.
-//!
-//! The thread number is optional and can follow separated with a comma.
-template <typename F, typename G> auto set_config(std::string_view value, void *data, F f, G g) -> bool {
-    auto &config = *static_cast<PropagatorConfig *>(data);
-    if (value.empty()) {
-        f(config);
-        return true;
-    }
-    if (auto opt = value.starts_with(',') ? parse_uint64(value.substr(1)) : std::nullopt; opt && *opt < 64) {
-        g(config.ensure(*opt));
-        return true;
-    }
-    return false;
 }
 
 template <class T> auto c_parse(const char *value, size_t size, void *data, bool *result) -> bool {
