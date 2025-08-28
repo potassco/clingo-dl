@@ -28,6 +28,7 @@
 #include <clingo.h>
 #include <clingo/propagate.hh>
 
+#include <array>
 #include <sstream>
 
 using namespace ClingoDL;
@@ -299,8 +300,8 @@ template <typename Enum, size_t N> class EnumStringMap {
 };
 
 template <typename Enum, size_t N>
-constexpr auto make_enum_string_map(std::array<std::pair<std::string_view, Enum>, N> const &map) {
-    return EnumStringMap<Enum, N>(map);
+constexpr auto make_enum_string_map(std::pair<std::string_view, Enum> const (&map)[N]) {
+    return EnumStringMap<Enum, N>(std::to_array(map));
 }
 
 template <class T> auto c_parse(const char *value, size_t size, void *data, bool *result) -> bool {
@@ -442,13 +443,13 @@ class ConfigMode {
         "      <thread>: Restrict to thread"sv;
 
   private:
-    static constexpr auto map_ = make_enum_string_map(std::array{
-        std::pair{"no"sv, PropagationMode::Check},
-        std::pair{"inverse"sv, PropagationMode::Trivial},
-        std::pair{"partial"sv, PropagationMode::Weak},
-        std::pair{"partial+"sv, PropagationMode::WeakPlus},
-        std::pair{"zero"sv, PropagationMode::Zero},
-        std::pair{"full"sv, PropagationMode::Strong},
+    static constexpr auto map_ = make_enum_string_map<PropagationMode>({
+        {"no", PropagationMode::Check},
+        {"inverse", PropagationMode::Trivial},
+        {"partial", PropagationMode::Weak},
+        {"partial+", PropagationMode::WeakPlus},
+        {"zero", PropagationMode::Zero},
+        {"full", PropagationMode::Strong},
     });
 
     PropagatorConfig *cfg_;
@@ -489,12 +490,12 @@ class ConfigSort {
         "        potential-reversed: Sort by relative negative potential"sv;
 
   private:
-    static constexpr auto map_ = make_enum_string_map(std::array{
-        std::pair{"no"sv, SortMode::No},
-        std::pair{"weight-reversed"sv, SortMode::WeightRev},
-        std::pair{"weight"sv, SortMode::Weight},
-        std::pair{"potential-reversed"sv, SortMode::PotentialRev},
-        std::pair{"potential"sv, SortMode::Potential},
+    static constexpr auto map_ = make_enum_string_map<SortMode>({
+        {"no", SortMode::No},
+        {"weight-reversed", SortMode::WeightRev},
+        {"weight", SortMode::Weight},
+        {"potential-reversed", SortMode::PotentialRev},
+        {"potential", SortMode::Potential},
     });
 
     PropagatorConfig *cfg_;
@@ -548,10 +549,10 @@ class ConfigDecide {
         "        max: Try to maximize conflicts"sv;
 
   private:
-    static constexpr auto map_ = make_enum_string_map(std::array{
-        std::pair{"no"sv, DecisionMode::Disabled},
-        std::pair{"min"sv, DecisionMode::MinConflict},
-        std::pair{"max"sv, DecisionMode::MaxConflict},
+    static constexpr auto map_ = make_enum_string_map<DecisionMode>({
+        {"no", DecisionMode::Disabled},
+        {"min", DecisionMode::MinConflict},
+        {"max", DecisionMode::MaxConflict},
     });
 
     PropagatorConfig *cfg_;
