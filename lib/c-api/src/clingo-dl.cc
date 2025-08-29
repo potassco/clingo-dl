@@ -304,27 +304,15 @@ constexpr auto make_enum_string_map(std::pair<std::string_view, Enum> const (&ma
     return EnumStringMap<Enum, N>(std::to_array(map));
 }
 
-template <class T> auto c_parse(const char *value, size_t size, void *data, bool *result) -> bool {
-    CLINGO_TRY {
-        T{*static_cast<PropagatorConfig *>(data)}.set({value, size});
-        *result = true;
-    }
-    catch (std::invalid_argument const &e) {
-        std::ignore = e;
-        *result = false;
-    }
+template <class T> auto c_parse(const char *value, size_t size, void *data) -> bool {
+    CLINGO_TRY { T{*static_cast<PropagatorConfig *>(data)}.set({value, size}); }
     CLINGO_CATCH;
 }
 
-template <class T> auto c_parse_thread(const char *value, size_t size, void *data, bool *result) -> bool {
+template <class T> auto c_parse_thread(const char *value, size_t size, void *data) -> bool {
     CLINGO_TRY {
         auto [index, span] = parse_thread({value, size});
         T{*static_cast<PropagatorConfig *>(data)}.set(index, span);
-        *result = true;
-    }
-    catch (std::invalid_argument const &e) {
-        std::ignore = e;
-        *result = false;
     }
     CLINGO_CATCH;
 }
