@@ -651,18 +651,6 @@ struct clingodl_theory {
         std::unique_ptr<clingodl_theory>{theory};
     }
 
-    // TODO: legacy will be removed with next clingo update
-    static auto configure([[maybe_unused]] void *self, char const *key, size_t key_size,
-                          [[maybe_unused]] char const *value, [[maybe_unused]] size_t value_size) -> bool {
-        CLINGO_TRY {
-            std::ostringstream msg;
-            msg << "invalid configuration key '" << std::string_view{key, key_size} << "'";
-            clingo_set_error(clingo_result_invalid, msg.view().data(), msg.view().size());
-            return false;
-        }
-        CLINGO_CATCH;
-    }
-
     static auto register_options(void *self, clingo_options_t *options) -> bool {
         auto theory = static_cast<clingodl_theory *>(self);
         CLINGO_TRY {
@@ -766,7 +754,6 @@ extern "C" bool clingodl_create(clingo_lib_t *lib, clingo_theory_t *theory) {
             clingodl_theory::prepare,
             clingodl_theory::register_options,
             clingodl_theory::validate_options,
-            clingodl_theory::configure,
             clingodl_theory::on_model,
             clingodl_theory::on_statistics,
             clingodl_theory::lookup_symbol,
