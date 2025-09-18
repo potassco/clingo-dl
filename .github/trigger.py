@@ -14,7 +14,7 @@ API_URL = f"https://api.github.com/repos/{OWNER}/{REPO}"
 TOKEN_FILE = os.path.expanduser("~/.tokens")
 WORKFLOW_ID_CONDA = "165699066"
 WORKFLOW_ID_PYPI = "190352245"
-WORKFLOW_ID_PPA = ""
+WORKFLOW_ID_PPA = "190430976"
 
 
 def get_token():
