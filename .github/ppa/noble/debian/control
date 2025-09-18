@@ -1,0 +1,37 @@
+Source: clingo-dl
+Section: devel
+Priority: optional
+Maintainer: Roland Kaminski <kaminski@cs.uni-potsdam.de>
+Build-Depends: debhelper-compat (= 13), dh-python, cmake, python3-dev, bison, re2c, clingo, libclingo-dev, python3-clingo
+Standards-Version: 4.4.1
+Homepage: https://potassco.org/clingo-dl
+Vcs-Browser: https://github.com/potassco/clingo-dl
+Vcs-Git: https://github.com/potassco/clingo-dl.git
+
+Package: clingo-dl
+Architecture: any
+Section: devel
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python3:Depends}, libclingo-dl (= ${binary:Version})
+Description: A solver for logic programs with difference constraints
+ Clingo-dl is an extension of the clingo Answer Set Programming (ASP) system
+ that integrates difference logic constraints. It allows expressing and solving
+ problems involving linear inequalities with integer or real-valued variables,
+ providing a powerful tool for applications like scheduling and timetabling.
+
+Package: libclingo-dl
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libclingo
+Description: The shared library for the clingo-dl package
+
+Package: libclingo-dl-dev
+Section: libdevel
+Architecture: any
+Depends: ${misc:Depends}, libclingo-dl (= ${binary:Version})
+Description: The development files for the clingo-dl package
+
+Package: python3-clingo-dl
+Section: python
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python3:Depends}, libclingo-dl (= ${binary:Version})
+Description: Python bindings for the clingo-dl package
