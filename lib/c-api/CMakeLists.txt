@@ -23,7 +23,7 @@ set(test
     ${test-group-tests})
 # ]]]
 
-if (CLINGODL_BUILD_SHARED)
+if(CLINGODL_BUILD_SHARED)
     set(lib_type SHARED)
 else()
     set(lib_type STATIC)
@@ -36,25 +36,24 @@ target_include_directories(clingo-dl PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 target_link_libraries(clingo-dl PUBLIC clingo::clingo PRIVATE clingo-dl-solver)
-if (CLINGODL_USE_VISIBILITY)
+if(CLINGODL_USE_VISIBILITY)
     target_compile_definitions(clingo-dl PRIVATE "$<BUILD_INTERFACE:CLINGODL_BUILD_LIBRARY>")
 else()
     target_compile_definitions(clingo-dl PUBLIC CLINGODL_NO_VISIBILITY)
 endif()
 
-if (CLINGODL_INSTALL_DEFAULT)
+if(CLINGODL_INSTALL_DEFAULT)
     install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN "*.h")
-elseif (CLINGODL_INSTALL_WHEEL AND CLINGODL_BUILD_SHARED)
+elseif(CLINGODL_INSTALL_WHEEL AND CLINGODL_BUILD_SHARED)
     install(
         TARGETS clingo-dl
         RUNTIME DESTINATION "."
         LIBRARY DESTINATION ".")
-    if (CLINGODL_BUILD_SHARED)
-        if (APPLE)
-            set_target_properties(clingo-dl
-                PROPERTIES INSTALL_RPATH "@loader_path"
-                BUILD_WITH_INSTALL_RPATH TRUE)
-        elseif (UNIX)
+    if(CLINGODL_BUILD_SHARED)
+        if(APPLE)
+            set_target_properties(clingo-dl PROPERTIES
+                INSTALL_NAME_DIR "@loader_path")
+        elseif(UNIX)
             set_target_properties(clingo-dl
                 PROPERTIES INSTALL_RPATH "$ORIGIN"
                 BUILD_WITH_INSTALL_RPATH TRUE)
@@ -62,8 +61,8 @@ elseif (CLINGODL_INSTALL_WHEEL AND CLINGODL_BUILD_SHARED)
     endif()
 endif()
 
-if (CLINGODL_BUILD_TESTS)
-    if (WIN32)
+if(CLINGODL_BUILD_TESTS)
+    if(WIN32)
         # NOTE: needed to get the test explorer working
         set(test_subdir "${CMAKE_BINARY_DIR}/bin/tests/")
         set(python_subdir "${CMAKE_BINARY_DIR}/bin/python/")
@@ -72,7 +71,7 @@ if (CLINGODL_BUILD_TESTS)
             set(test_subdir "${test_subdir}$<CONFIG>/")
             set(python_subdir "${python_subdir}$<CONFIG>/")
         endif()
-        if (CLINGODL_BUILD_SHARED)
+        if(CLINGODL_BUILD_SHARED)
             add_custom_command(
                 TARGET clingo-dl POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${python_subdir}"
