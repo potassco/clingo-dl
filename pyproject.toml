@@ -37,7 +37,7 @@ Repository = "https://github.com/potassco/clingo-dl"
 Documentation = "https://github.com/potassco/guide"
 
 [project.scripts]
-pyclingo-dl = "clingodl:main"
+pyclingo-dl = "clingodl:_pyclingodl"
 
 [build-system]
 requires = ["scikit-build-core", "pybind11", "clingo"]

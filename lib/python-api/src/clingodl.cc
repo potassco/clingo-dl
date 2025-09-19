@@ -81,7 +81,7 @@ run()
 void register_clingodl(pybind11::module &m) {
     m.doc() = R"doc(The clingo-dl python module.)doc";
     m.def("create_theory", create_theory, R"(Get the theory constructor.)");
-    m.def("main", main, R"(Run clingo-dl.)");
+    m.def("_pyclingodl", main, R"(Run clingo-dl.)");
 }
 
 } // namespace PyClingoDL
