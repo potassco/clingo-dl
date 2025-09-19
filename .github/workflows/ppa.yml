@@ -1,7 +1,6 @@
 name: Ubuntu PPA
 
 on:
-  push:
   workflow_dispatch:
     inputs:
       build_number:
