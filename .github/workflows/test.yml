@@ -36,9 +36,10 @@ jobs:
         with:
           miniforge-version: latest
           channel-priority: strict
-          use-mamba: true
           environment-file: .github/test-environment.yml
           activate-environment: test-env
+        env:
+          CONDA_VERBOSITY: 2 # Set verbosity to debug level
 
       - name: Configure
         run: |
