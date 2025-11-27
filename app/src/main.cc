@@ -62,7 +62,7 @@ class App : public Clingo::App, private Clingo::SolveEventHandler {
 #endif
             if (!opt_cfg_.active) {
                 theory_.prepare(ctl);
-                std::ignore = ctl.solve(*this).get();
+                std::ignore = ctl.solve({}, std::ref<Clingo::SolveEventHandler>(*this));
             } else {
                 Optimizer{lib_, opt_cfg_, *this, theory_}.solve(ctl);
             }

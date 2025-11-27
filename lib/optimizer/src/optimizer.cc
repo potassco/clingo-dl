@@ -51,7 +51,7 @@ void Optimizer::solve(Clingo::Control const &ctl) {
     for (;;) {
         prepare_(ctl);
         theory_.prepare(ctl);
-        auto ret = ctl.solve(*this).get();
+        auto ret = ctl.solve({}, std::ref<Clingo::SolveEventHandler>(*this));
         if (ret.interrupted()) {
             break;
         }
