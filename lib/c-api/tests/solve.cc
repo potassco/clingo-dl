@@ -161,9 +161,8 @@ bound(104).
     //! Solve a given DL problem returning all models.
     auto solve(Clingo::Control &ctl) -> RV {
         using namespace Clingo;
-        Handler h{theory};
         RV result;
-        for (auto &&m : ctl.solve(h, {}, SolveFlags::yield)) {
+        for (auto &&m : ctl.start_solve({}, SolveFlags::yield, Handler{theory})) {
             result.emplace_back();
             auto &sol = result.back().first;
             auto &sol_bool = result.back().second;

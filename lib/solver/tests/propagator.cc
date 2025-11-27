@@ -76,11 +76,7 @@ template <class N> auto solve(std::string_view str) -> MV {
     }
     ctl.ground();
     MV models;
-    {
-        auto mcb = MCB{prp, models};
-        auto hnd = ctl.solve(mcb);
-        std::ignore = hnd.get();
-    }
+    std::ignore = ctl.solve({}, MCB{prp, models});
     return models;
 }
 
