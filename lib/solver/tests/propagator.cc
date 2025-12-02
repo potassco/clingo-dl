@@ -50,7 +50,11 @@ template <class N> class MCB : public Clingo::SolveEventHandler {
         }
         models_->emplace_back();
         for (auto &sym : model.symbols(Clingo::ShowFlags::shown)) {
-            models_->back().push_back(sym.to_string());
+            if (sym.name() == "__dl") {
+                models_->back().push_back(sym.to_string().erase(0, 2));
+            } else {
+                models_->back().push_back(sym.to_string());
+            }
         }
         std::ranges::sort(models_->back());
         return true;

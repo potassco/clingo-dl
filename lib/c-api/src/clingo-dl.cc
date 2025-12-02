@@ -29,7 +29,6 @@
 #include <clingo/propagate.hh>
 
 #include <array>
-#include <sstream>
 
 using namespace ClingoDL;
 
@@ -579,7 +578,6 @@ struct clingodl_theory {
     bool shift_constraints{false};
 
     static auto info([[maybe_unused]] void *self, clingo_string_t *name, int *major, int *minor, int *patch) -> bool {
-        using namespace std::string_view_literals;
         CLINGO_TRY {
             if (name != nullptr) {
                 constexpr auto str = "clingo-dl"sv;
@@ -654,7 +652,6 @@ struct clingodl_theory {
     static auto register_options(void *self, clingo_options_t *options) -> bool {
         auto theory = static_cast<clingodl_theory *>(self);
         CLINGO_TRY {
-            using namespace std::string_view_literals;
             auto group = "Clingo.DL Options"sv;
             auto opt = [&](std::string_view name, std::string_view desc, clingo_option_parser_t parser,
                            bool multi = false, std::string_view arg = {}) {
@@ -675,6 +672,11 @@ struct clingodl_theory {
             flag("rdl", desc_rdl, theory->rdl);
             flag("shift-constraints", desc_shift, theory->shift_constraints);
             flag("compute-components", desc_comp, theory->config.calculate_cc);
+
+            static constexpr auto assign = "out-assign"sv;
+            static constexpr auto assign_val = "__dl/2"sv;
+            Clingo::Detail::handle_error(clingo_options_set_default_value(options, assign.data(), assign.size(),
+                                                                          assign_val.data(), assign_val.size()));
         }
         CLINGO_CATCH;
     }

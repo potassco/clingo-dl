@@ -50,7 +50,7 @@ struct Fixture : public Clingo::SolveEventHandler {
 
     //! Create symbols representing DL assignments.
     auto assign(Clingo::Symbol const &name, int value) -> Clingo::Symbol {
-        return Clingo::Function(lib, "dl", {name, Clingo::Number(value)});
+        return Clingo::Function(lib, "__dl", {name, Clingo::Number(value)});
     }
 
     //! Run the optimization algorithm minimizing the given variable.
