@@ -148,7 +148,7 @@ template <typename T> void DLPropagator<T>::extend_model(Clingo::Model &model) {
             T adjust = state.graph.has_value(zero_vertex) ? state.graph.get_value(zero_vertex) : 0;
             params.emplace_back(vertex_info_[idx].symbol);
             params.emplace_back(to_symbol<T>(lib_, state.graph.get_value(idx) - adjust));
-            vec.emplace_back(Function(lib_, "dl", params));
+            vec.emplace_back(Function(lib_, "__dl", params));
         }
     }
     model.extend(vec);

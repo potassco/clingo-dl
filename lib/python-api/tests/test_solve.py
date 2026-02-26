@@ -36,6 +36,6 @@ def test_solve():
 
     ctl.solve(on_model=on_model)
 
-    assert models == [(["a", "b", "c", "dl(x,0)", "dl(y,1)"], [("x", 0), ("y", 1)])]
+    assert models == [(["__dl(x,0)", "__dl(y,1)", "a", "b", "c"], [("x", 0), ("y", 1)])]
 
     gc.collect()
