@@ -1,2 +1,6 @@
 [build-system]
 requires = ["setuptools", "wheel", "scikit-build", "cmake", "ninja", "clingo"]
+
+[tool.cibuildwheel.macos]
+archs = ["arm64", "x86_64"]
+environment = { MACOSX_DEPLOYMENT_TARGET = "13.0" }

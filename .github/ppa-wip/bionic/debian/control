@@ -1,0 +1,36 @@
+Source: clingo-dl
+Section: devel
+Priority: optional
+Maintainer: Roland Kaminski <kaminski@cs.uni-potsdam.de>
+Build-Depends: debhelper-compat (= 11), dh-python, cmake, python3-dev, python3-cffi, libclingo-dev
+Standards-Version: 4.4.1
+Homepage: https://potassco.org/clingo-dl
+Vcs-Browser: https://github.com/potassco/clingo-dl
+Vcs-Git: https://github.com/potassco/clingo-dl.git
+
+Package: clingo-dl
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libclingo-dl (= ${binary:Version})
+Description: A solver for logic programs with linear constraints
+ This package contains the executables.
+
+Package: python3-clingo-dl
+Section: python
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python3:Depends}, libclingo-dl (= ${binary:Version}), python3-cffi-backend
+Description: A solver for logic programs with linear constraints
+ This package contains python bindings for clingo-dl.
+
+Package: libclingo-dl
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libclingo
+Description: A solver for logic programs with linear constraints
+ This package contains the shared library.
+
+Package: libclingo-dl-dev
+Section: libdevel
+Architecture: any
+Depends: ${misc:Depends}, libclingo-dl (= ${binary:Version})
+Description: A solver for logic programs with linear constraints
+ This package contains the development files.
