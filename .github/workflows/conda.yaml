@@ -102,7 +102,7 @@ jobs:
               conda config --add channels potassco/label/dev-20 && \
               conda create -n build conda-build && \
               conda activate build && \
-              conda build /work/.github/conda --output-folder artifacts --python ${{ matrix.python-version }} && \
+              conda-build /work/.github/conda --output-folder artifacts --python ${{ matrix.python-version }} && \
               find artifacts -type f -name '*.conda' -exec cp {} /artifacts/ \;
             "
       - name: Build (macos_x86_64)
