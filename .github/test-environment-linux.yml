@@ -1,0 +1,9 @@
+name: test-env
+dependencies:
+  - python=3.12
+  - clingo>=6
+  - cmake
+  - ninja
+  - pytest
+  - gxx_linux-64 >=16
+  - gcc_linux-64 >=16
