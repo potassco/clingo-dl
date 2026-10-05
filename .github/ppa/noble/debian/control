@@ -2,7 +2,7 @@ Source: clingo-dl
 Section: devel
 Priority: optional
 Maintainer: Roland Kaminski <kaminski@cs.uni-potsdam.de>
-Build-Depends: debhelper-compat (= 13), dh-python, cmake, python3-dev, bison, re2c, clingo, libclingo-dev, python3-clingo
+Build-Depends: debhelper-compat (= 13), dh-python, cmake, python3-dev, libclingo-dev
 Standards-Version: 4.4.1
 Homepage: https://potassco.org/clingo-dl
 Vcs-Browser: https://github.com/potassco/clingo-dl
@@ -27,7 +27,7 @@ Description: The shared library for the clingo-dl package
 Package: libclingo-dl-dev
 Section: libdevel
 Architecture: any
-Depends: ${misc:Depends}, libclingo-dl (= ${binary:Version})
+Depends: ${misc:Depends}, clingo-dl, python3-clingo-dl, libclingo-dl (= ${binary:Version})
 Description: The development files for the clingo-dl package
 
 Package: python3-clingo-dl
