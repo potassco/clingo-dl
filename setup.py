@@ -36,5 +36,10 @@ setup(
     packages=[ 'clingodl' ],
     package_data={ 'clingodl': [ 'py.typed', 'import__clingo-dl.lib', 'clingo-dl.h' ] },
     package_dir={ '': 'libpyclingo-dl' },
+    entry_points={
+        "console_scripts": [
+            "clingo-dl=clingodl.__main__:main",
+        ],
+    },
     python_requires=">=3.6"
 )
