@@ -1,8 +1,8 @@
 #!/usr/bin/python
-'''
+"""
 This module provides an application class similar to clingo-dl plus a main
 function to execute it.
-'''
+"""
 
 import sys
 from typing import Callable, Sequence
@@ -19,20 +19,26 @@ from . import ClingoDLTheory
 
 
 class ClingoDLApp(Application):
-    '''
+    """
     Application class similar to clingo-dl (excluding optimization).
-    '''
+    """
+
     def __init__(self, name: str):
         self.__theory = ClingoDLTheory()
         self.program_name = name
         self.version = ".".join(str(x) for x in self.__theory.version())
-        self._enable_python  = Flag()
+        self._enable_python = Flag()
 
     def register_options(self, options: ApplicationOptions):
         """
         Register clingo-dl related options.
         """
-        options.add_flag("Basic Options", "enable-python", "Enable Python script tags", self._enable_python)
+        options.add_flag(
+            "Basic Options",
+            "enable-python",
+            "Enable Python script tags",
+            self._enable_python,
+        )
         self.__theory.register_options(options)
 
     def validate_options(self) -> bool:
@@ -48,18 +54,22 @@ class ClingoDLApp(Application):
         """
         # print model
         symbols = model.symbols(shown=True)
-        sys.stdout.write(" ".join(str(symbol) for symbol in sorted(symbols) if not self.__hidden(symbol)))
-        sys.stdout.write('\n')
+        sys.stdout.write(
+            " ".join(
+                str(symbol) for symbol in sorted(symbols) if not self.__hidden(symbol)
+            )
+        )
+        sys.stdout.write("\n")
 
         # print assignment
-        sys.stdout.write('Assignment:\n')
+        sys.stdout.write("Assignment:\n")
         symbols = model.symbols(theory=True)
         assignment = []
         for symbol in sorted(symbols):
             if symbol.match("dl", 2):
                 assignment.append("{}={}".format(*symbol.arguments))
         sys.stdout.write(" ".join(assignment))
-        sys.stdout.write('\n')
+        sys.stdout.write("\n")
 
         sys.stdout.flush()
 
@@ -103,8 +113,8 @@ def main():
     """
     Main function to be used as an entry point.
     """
-    sys.exit(int(clingo_main(ClingoDLApp("clingo-dl"), sys.argv[1:])))
+    return clingo_main(ClingoDLApp("clingo-dl"), sys.argv[1:])
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
