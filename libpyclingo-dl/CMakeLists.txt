@@ -40,7 +40,6 @@ else()
     add_library(pyclingo-dl MODULE ${source})
 endif()
 target_link_libraries(pyclingo-dl PRIVATE libclingo-dl clingodl_python_config Python::Module)
-target_compile_definitions(pyclingo-dl PRIVATE _CFFI_NO_LIMITED_API)
 set_target_properties(pyclingo-dl PROPERTIES
     FOLDER lib
     OUTPUT_NAME _clingodl
