@@ -5,7 +5,7 @@ cmake -G "Ninja" -S . -B build ^
     -DPYCLINGODL_ENABLE="require" ^
     -DPYCLINGODL_INSTALL_DIR="%SP_DIR%" ^
     -DCMAKE_INSTALL_PREFIX="%LIBRARY_PREFIX%" ^
-    -DCLINGCON_MANAGE_RPATH=Off ^
+    -DCLINGODL_MANAGE_RPATH=Off ^
     -DCMAKE_BUILD_TYPE=Release || exit /b 1
 
 cmake --build build || exit /b 1
