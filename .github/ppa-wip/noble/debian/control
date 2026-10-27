@@ -17,7 +17,7 @@ Description: A solver for logic programs with linear constraints
 Package: python3-clingo-dl
 Section: python
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${python3:Depends}, libclingo-dl (= ${binary:Version}), python3-cffi-backend
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python3:Depends}, python3-clingo, libclingo-dl (= ${binary:Version})
 Description: A solver for logic programs with linear constraints
  This package contains python bindings for clingo-dl.
 
@@ -31,6 +31,6 @@ Description: A solver for logic programs with linear constraints
 Package: libclingo-dl-dev
 Section: libdevel
 Architecture: any
-Depends: ${misc:Depends}, libclingo-dl (= ${binary:Version})
+Depends: ${misc:Depends}, libclingo-dev, python3-clingo-dl, clingo-dl, libclingo-dl (= ${binary:Version})
 Description: A solver for logic programs with linear constraints
  This package contains the development files.
