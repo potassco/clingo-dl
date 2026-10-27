@@ -205,7 +205,7 @@ template <class T> [[nodiscard]] auto to_number(Clingo::Symbol const &a) -> T {
 template <class N> [[nodiscard]] auto evaluate(Clingo::TheoryTerm const &term) -> Clingo::Symbol;
 
 //! Evaluate two theory terms involved involved in a binary operation to an integral number.
-template <class N, class F, typename std::enable_if<std::is_integral_v<N>, bool>::type = true>
+template <class N, class F, std::enable_if_t<std::is_integral_v<N>, bool> = true>
 [[nodiscard]] auto evaluate_binary(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F &&f) -> Clingo::Symbol {
     auto ea = evaluate<N>(a);
     check_syntax(ea.type() == Clingo::SymbolType::Number);
@@ -215,7 +215,7 @@ template <class N, class F, typename std::enable_if<std::is_integral_v<N>, bool>
 }
 
 //! Evaluate two theory terms involved involved in a binary operation to a floating point number.
-template <class N, class F, typename std::enable_if<std::is_floating_point_v<N>, bool>::type = true>
+template <class N, class F, std::enable_if_t<std::is_floating_point_v<N>, bool> = true>
 [[nodiscard]] auto evaluate_binary(Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b, F &&f) -> Clingo::Symbol {
     auto ea = evaluate<N>(a);
     auto eb = evaluate<N>(b);
@@ -368,9 +368,8 @@ template <class N> [[nodiscard]] auto simplify(CoVarVec<N> &vec) -> N {
         if (!is_valid_var(var)) {
             rhs = safe_sub<N>(rhs, co);
         } else {
-            auto r = seen.emplace(var, jt);
-            auto kt = r.first;
-            auto ins = r.second;
+            auto [kt, ins] = seen.emplace(var, jt);
+
             if (!ins) {
                 kt->second->first = safe_add<N>(kt->second->first, co);
             } else {
@@ -382,7 +381,7 @@ template <class N> [[nodiscard]] auto simplify(CoVarVec<N> &vec) -> N {
         }
     }
 
-    jt = std::remove_if(vec.begin(), jt, [](auto &co_var) { return co_var.first == 0; });
+    jt = std::remove_if(vec.begin(), jt, [](auto &co_var) -> auto { return co_var.first == 0; });
     vec.erase(jt, vec.end());
     return rhs;
 }

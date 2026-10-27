@@ -32,14 +32,12 @@ namespace {
 constexpr double DOUBLE_EPSILON = 0.00001;
 
 //! Epsilon value for integral numbers.
-template <class T, typename std::enable_if<std::is_integral_v<T>, bool>::type = true>
-[[nodiscard]] auto epsilon_() -> T {
+template <class T, std::enable_if_t<std::is_integral_v<T>, bool> = true> [[nodiscard]] auto epsilon_() -> T {
     return 1;
 }
 
 //! Epsilon value for floating point numbers.
-template <class T, typename std::enable_if<std::is_floating_point_v<T>, bool>::type = true>
-[[nodiscard]] auto epsilon_() -> T {
+template <class T, std::enable_if_t<std::is_floating_point_v<T>, bool> = true> [[nodiscard]] auto epsilon_() -> T {
     return DOUBLE_EPSILON;
 }
 

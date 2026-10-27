@@ -41,9 +41,8 @@ auto parse(char const *prg) -> V {
     Clingo::Control ctl;
     {
         Clingo::AST::ProgramBuilder builder{ctl};
-        Clingo::AST::parse_string(prg, [&](Clingo::AST::Node const &ast) {
-            transform(
-                ast, [&](Clingo::AST::Node &&trans) { builder.add(trans); }, true);
+        Clingo::AST::parse_string(prg, [&](Clingo::AST::Node const &ast) -> void {
+            transform(ast, [&](Clingo::AST::Node &&trans) -> void { builder.add(trans); }, true);
         });
     }
     ctl.add("base", {}, THEORY);
@@ -54,7 +53,7 @@ auto parse(char const *prg) -> V {
     std::ostringstream oss;
     V ret;
     for (auto &&atom : ctl.theory_atoms()) {
-        auto edge = ClingoDL::parse<int>(atom, [&](Clingo::Symbol sym) {
+        auto edge = ClingoDL::parse<int>(atom, [&](Clingo::Symbol sym) -> unsigned int {
             auto [it, ins] = vertex_map.try_emplace(sym, vertices.size());
             if (ins) {
                 vertices.emplace_back(it->first);

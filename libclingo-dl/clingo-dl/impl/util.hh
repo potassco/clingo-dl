@@ -80,7 +80,7 @@ template <class K, class V> auto operator<<(std::ostream &out, std::unordered_ma
     using T = std::pair<K, V>;
     std::vector<T> vec;
     vec.assign(map.begin(), map.end());
-    std::sort(vec.begin(), vec.end(), [](T const &a, T const &b) { return a.first < b.first; });
+    std::sort(vec.begin(), vec.end(), [](T const &a, T const &b) -> auto { return a.first < b.first; });
     out << vec;
     return out;
 }
@@ -172,7 +172,7 @@ template <int N> template <class M> void Heap<N>::swap_(M &m, index_type i, inde
 
 template <int N> auto Heap<N>::parent_(index_type offset) -> index_type { return (offset - 1) / N; }
 
-template <int N> auto Heap<N>::children_(index_type offset) -> index_type { return N * offset + 1; }
+template <int N> auto Heap<N>::children_(index_type offset) -> index_type { return (N * offset) + 1; }
 
 template <int N> template <class M> auto Heap<N>::less_(M &m, index_type a, index_type b) -> bool {
     return m.less(heap_[a], heap_[b]);

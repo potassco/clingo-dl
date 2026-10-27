@@ -63,7 +63,7 @@ class App : public Clingo::Application, private Clingo::SolveEventHandler {
     void main(Clingo::Control &ctl, Clingo::StringSpan files) override { // NOLINT
         handle_error(clingodl_register(theory_, ctl.to_c()));
 
-        Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
+        Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) -> void {
             Rewriter rewriter{theory_, builder.to_c()};
             rewriter.rewrite(ctl, files);
         });
@@ -121,10 +121,10 @@ class App : public Clingo::Application, private Clingo::SolveEventHandler {
                     "      <arg>     : <variable>[,<initial>]\n"
                     "      <variable>: the variable to minimize\n"
                     "      <initial> : upper bound for the variable",
-                    [this](char const *value) { return parse_bound(value); });
+                    [this](char const *value) -> bool { return parse_bound(value); });
         options.add(
             group, "minimize-factor", "Factor to adjust minimization step size [1]",
-            [this](char const *value) { return parse_factor(value); }, false, "<factor>");
+            [this](char const *value) -> bool { return parse_factor(value); }, false, "<factor>");
     }
     //! Validate options of the theory.
     void validate_options() override { handle_error(clingodl_validate_options(theory_)); }

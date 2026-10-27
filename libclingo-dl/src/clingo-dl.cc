@@ -137,8 +137,13 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
   public:
     DLPropagatorFacade(clingo_control_t *control, PropagatorConfig const &conf) : prop_{step_, conf} {
         handle_error(clingo_control_add(control, "base", nullptr, 0, THEORY));
-        static clingo_propagator_t prop = {init<T>, propagate<T>, undo<T>, check<T>,
-                                           conf.decision_mode != DecisionMode::Disabled ? decide<T> : nullptr};
+        static clingo_propagator_t prop = {
+            init<T>,
+            propagate<T>,
+            undo<T>,
+            check<T>,
+            conf.decision_mode != DecisionMode::Disabled ? decide<T> : nullptr,
+        };
         handle_error(clingo_control_register_propagator(control, &prop, &prop_, false));
     }
 
@@ -300,8 +305,8 @@ auto parse_root(const char *value, void *data) -> bool {
     uint64_t x = 0;
     return (value = parse_uint64_pre(value, &x)) != nullptr &&
            set_config(
-               value, data, [x](PropagatorConfig &config) { config.propagate_root = x; },
-               [x](ThreadConfig &config) { config.propagate_root = x; });
+               value, data, [x](PropagatorConfig &config) -> void { config.propagate_root = x; },
+               [x](ThreadConfig &config) -> void { config.propagate_root = x; });
 }
 
 //! Parse the propagation budget and store it data.
@@ -311,8 +316,8 @@ auto parse_budget(const char *value, void *data) -> bool {
     uint64_t x = 0;
     return (value = parse_uint64_pre(value, &x)) != nullptr &&
            set_config(
-               value, data, [x](PropagatorConfig &config) { config.propagate_budget = x; },
-               [x](ThreadConfig &config) { config.propagate_budget = x; });
+               value, data, [x](PropagatorConfig &config) -> void { config.propagate_budget = x; },
+               [x](ThreadConfig &config) -> void { config.propagate_budget = x; });
 }
 
 //! Parse the mutex detection mode and store it data.
@@ -358,8 +363,8 @@ auto parse_mode(const char *value, void *data) -> bool {
         mode = PropagationMode::Strong;
     }
     return rem != nullptr && set_config(
-                                 rem, data, [mode](PropagatorConfig &config) { config.propagate_mode = mode; },
-                                 [mode](ThreadConfig &config) { config.propagate_mode = mode; });
+                                 rem, data, [mode](PropagatorConfig &config) -> void { config.propagate_mode = mode; },
+                                 [mode](ThreadConfig &config) -> void { config.propagate_mode = mode; });
 }
 
 //! Parse the sort mode and store it data.
@@ -380,8 +385,8 @@ auto parse_sort(const char *value, void *data) -> bool {
         sort = SortMode::Potential;
     }
     return rem != nullptr && set_config(
-                                 rem, data, [sort](PropagatorConfig &config) { config.sort_mode = sort; },
-                                 [sort](ThreadConfig &config) { config.sort_mode = sort; });
+                                 rem, data, [sort](PropagatorConfig &config) -> void { config.sort_mode = sort; },
+                                 [sort](ThreadConfig &config) -> void { config.sort_mode = sort; });
 }
 
 //! Parse the decision mode.
@@ -471,7 +476,7 @@ extern "C" auto clingodl_rewrite_ast(clingodl_theory_t *theory, clingo_ast_t *as
         clingo_ast_acquire(ast);
         Clingo::AST::Node ast_cpp{ast};
         transform(
-            ast_cpp, [add, data](Clingo::AST::Node &&ast_trans) { handle_error(add(ast_trans.to_c(), data)); },
+            ast_cpp, [add, data](Clingo::AST::Node &&ast_trans) -> void { handle_error(add(ast_trans.to_c(), data)); },
             theory->shift_constraints);
     }
     CLINGODL_CATCH;

@@ -70,7 +70,7 @@ extern "C" {
 enum clingodl_value_type {
     clingodl_value_type_int = 0,
     clingodl_value_type_double = 1,
-    clingodl_value_type_symbol = 2
+    clingodl_value_type_symbol = 2,
 };
 typedef int clingodl_value_type_t;
 

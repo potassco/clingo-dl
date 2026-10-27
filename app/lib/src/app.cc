@@ -55,7 +55,7 @@ Optimizer::Optimizer(OptimizerConfig const &opt_cfg, Clingo::SolveEventHandler &
     : opt_cfg_{opt_cfg}, handler_{handler}, theory_{theory} {}
 
 void Optimizer::solve(Clingo::Control &ctl) {
-    Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) {
+    Clingo::AST::with_builder(ctl, [&](Clingo::AST::ProgramBuilder &builder) -> void {
         Rewriter rewriter{theory_, builder.to_c()};
         rewriter.rewrite(ctl,
                          // add a fixed bound
@@ -131,11 +131,10 @@ auto Optimizer::on_model(Clingo::Model &model) -> bool {
 
 auto Optimizer::get_bound(Clingo::Model &model) -> int_value_t {
     // get bound
-    if (opt_cfg_.index == 0) {
-        if (!clingodl_lookup_symbol(theory_, opt_cfg_.symbol.to_c(), &opt_cfg_.index)) {
-            throw std::runtime_error("variable to minimize not found");
-        }
+    if ((opt_cfg_.index == 0) && (!clingodl_lookup_symbol(theory_, opt_cfg_.symbol.to_c(), &opt_cfg_.index))) {
+        throw std::runtime_error("variable to minimize not found");
     }
+
     if (!clingodl_assignment_has_value(theory_, model.thread_id(), opt_cfg_.index)) {
         throw std::runtime_error("variable to minimize is unassigned");
     }

@@ -32,12 +32,12 @@ namespace ClingoDL {
 
 namespace {
 
-template <typename T, typename std::enable_if<std::is_integral_v<T>, bool>::type = true>
+template <typename T, std::enable_if_t<std::is_integral_v<T>, bool> = true>
 inline auto to_symbol(T value) -> Clingo::Symbol {
     return Clingo::Number(value);
 }
 
-template <typename T, typename std::enable_if<std::is_floating_point_v<T>, bool>::type = true>
+template <typename T, std::enable_if_t<std::is_floating_point_v<T>, bool> = true>
 inline auto to_symbol(T value) -> Clingo::Symbol {
     return Clingo::String(std::to_string(value).c_str());
 }
@@ -79,9 +79,9 @@ template <typename T> struct DLPropagator<T>::VertexInfo {
         this->visited = visited;
     }
 
-    Clingo::Symbol symbol;                //!< The symbol associated with the vertex.
-    index_t cc : sizeof(index_t) * 8 - 1; //!< The connected component the vertex is in.
-    index_t visited : 1;                  //!< Whether the vertex has been visited.
+    Clingo::Symbol symbol;                  //!< The symbol associated with the vertex.
+    index_t cc : (sizeof(index_t) * 8) - 1; //!< The connected component the vertex is in.
+    index_t visited : 1;                    //!< Whether the vertex has been visited.
 };
 
 //! Struct to store thread specific state.
@@ -239,7 +239,7 @@ template <typename T> auto DLPropagator<T>::add_constraints_(Clingo::PropagateIn
     for (auto atom : init.theory_atoms()) {
         auto term = atom.term();
         if (match(term, "__diff_h", 0) || match(term, "__diff_b", 0)) {
-            auto edge = parse<T>(atom, [this](Clingo::Symbol const &sym) { return map_vertex_(sym); });
+            auto edge = parse<T>(atom, [this](Clingo::Symbol const &sym) -> auto { return map_vertex_(sym); });
             literal_t lit = init.solver_literal(atom.literal());
             if (!normalize_constraint_(init, lit, edge.lhs, edge.rel, edge.rhs, edge.strict)) {
                 return false;
@@ -668,7 +668,7 @@ template <typename T> auto DLPropagator<T>::cost_(SortMode mode, Graph const &gr
 
 template <typename T> void DLPropagator<T>::sort_edges(SortMode mode, ThreadState &state) {
     std::sort(state.todo_edges.begin(), state.todo_edges.end(),
-              [&](edge_t l, edge_t r) { return cost_(mode, state.graph, l) < cost_(mode, state.graph, r); });
+              [&](edge_t l, edge_t r) -> auto { return cost_(mode, state.graph, l) < cost_(mode, state.graph, r); });
 }
 
 template <typename T>

@@ -39,16 +39,16 @@ enum class PropagationMode {
     Weak = 2,     //!< Perform weak propagation.
     WeakPlus = 3, //!< Perform weak propagation with some extra effort.
     Zero = 4,     //!< Perform propagation through zero node.
-    Strong = 5    //!< Perform full propagation.
+    Strong = 5,   //!< Perform full propagation.
 };
 
 //! Enumeration to configure sorting of edges before propagation.
 enum class SortMode {
-    No = 0,          //! Do not sort edges.
-    Weight = 1,      //! Sort edges by weight in ascending order.
-    WeightRev = 2,   //! Sort edges by weight in descending order.
-    Potential = 3,   //! Sort edges by potential in ascending order.
-    PotentialRev = 4 //! Sort edges by potential in descending order.
+    No = 0,           //! Do not sort edges.
+    Weight = 1,       //! Sort edges by weight in ascending order.
+    WeightRev = 2,    //! Sort edges by weight in descending order.
+    Potential = 3,    //! Sort edges by potential in ascending order.
+    PotentialRev = 4, //! Sort edges by potential in descending order.
 };
 
 //! Enumeration to configure sorting of edges before propagation.
