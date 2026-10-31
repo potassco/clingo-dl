@@ -44,6 +44,14 @@ class App : public Clingo::App, private Clingo::SolveEventHandler {
     auto do_program_name() noexcept -> std::string_view override { return "clingo-dl"; }
     //! Set the version.
     auto do_version() noexcept -> std::string_view override { return CLINGODL_VERSION; }
+    //! Get the commit hash.
+    auto do_commit_hash() noexcept -> std::string_view override {
+        try {
+            return theory_.commit_hash();
+        } catch (...) {
+            return "";
+        }
+    }
     //! Pass models to the theory.
     auto do_model(Clingo::Model model) -> bool override {
         theory_.model(model);

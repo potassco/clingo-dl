@@ -25,6 +25,8 @@
 #include <clingo-dl.h>
 #include <clingo-dl/propagator.hh>
 
+#include "clingodl_git_hash.h"
+
 #include <clingo.h>
 #include <clingo/propagate.hh>
 
@@ -577,7 +579,8 @@ struct clingodl_theory {
     bool rdl{false};
     bool shift_constraints{false};
 
-    static auto info([[maybe_unused]] void *self, clingo_string_t *name, int *major, int *minor, int *patch) -> bool {
+    static auto info([[maybe_unused]] void *self, clingo_string_t *name, int *major, int *minor, int *patch,
+                     clingo_string_t *hash) -> bool {
         CLINGO_TRY {
             if (name != nullptr) {
                 constexpr auto str = "clingo-dl"sv;
@@ -592,6 +595,15 @@ struct clingodl_theory {
             }
             if (patch != nullptr) {
                 *patch = CLINGODL_VERSION_REVISION;
+            }
+            if (hash != nullptr) {
+#ifdef CLINGODL_GIT_HASH
+                constexpr auto str = std::string_view{CLINGODL_GIT_HASH};
+#else
+                constexpr auto str = std::string_view{""};
+#endif
+                hash->data = str.data();
+                hash->size = str.size();
             }
         }
         CLINGO_CATCH;

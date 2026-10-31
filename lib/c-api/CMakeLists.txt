@@ -29,13 +29,15 @@ else()
     set(lib_type STATIC)
 endif()
 
+potassco_git_hash(clingodl)
+
 add_library(clingo-dl ${lib_type})
 clingodl_target_properties(TARGET clingo-dl FOLDER "lib" TYPE default)
 target_sources(clingo-dl PRIVATE ${header} ${source})
 target_include_directories(clingo-dl PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
-target_link_libraries(clingo-dl PUBLIC clingo::clingo PRIVATE clingo-dl-solver)
+target_link_libraries(clingo-dl PUBLIC clingo::clingo PRIVATE clingodl-hash clingo-dl-solver)
 if(CLINGODL_USE_VISIBILITY)
     target_compile_definitions(clingo-dl PRIVATE "$<BUILD_INTERFACE:CLINGODL_BUILD_LIBRARY>")
 else()
@@ -90,7 +92,7 @@ if(CLINGODL_BUILD_TESTS)
     add_library(clingo-dl_t STATIC)
     clingodl_target_properties(TARGET clingo-dl_t FOLDER "lib")
     target_sources(clingo-dl_t PRIVATE ${header} ${source})
-    target_link_libraries(clingo-dl_t PUBLIC clingo-dl-solver_t)
+    target_link_libraries(clingo-dl_t PUBLIC clingo-dl-solver_t PRIVATE clingodl-hash)
     target_include_directories(clingo-dl_t PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
     target_compile_definitions(clingo-dl_t PUBLIC CLINGODL_NO_VISIBILITY)
 
