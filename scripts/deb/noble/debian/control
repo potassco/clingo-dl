@@ -12,11 +12,13 @@ Package: clingo-dl
 Architecture: any
 Section: devel
 Depends: ${shlibs:Depends}, ${misc:Depends}, libclingo-dl (= ${binary:Version})
-Description: A solver for logic programs with finite domain constraints
- Clingcon is an extension of the clingo Answer Set Programming (ASP) system
- that integrates finite domain constraint solving. It enables modeling and
- solving problems with variables over finite domains and complex constraints,
- making it suitable for applications such as resource allocation and planning.
+Description: A solver for logic programs with difference constraints
+ Clingo-dl is an extension of the clingo answer set programming solver that
+ combines logical rules with difference constraints over integers or reals.
+ This makes it useful for problems where choices and timing or numeric
+ relationships need to be reasoned about together, such as scheduling and
+ timetabling. Its focused constraint language can make these relationships
+ easier to express within an ASP model.
 
 Package: libclingo-dl
 Section: libs
