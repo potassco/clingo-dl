@@ -1,0 +1,45 @@
+{% set name = 'clingo-dl' %}
+{% set version = environ.get('VERSION_NUMBER', '1.0.0') %}
+{% set build = environ.get('BUILD_NUMBER', '0') %}
+
+package:
+  name: {{ name }}
+  version: {{ version }}
+
+source:
+  path: ../..
+
+requirements:
+  build:
+  - cmake
+  - ninja
+  - re2c
+  - python
+  - pytest
+  - {{ compiler('c') }}
+  - {{ compiler('cxx') }}
+  host:
+  - clingo
+  - python
+  - libpython
+  run:
+  - libpython
+  - python
+  - clingo
+
+build:
+  number: {{ build }}
+
+test:
+  commands:
+  - clingo-dl --version
+  - python -c "import clingodl; clingodl._pyclingodl()" --version
+
+about:
+  home: https://potassco.org/
+  license: MIT
+  summary: A solver for logic programs with difference constraints.
+  description: The clingo-dl solver extends the clingo ASP system with support for difference constraints over integers and reals.
+  license_file: LICENSE.md
+  doc_url: https://potassco.org/
+  dev_url: https://github.com/potassco/{{ name }}/

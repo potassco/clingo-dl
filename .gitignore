@@ -18,3 +18,4 @@ MANIFEST
 /test*
 /.vs
 /CMakeSettings.json
+.git_hash

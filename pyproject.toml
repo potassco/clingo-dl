@@ -1,58 +1,55 @@
 [project]
 name = "clingo-dl"
-version = "1.5.0"
-description="Python bindings to the clingo-dl solver."
-readme = {file = "README.md", content-type = "text/markdown"}
-authors = [
-  { name = "Roland Kaminski", email = "kaminski@cs.uni-potsdam.de" }
-]
+dynamic = ["version"]
+description = "Python bindings to the clingo-dl solver."
+readme = { file = "README.md", content-type = "text/markdown" }
+authors = [{ name = "Roland Kaminski", email = "kaminski@cs.uni-potsdam.de" }]
 classifiers = [
-  "Development Status :: 5 - Production/Stable",
-  "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
-  "Programming Language :: Python :: 3",
-  "Topic :: Software Development :: Libraries",
-  "Topic :: Scientific/Engineering :: Artificial Intelligence"
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 keywords = [
-  "artificial intelligence",
-  "logic programming",
-  "answer set programming",
-  "constraint solving",
-  "theory solving",
-  "difference logic",
-  "AI",
-  "ASP",
-  "SAT",
-  "Potassco",
-  "clingo",
-  "clingo-dl",
-  "solver"
+    "artificial intelligence",
+    "logic programming",
+    "answer set programming",
+    "constraint solving",
+    "theory solving",
+    "difference logic",
+    "AI",
+    "ASP",
+    "SAT",
+    "CSP",
+    "Potassco",
+    "clingo",
+    "clingcon",
+    "solver",
 ]
 dependencies = ["clingo>=6.0.0"]
 
 [project.urls]
 Homepage = "https://potassco.org"
-Repository = "https://github.com/potassco/clingo-dl"
+Repository = "https://github.com/potassco/clingcon"
 Documentation = "https://github.com/potassco/guide"
 
 [project.scripts]
-pyclingo-dl = "clingodl:_pyclingodl"
+pyclingcon = "clingcon:_pyclingcon"
 
 [build-system]
-requires = ["scikit-build-core", "pybind11", "clingo>=6.0.0"]
+requires = ["scikit-build-core>=1.0", "pybind11", "clingo>=6.0.0"]
 build-backend = "scikit_build_core.build"
 
+[[tool.dynamic-metadata]]
+provider = { path = "scripts", module = "meta" }
+
 [tool.scikit-build.sdist]
-include = ["lib/*", "third_party/*", "app/*", "CMakeLists.txt"]
-exclude = ["*.pyc"]
+include = [".git_hash"]
 
 [tool.pytest.ini_options]
-addopts = [
-    "--ignore=third_party",
-    "--ignore=doc",
-    "--ignore=.git",
-]
+addopts = ["--ignore=third_party", "--ignore=doc", "--ignore=.git"]
 testpaths = ["lib"]
 
 [tool.ruff]
@@ -78,3 +75,6 @@ repair-wheel-command = "auditwheel repair --exclude libclingo.so -w {dest_dir} {
 archs = ["arm64"]
 environment = { MACOSX_DEPLOYMENT_TARGET = "14.0" }
 repair-wheel-command = "delocate-wheel --ignore-missing-dependencies -w {dest_dir} -v {wheel}"
+
+[tool.cibuildwheel.windows]
+repair-wheel-command = "delvewheel repair --exclude clingo.dll --ignore-existing -v -w {dest_dir} {wheel}"

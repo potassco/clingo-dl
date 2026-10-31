@@ -12,26 +12,26 @@ Package: clingo-dl
 Architecture: any
 Section: devel
 Depends: ${shlibs:Depends}, ${misc:Depends}, libclingo-dl (= ${binary:Version})
-Description: A solver for logic programs with difference constraints
- Clingo-dl is an extension of the clingo Answer Set Programming (ASP) system
- that integrates difference logic constraints. It allows expressing and solving
- problems involving linear inequalities with integer or real-valued variables,
- providing a powerful tool for applications like scheduling and timetabling.
+Description: A solver for logic programs with finite domain constraints
+ Clingcon is an extension of the clingo Answer Set Programming (ASP) system
+ that integrates finite domain constraint solving. It enables modeling and
+ solving problems with variables over finite domains and complex constraints,
+ making it suitable for applications such as resource allocation and planning.
 
 Package: libclingo-dl
 Section: libs
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, libclingo
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: The shared library for the clingo-dl package
 
 Package: libclingo-dl-dev
 Section: libdevel
 Architecture: any
-Depends: ${misc:Depends}, clingo-dl, python3-clingo-dl, libclingo-dl (= ${binary:Version})
+Depends: ${misc:Depends}, libclingo-dev, python3-clingo-dl, clingo-dl, libclingo-dl (= ${binary:Version})
 Description: The development files for the clingo-dl package
 
 Package: python3-clingo-dl
 Section: python
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${python3:Depends}, libclingo-dl (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python3:Depends}, python3-clingo, libclingo-dl (= ${binary:Version})
 Description: Python bindings for the clingo-dl package
