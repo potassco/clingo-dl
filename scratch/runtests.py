@@ -2,7 +2,12 @@
 
 from subprocess import call
 
-calls = [("clingo-dl examples/taskassignment/encoding-dl.lp examples/taskassignment/tai4_4_1.lp -c n=132 0 --outf=3", 30)]
+calls = [
+    (
+        "clingo-dl examples/taskassignment/encoding-dl.lp examples/taskassignment/tai4_4_1.lp -c n=132 0 --outf=3",
+        30,
+    )
+]
 rc = 0
 for i, rc_expected in calls:
     rc_call = call(i, shell=True)

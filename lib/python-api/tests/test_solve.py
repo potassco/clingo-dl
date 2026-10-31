@@ -1,10 +1,9 @@
 import gc
 
-from clingo.theory import Theory
-from clingo.core import Library
-from clingo.control import Control
 from clingo import ast
-
+from clingo.control import Control
+from clingo.core import Library
+from clingo.theory import Theory
 from clingodl import create_theory
 
 

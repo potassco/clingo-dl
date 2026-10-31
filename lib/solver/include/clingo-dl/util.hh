@@ -70,7 +70,7 @@ class Timer {
   public:
     //! The constructor expects a reference to a duration which is incremented
     //! by the lifetime of the timer.
-    Timer(Duration &elapsed);
+    explicit Timer(Duration &elapsed);
     Timer(Timer const &other) = delete;
     Timer(Timer &&other) = delete;
     auto operator=(Timer const &other) -> Timer & = delete;

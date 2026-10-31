@@ -26,12 +26,13 @@
 
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace ClingoDL {
 
-Optimizer::Optimizer(Clingo::Library const &lib, OptimizerConfig const &opt_cfg, Clingo::SolveEventHandler &handler,
+Optimizer::Optimizer(Clingo::Library lib, OptimizerConfig const &opt_cfg, Clingo::SolveEventHandler &handler,
                      Clingo::Theory const &theory)
-    : lib_{lib}, theory_{theory}, opt_cfg_{opt_cfg}, handler_{handler} {}
+    : lib_{std::move(lib)}, theory_{theory}, opt_cfg_{opt_cfg}, handler_{handler} {}
 
 void Optimizer::solve(Clingo::Control const &ctl) {
     theory_.rewrite(lib_, ctl,
@@ -61,7 +62,7 @@ void Optimizer::solve(Clingo::Control const &ctl) {
             }
             search_bound_ = upper_bound_;
             adjust_ = 1;
-            if (!lower_bound_ || *lower_bound_ > *upper_bound_) {
+            if (!lower_bound_ || !upper_bound_ || *lower_bound_ > *upper_bound_) {
                 break;
             }
         }

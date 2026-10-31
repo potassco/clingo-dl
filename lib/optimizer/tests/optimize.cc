@@ -49,7 +49,7 @@ struct Fixture : public Clingo::SolveEventHandler {
     void do_stats(Clingo::Stats step, Clingo::Stats accu) override { theory.stats(step, accu); }
 
     //! Create symbols representing DL assignments.
-    auto assign(Clingo::Symbol const &name, int value) -> Clingo::Symbol {
+    [[nodiscard]] auto assign(Clingo::Symbol const &name, int value) const -> Clingo::Symbol {
         return Clingo::Function(lib, "__dl", {name, Clingo::Number(value)});
     }
 

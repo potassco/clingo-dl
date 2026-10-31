@@ -80,7 +80,7 @@ template <class K, class V> auto operator<<(std::ostream &out, std::unordered_ma
     using T = std::pair<K, V>;
     std::vector<T> vec;
     vec.assign(map.begin(), map.end());
-    std::sort(vec.begin(), vec.end(), [](T const &a, T const &b) { return a.first < b.first; });
+    std::sort(vec.begin(), vec.end(), [](T const &a, T const &b) -> auto { return a.first < b.first; });
     out << vec;
     return out;
 }
@@ -172,7 +172,7 @@ template <int N> template <class M> void Heap<N>::swap_(M &m, index_type i, inde
 
 template <int N> auto Heap<N>::parent_(index_type offset) -> index_type { return (offset - 1) / N; }
 
-template <int N> auto Heap<N>::children_(index_type offset) -> index_type { return N * offset + 1; }
+template <int N> auto Heap<N>::children_(index_type offset) -> index_type { return (N * offset) + 1; }
 
 template <int N> template <class M> auto Heap<N>::less_(M &m, index_type a, index_type b) -> bool {
     return m.less(heap_[a], heap_[b]);
@@ -312,9 +312,9 @@ inline auto unquote(std::string_view str) -> std::string {
     if (str.size() >= 2 && str.front() == '"' && str.back() == '"') {
         str = str.substr(1, str.size() - 2);
     }
-    for (auto it = str.begin(), ie = str.end(); it != ie; ++it) {
+    for (char it : str) {
         if (slash) {
-            switch (*it) {
+            switch (it) {
                 case 'n': {
                     res.push_back('\n');
                     break;
@@ -333,10 +333,10 @@ inline auto unquote(std::string_view str) -> std::string {
                 }
             }
             slash = false;
-        } else if (*it == '\\') {
+        } else if (it == '\\') {
             slash = true;
         } else {
-            res.push_back(*it);
+            res.push_back(it);
         }
     }
     return res;

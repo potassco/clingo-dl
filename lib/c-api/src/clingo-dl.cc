@@ -36,6 +36,9 @@ using namespace ClingoDL;
 
 namespace {
 
+constexpr auto max_thread_id = 64;
+constexpr auto cutoff_factor = 10;
+
 using namespace std::string_view_literals;
 
 using Clingo::Detail::handle_error;
@@ -133,7 +136,8 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
         static clingo_propagator_t prop = {
             init<T>, nullptr,  propagate<T>,
             undo<T>, check<T>, conf.decision_mode != DecisionMode::Disabled ? decide<T> : nullptr,
-            nullptr};
+            nullptr,
+        };
         handle_error(clingo_control_register_propagator(control, &prop, &prop_));
     }
 
@@ -175,13 +179,17 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
 
   private:
     //! Add an integral value to the statistics.
-    template <class V, std::enable_if_t<std::is_integral_v<V>, bool> = true>
-    static void add_subkey_(Clingo::StatsMap root, char const *name, V value) {
+    template <class V>
+    static void add_subkey_(Clingo::StatsMap root, char const *name, V value)
+        requires(std::is_integral_v<V>)
+    {
         root.insert(name, Clingo::StatsType::value).value(static_cast<double>(value));
     }
     //! Add an floating point value to the statistics.
-    template <class V, std::enable_if_t<std::is_floating_point_v<V>, bool> = true>
-    static void add_subkey_(Clingo::StatsMap root, char const *name, V value) {
+    template <class V>
+    static void add_subkey_(Clingo::StatsMap root, char const *name, V value)
+        requires(std::is_floating_point_v<V>)
+    {
         root.insert(name, Clingo::StatsType::value).value(value);
     }
 
@@ -221,14 +229,14 @@ template <typename T> class DLPropagatorFacade : public PropagatorFacade {
 };
 
 //! Ascii tolower conversion.
-constexpr auto tolower(char c) -> char { return (c >= 'A' && c <= 'Z') ? c + ('a' - 'A') : c; }
+constexpr auto tolower(char c) -> char { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - ('A' - 'a')) : c; }
 
 //! Check if b is a lower case prefix of a returning a string_view to the remainder of a.
 auto iequals_pre(std::string_view a, std::string_view b) -> std::optional<std::string_view> {
     if (a.size() < b.size()) {
         return std::nullopt;
     }
-    auto cmp = [](char ac, char bc) { return tolower(ac) == tolower(bc); };
+    auto cmp = [](char ac, char bc) -> bool { return tolower(ac) == tolower(bc); };
     auto res = std::ranges::mismatch(b, a, cmp);
     return res.in1 == b.end() ? std::optional{a.substr(b.size())} : std::nullopt;
 }
@@ -245,7 +253,7 @@ auto iequals(std::string_view a, std::string_view b) -> bool {
 auto parse_uint64_pre(std::string_view value) -> std::optional<std::pair<uint64_t, std::string_view>> {
     uint64_t res = 0;
     auto const *first = value.data();
-    auto const *last = value.data() + value.size();
+    auto const *last = value.data() + value.size(); // NOLINT
     auto [ptr, err] = std::from_chars(first, last, res);
     return err == std::errc{} ? std::make_optional(std::make_pair(res, std::string_view(ptr, last))) : std::nullopt;
 }
@@ -254,13 +262,14 @@ auto parse_uint64_pre(std::string_view value) -> std::optional<std::pair<uint64_
 //!
 //! The function returns a nullopt if there are no leading digits.
 auto parse_thread(std::string_view value) -> std::pair<std::optional<clingo_id_t>, std::string_view> {
-    auto pos = value.find_last_of(",");
+    auto pos = value.find_last_of(',');
     if (pos != std::string_view::npos) {
         clingo_id_t res = 0;
         auto spn = value.substr(pos + 1);
-        auto end = spn.data() + spn.size();
-        auto [ptr, err] = std::from_chars(spn.data(), end, res);
-        if (err == std::errc{} && ptr == end && res < 64) {
+        auto const *begin = spn.data();
+        auto const *end = spn.data() + spn.size(); // NOLINT
+        auto [ptr, err] = std::from_chars(begin, end, res);
+        if (err == std::errc{} && ptr == end && res < max_thread_id) {
             return {res, value.substr(0, pos)};
         }
         throw std::invalid_argument("invalid thread id");
@@ -276,9 +285,9 @@ auto parse_uint64(std::string_view value) -> std::optional<uint64_t> {
 
 template <typename Enum, size_t N> class EnumStringMap {
   public:
-    constexpr EnumStringMap(const std::array<std::pair<std::string_view, Enum>, N> &map) : map_{map} {}
+    constexpr explicit EnumStringMap(const std::array<std::pair<std::string_view, Enum>, N> &map) : map_{map} {}
 
-    Enum from_string(std::string_view value) const {
+    [[nodiscard]] auto from_string(std::string_view value) const -> Enum {
         for (const auto &[name, mode] : map_) {
             if (iequals(value, name)) {
                 return mode;
@@ -287,7 +296,7 @@ template <typename Enum, size_t N> class EnumStringMap {
         throw std::invalid_argument("invalid enum string");
     }
 
-    std::string_view to_string(Enum mode) const {
+    [[nodiscard]] auto to_string(Enum mode) const -> std::string_view {
         for (const auto &[name, m] : map_) {
             if (mode == m) {
                 return name;
@@ -301,6 +310,7 @@ template <typename Enum, size_t N> class EnumStringMap {
 };
 
 template <typename Enum, size_t N>
+// NOLINTNEXTLINE
 constexpr auto make_enum_string_map(std::pair<std::string_view, Enum> const (&map)[N]) {
     return EnumStringMap<Enum, N>(std::to_array(map));
 }
@@ -320,7 +330,7 @@ template <class T> auto c_parse_thread(const char *value, size_t size, void *dat
 
 class ConfigRoot {
   public:
-    ConfigRoot(PropagatorConfig &cfg) : cfg_{&cfg} {}
+    explicit ConfigRoot(PropagatorConfig &cfg) : cfg_{&cfg} {}
 
     void set(std::optional<size_t> index, std::string_view value) {
         auto root = parse_uint64(value);
@@ -328,15 +338,16 @@ class ConfigRoot {
             throw std::invalid_argument("invalid root value");
         }
         if (index) {
-            cfg_->ensure(*index).propagate_root = *root;
+            cfg_->ensure(*index).propagate_root = root;
         } else {
             cfg_->propagate_root = *root;
         }
     }
 
-    auto get(std::optional<size_t> index) const -> std::optional<std::string> {
+    [[nodiscard]] auto get(std::optional<size_t> index) const -> std::optional<std::string> {
         if (index) {
             if (index < cfg_->thread_config.size() && cfg_->thread_config[*index].propagate_root) {
+                // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
                 return std::to_string(*cfg_->thread_config[*index].propagate_root);
             }
             return std::nullopt;
@@ -344,7 +355,7 @@ class ConfigRoot {
         return std::to_string(cfg_->propagate_root);
     }
 
-    auto size() const -> size_t { return cfg_->thread_config.size(); }
+    [[nodiscard]] auto size() const -> size_t { return cfg_->thread_config.size(); }
 
     static constexpr auto desc = //
         "Enable full propagation below decision level [0]\n"
@@ -358,7 +369,7 @@ class ConfigRoot {
 
 class ConfigBudget {
   public:
-    ConfigBudget(PropagatorConfig &cfg) : cfg_{&cfg} {}
+    explicit ConfigBudget(PropagatorConfig &cfg) : cfg_{&cfg} {}
 
     void set(std::optional<size_t> index, std::string_view value) {
         auto root = parse_uint64(value);
@@ -366,15 +377,16 @@ class ConfigBudget {
             throw std::invalid_argument("invalid budget value");
         }
         if (index) {
-            cfg_->ensure(*index).propagate_budget = *root;
+            cfg_->ensure(*index).propagate_budget = root;
         } else {
             cfg_->propagate_budget = *root;
         }
     }
 
-    auto get(std::optional<size_t> index) const -> std::optional<std::string> {
+    [[nodiscard]] auto get(std::optional<size_t> index) const -> std::optional<std::string> {
         if (index) {
             if (index < cfg_->thread_config.size() && cfg_->thread_config[*index].propagate_budget) {
+                // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
                 return std::to_string(*cfg_->thread_config[*index].propagate_budget);
             }
             return std::nullopt;
@@ -382,7 +394,7 @@ class ConfigBudget {
         return std::to_string(cfg_->propagate_budget);
     }
 
-    auto size() const -> size_t { return cfg_->thread_config.size(); }
+    [[nodiscard]] auto size() const -> size_t { return cfg_->thread_config.size(); }
 
     static constexpr auto desc = //
         "Enable full propagation limiting to budget [0]\n"
@@ -397,7 +409,7 @@ class ConfigBudget {
 
 class ConfigMode {
   public:
-    ConfigMode(PropagatorConfig &cfg) : cfg_{&cfg} {}
+    explicit ConfigMode(PropagatorConfig &cfg) : cfg_{&cfg} {}
 
     void set(std::optional<size_t> index, std::string_view value) {
         auto mode = map_.from_string(value);
@@ -408,9 +420,10 @@ class ConfigMode {
         }
     }
 
-    auto get(std::optional<size_t> index) const -> std::optional<std::string_view> {
+    [[nodiscard]] auto get(std::optional<size_t> index) const -> std::optional<std::string_view> {
         if (index) {
             if (index < cfg_->thread_config.size() && cfg_->thread_config[*index].propagate_mode) {
+                // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
                 return map_.to_string(cfg_->thread_config[*index].propagate_mode.value());
             }
             return std::nullopt;
@@ -418,7 +431,7 @@ class ConfigMode {
         return map_.to_string(cfg_->propagate_mode);
     }
 
-    auto size() const -> size_t { return cfg_->thread_config.size(); }
+    [[nodiscard]] auto size() const -> size_t { return cfg_->thread_config.size(); }
 
     static constexpr auto desc = //
         "Set propagation mode [no]\n"
@@ -446,7 +459,7 @@ class ConfigMode {
 
 class ConfigSort {
   public:
-    ConfigSort(PropagatorConfig &cfg) : cfg_{&cfg} {}
+    explicit ConfigSort(PropagatorConfig &cfg) : cfg_{&cfg} {}
 
     void set(std::optional<size_t> index, std::string_view value) {
         auto mode = map_.from_string(value);
@@ -457,9 +470,10 @@ class ConfigSort {
         }
     }
 
-    auto get(std::optional<size_t> index) const -> std::optional<std::string_view> {
+    [[nodiscard]] auto get(std::optional<size_t> index) const -> std::optional<std::string_view> {
         if (index) {
             if (index < cfg_->thread_config.size() && cfg_->thread_config[*index].sort_mode) {
+                // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
                 return map_.to_string(*cfg_->thread_config[*index].sort_mode);
             }
             return std::nullopt;
@@ -467,7 +481,7 @@ class ConfigSort {
         return map_.to_string(cfg_->sort_mode);
     }
 
-    auto size() const -> size_t { return cfg_->thread_config.size(); }
+    [[nodiscard]] auto size() const -> size_t { return cfg_->thread_config.size(); }
 
     static constexpr auto desc = //
         "Sort edges for propagation [weight]\n"
@@ -492,15 +506,16 @@ class ConfigSort {
 
 class ConfigMutex {
   public:
-    ConfigMutex(PropagatorConfig &cfg) : cfg_{&cfg} {}
+    explicit ConfigMutex(PropagatorConfig &cfg) : cfg_{&cfg} {}
 
     void set(std::string_view value) {
         if (auto fst = parse_uint64_pre(value)) {
             cfg_->mutex_size = fst->first;
             if (fst->second.empty()) {
-                cfg_->mutex_cutoff = 10 * fst->first;
+                cfg_->mutex_cutoff = cutoff_factor * fst->first;
                 return;
-            } else if (auto snd = fst->second.starts_with(',') ? parse_uint64(fst->second.substr(1)) : std::nullopt) {
+            }
+            if (auto snd = fst->second.starts_with(',') ? parse_uint64(fst->second.substr(1)) : std::nullopt) {
                 cfg_->mutex_cutoff = *snd;
                 return;
             }
@@ -508,7 +523,7 @@ class ConfigMutex {
         throw std::invalid_argument("invalid propagate mutex value");
     }
 
-    auto get() const -> std::optional<std::string> {
+    [[nodiscard]] auto get() const -> std::optional<std::string> {
         return std::to_string(cfg_->mutex_size) + "," + std::to_string(cfg_->mutex_cutoff);
     }
 
@@ -524,11 +539,11 @@ class ConfigMutex {
 
 class ConfigDecide {
   public:
-    ConfigDecide(PropagatorConfig &cfg) : cfg_{&cfg} {}
+    explicit ConfigDecide(PropagatorConfig &cfg) : cfg_{&cfg} {}
 
     void set(std::string_view value) { cfg_->decision_mode = map_.from_string(value); }
 
-    auto get() const -> std::optional<std::string_view> { return map_.to_string(cfg_->decision_mode); }
+    [[nodiscard]] auto get() const -> std::optional<std::string_view> { return map_.to_string(cfg_->decision_mode); }
 
     static constexpr auto desc = //
         "Decision heuristic for difference constraints\n"
@@ -549,7 +564,7 @@ class ConfigDecide {
 
 class ConfigBool {
   public:
-    ConfigBool(bool &target) : target_{&target} {}
+    explicit ConfigBool(bool &target) : target_{&target} {}
 
     void set(std::string_view value) {
         if (iequals(value, "no") || iequals(value, "off") || iequals(value, "0")) {
@@ -561,18 +576,18 @@ class ConfigBool {
         }
     }
 
-    auto get() const -> std::optional<std::string_view> { return *target_ ? "yes" : "no"; }
+    [[nodiscard]] auto get() const -> std::optional<std::string_view> { return *target_ ? "yes" : "no"; }
 
   private:
     bool *target_;
 };
 
-static constexpr auto desc_rdl = "Enable support for real numbers [no]"sv;
-static constexpr auto desc_shift = "Shift constraints into head of integrity constraints [no]"sv;
-static constexpr auto desc_comp = "Compute connected components [yes]"sv;
+constexpr auto desc_rdl = "Enable support for real numbers [no]"sv;
+constexpr auto desc_shift = "Shift constraints into head of integrity constraints [no]"sv;
+constexpr auto desc_comp = "Compute connected components [yes]"sv;
 
 struct clingodl_theory {
-    clingodl_theory(clingo_lib_t *lib) : lib{lib, true} {}
+    explicit clingodl_theory(clingo_lib_t *lib) : lib{lib, true} {}
     Clingo::Library lib;
     std::unique_ptr<PropagatorFacade> clingodl;
     PropagatorConfig config;
@@ -610,7 +625,7 @@ struct clingodl_theory {
     }
 
     static auto register_(void *self, clingo_control_t *control) -> bool {
-        auto theory = static_cast<clingodl_theory *>(self);
+        auto *theory = static_cast<clingodl_theory *>(self);
         CLINGO_TRY {
             handle_error(clingo_control_parse_string(control, THEORY, std::strlen(THEORY)));
             auto ctl = Clingo::Control{control, true};
@@ -630,18 +645,18 @@ struct clingodl_theory {
     }
 
     static auto rewrite_ast(void *self, clingo_ast_t *ast, clingo_theory_ast_callback_t add, void *data) -> bool {
-        auto theory = static_cast<clingodl_theory *>(self);
+        auto *theory = static_cast<clingodl_theory *>(self);
         CLINGO_TRY {
             rewrite(
                 theory->lib, Clingo::AST::Node{ast, true},
-                [add, data](Clingo::AST::Node ast) { handle_error(add(c_cast(ast), data)); },
+                [add, data](const Clingo::AST::Node &ast) -> void { handle_error(add(c_cast(ast), data)); },
                 theory->shift_constraints);
         }
         CLINGO_CATCH;
     }
 
     static auto prepare(void *self, clingo_control_t *control) -> bool {
-        auto theory = static_cast<clingodl_theory *>(self);
+        auto *theory = static_cast<clingodl_theory *>(self);
         CLINGO_TRY {
             if (theory->clingodl == nullptr) {
                 if (!theory->rdl) {
@@ -657,21 +672,21 @@ struct clingodl_theory {
     }
 
     static void destroy(void *self) {
-        auto theory = static_cast<clingodl_theory *>(self);
+        auto *theory = static_cast<clingodl_theory *>(self);
         std::unique_ptr<clingodl_theory>{theory};
     }
 
     static auto register_options(void *self, clingo_options_t *options) -> bool {
-        auto theory = static_cast<clingodl_theory *>(self);
+        auto *theory = static_cast<clingodl_theory *>(self);
         CLINGO_TRY {
             auto group = "Clingo.DL Options"sv;
             auto opt = [&](std::string_view name, std::string_view desc, clingo_option_parser_t parser,
-                           bool multi = false, std::string_view arg = {}) {
+                           bool multi = false, std::string_view arg = {}) -> void {
                 handle_error(clingo_options_add(options, group.data(), group.size(), name.data(), name.size(),
                                                 desc.data(), desc.size(), parser, &theory->config, multi,
                                                 arg.empty() ? nullptr : arg.data(), arg.size()));
             };
-            auto flag = [&](std::string_view name, std::string_view desc, bool &target) {
+            auto flag = [&](std::string_view name, std::string_view desc, bool &target) -> void {
                 handle_error(clingo_options_add_flag(options, group.data(), group.size(), name.data(), name.size(),
                                                      desc.data(), desc.size(), &target));
             };
@@ -697,7 +712,7 @@ struct clingodl_theory {
 
     static auto on_model(void *self, clingo_model_t *model) -> bool {
         CLINGO_TRY {
-            auto theory = static_cast<clingodl_theory *>(self);
+            auto *theory = static_cast<clingodl_theory *>(self);
             Clingo::Model m(model);
             theory->clingodl->extend_model(m);
         }
@@ -706,7 +721,7 @@ struct clingodl_theory {
 
     static auto lookup_symbol(void *self, clingo_symbol_t symbol, size_t *index, bool *found) -> bool {
         CLINGO_TRY {
-            auto theory = static_cast<clingodl_theory *>(self);
+            auto *theory = static_cast<clingodl_theory *>(self);
             *found = theory->clingodl->lookup_symbol(Clingo::Symbol{symbol, true}, *index);
         }
         CLINGO_CATCH;
@@ -714,7 +729,7 @@ struct clingodl_theory {
 
     static auto assignment_next(void *self, uint32_t thread_id, bool *init, size_t *index, bool *has_value) -> bool {
         CLINGO_TRY {
-            auto theory = static_cast<clingodl_theory *>(self);
+            auto *theory = static_cast<clingodl_theory *>(self);
             if (std::exchange(*init, false)) {
                 *index = 0;
             }
@@ -726,7 +741,7 @@ struct clingodl_theory {
     static auto assignment_get_value(void *self, uint32_t thread_id, size_t index, clingo_symbol_t *symbol,
                                      clingo_theory_value_t *value, bool *has_value) -> bool {
         CLINGO_TRY {
-            auto theory = static_cast<clingodl_theory *>(self);
+            auto *theory = static_cast<clingodl_theory *>(self);
             bool hv = theory->clingodl->has_value(thread_id, index);
             if (has_value != nullptr) {
                 *has_value = hv;
@@ -746,7 +761,7 @@ struct clingodl_theory {
 
     static auto on_statistics(void *self, clingo_stats_t *stats) -> bool {
         CLINGO_TRY {
-            auto theory = static_cast<clingodl_theory *>(self);
+            auto *theory = static_cast<clingodl_theory *>(self);
             uint64_t root = 0;
             handle_error(clingo_stats_root(stats, &root));
             auto cpp_stats = Clingo::Stats{stats, root};
@@ -758,7 +773,7 @@ struct clingodl_theory {
 
 } // namespace
 
-extern "C" bool clingodl_create(clingo_lib_t *lib, clingo_theory_t *theory) {
+extern "C" auto clingodl_create(clingo_lib_t *lib, clingo_theory_t *theory) -> bool {
     CLINGO_TRY {
         *theory = clingo_theory_t{
             clingodl_theory::info,

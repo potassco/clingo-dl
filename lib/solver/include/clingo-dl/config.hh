@@ -32,26 +32,26 @@
 namespace ClingoDL {
 
 //! Enumeration to configure propagation strength.
-enum class PropagationMode {
+enum class PropagationMode : uint8_t {
     Check = 0,    //!< Only check for conflicting assignments.
     Trivial = 1,  //!< Check inverse constraits.
     Weak = 2,     //!< Perform weak propagation.
     WeakPlus = 3, //!< Perform weak propagation with some extra effort.
     Zero = 4,     //!< Perform propagation through zero node.
-    Strong = 5    //!< Perform full propagation.
+    Strong = 5,   //!< Perform full propagation.
 };
 
 //! Enumeration to configure sorting of edges before propagation.
-enum class SortMode {
-    No = 0,          //! Do not sort edges.
-    Weight = 1,      //! Sort edges by weight in ascending order.
-    WeightRev = 2,   //! Sort edges by weight in descending order.
-    Potential = 3,   //! Sort edges by potential in ascending order.
-    PotentialRev = 4 //! Sort edges by potential in descending order.
+enum class SortMode : uint8_t {
+    No = 0,           //! Do not sort edges.
+    Weight = 1,       //! Sort edges by weight in ascending order.
+    WeightRev = 2,    //! Sort edges by weight in descending order.
+    Potential = 3,    //! Sort edges by potential in ascending order.
+    PotentialRev = 4, //! Sort edges by potential in descending order.
 };
 
 //! Enumeration to configure sorting of edges before propagation.
-enum class DecisionMode {
+enum class DecisionMode : uint8_t {
     Disabled = 0,    //! Do not modify decision heuristic.
     MinConflict = 1, //! Try to minimize conflicts.
     MaxConflict = 2, //! Try to maximize conflicts.
@@ -134,7 +134,8 @@ struct PropagatorConfig {
 
   private:
     //! Helper to access per thread or global properties.
-    template <class T, class P> [[nodiscard]] auto get_prop(Clingo::ProgramId thread_id, T &&def, P &&prop) const -> T {
+    template <class T, class P>
+    [[nodiscard]] auto get_prop(Clingo::ProgramId thread_id, T const &def, P const &prop) const -> T {
         if (thread_id < thread_config.size() && thread_config[thread_id].*prop) {
             return *(thread_config[thread_id].*prop); // NOLINT(bugprone-unchecked-optional-access)
         }

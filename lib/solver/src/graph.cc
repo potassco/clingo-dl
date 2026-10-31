@@ -306,8 +306,8 @@ template <typename T> template <typename D> struct Graph<T>::Impl : Graph {
 
 #ifdef CLINGODL_CROSSCHECK
     //! Compute shortests paths using the Bellman Ford algorithm.
-    std::optional<std::unordered_map<vertex_t, value_t>> bellman_ford_(std::vector<edge_t> const &edges,
-                                                                       vertex_t source) {
+    auto bellman_ford_(std::vector<edge_t> const &edges, vertex_t source)
+        -> std::optional<std::unordered_map<vertex_t, value_t>> {
         std::unordered_map<vertex_t, T> costs;
         costs[source] = 0;
         vertex_t vertices = 0;
@@ -511,7 +511,7 @@ template <typename T> template <typename D> struct Graph<T>::Impl : Graph {
 
 #ifdef CLINGODL_CROSSCHECK
     //! Count relevant incoming/outgoing edges.
-    std::pair<uint32_t, uint32_t> count_relevant_() {
+    auto count_relevant_() -> std::pair<uint32_t, uint32_t> {
         uint32_t relevant_in = 0;
         uint32_t relevant_out = 0;
         for (auto &vertex : visited_set()) {
@@ -535,8 +535,8 @@ template <typename T> template <typename D> struct Graph<T>::Impl : Graph {
     //! Traverse incoming/outgoing edges and disables true edges and propagates
     //! false edges.
     template <bool full>
-    bool propagate_edges(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t xy_idx, bool forward,
-                         bool backward) {
+    auto propagate_edges(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t xy_idx, bool forward,
+                         bool backward) -> bool {
         if (!forward && !backward) {
             return true;
         }
@@ -545,7 +545,7 @@ template <typename T> template <typename D> struct Graph<T>::Impl : Graph {
                 if (forward) {
                     auto &in = candidate_incoming(vertex);
                     in.resize(std::remove_if(in.begin(), in.end(),
-                                             [&](edge_t uv_idx) {
+                                             [&](edge_t uv_idx) -> auto {
                                                  if (!edge_states_[uv_idx].enabled ||
                                                      propagate_edge_true_<full>(uv_idx, xy_idx)) {
                                                      remove_incoming(uv_idx);
@@ -559,7 +559,7 @@ template <typename T> template <typename D> struct Graph<T>::Impl : Graph {
                     bool ret = true;
                     auto &out = candidate_outgoing(vertex);
                     out.resize(std::remove_if(out.begin(), out.end(),
-                                              [&](edge_t uv_idx) {
+                                              [&](edge_t uv_idx) -> auto {
                                                   if (!ret) {
                                                       return false;
                                                   }
@@ -628,11 +628,17 @@ template <typename T> void Graph<T>::disable_propagate() { changed_trail_.back()
 template <typename T> void Graph<T>::ensure_decision_level(level_t level, bool enable_propagate) {
     // initialize the trail
     if (changed_trail_.empty() || current_decision_level_() < level) {
-        changed_trail_.push_back(
-            {level, numeric_cast<index_t>(changed_vertices_.size()), numeric_cast<index_t>(changed_edges_.size()),
-             numeric_cast<index_t>(disabled_edges_.size()), numeric_cast<index_t>(visited_lower_.size()),
-             numeric_cast<index_t>(visited_upper_.size()), numeric_cast<index_t>(lower_trail_.size()),
-             numeric_cast<index_t>(upper_trail_.size()), can_propagate() && enable_propagate});
+        changed_trail_.push_back({
+            level,
+            numeric_cast<index_t>(changed_vertices_.size()),
+            numeric_cast<index_t>(changed_edges_.size()),
+            numeric_cast<index_t>(disabled_edges_.size()),
+            numeric_cast<index_t>(visited_lower_.size()),
+            numeric_cast<index_t>(visited_upper_.size()),
+            numeric_cast<index_t>(lower_trail_.size()),
+            numeric_cast<index_t>(upper_trail_.size()),
+            can_propagate() && enable_propagate,
+        });
     }
 }
 
@@ -680,8 +686,8 @@ auto Graph<T>::add_edge(Clingo::Assignment ass, Clingo::PropagateControl ctl, ed
 }
 
 template <typename T>
-bool Graph<T>::propagate_zero_(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t uv_idx,
-                               vertex_t zero_idx) { // NOLINT
+auto Graph<T>::propagate_zero_(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t uv_idx,
+                               vertex_t zero_idx) -> bool { // NOLINT
     ++stats_.edges_propagated;
     disable_edge(uv_idx);
 
@@ -821,7 +827,7 @@ bool Graph<T>::propagate_simple_(Clingo::Assignment ass, Clingo::PropagateContro
     if (propagate_ >= PropagationMode::Trivial) {
         auto &uv = edges_[uv_idx];
         if (visited_from_.empty() || propagate_ == PropagationMode::Trivial) {
-            return with_incoming_(ctl, uv.from, [&](vertex_t t_idx, edge_t ts_idx) {
+            return with_incoming_(ctl, uv.from, [&](vertex_t t_idx, edge_t ts_idx) -> auto {
                 auto &ts = edges_[ts_idx];
                 if (t_idx == uv.to && uv.weight + ts.weight < 0 && !ass.is_false(ts.lit)) {
                     clause_.emplace_back(-edges_[uv_idx].lit);
@@ -949,7 +955,7 @@ template <typename T>
     //   u ->* s ->* t
     //         ^----/
     //           ts
-    return with_incoming_(ctl, s_idx, [&](vertex_t t_idx, edge_t ts_idx) {
+    return with_incoming_(ctl, s_idx, [&](vertex_t t_idx, edge_t ts_idx) -> auto {
         auto &s = vertices_[s_idx];
         auto &t = vertices_[t_idx];
         auto &ts = edges_[ts_idx];
@@ -1127,8 +1133,8 @@ template <typename T> template <bool full> bool Graph<T>::propagate_edge_true_(e
 
 template <typename T>
 template <bool full>
-bool Graph<T>::propagate_edge_false_(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t uv_idx, edge_t xy_idx,
-                                     bool &ret) { // NOLINT
+auto Graph<T>::propagate_edge_false_(Clingo::Assignment ass, Clingo::PropagateControl ctl, edge_t uv_idx, edge_t xy_idx,
+                                     bool &ret) -> bool { // NOLINT
     // The function is best understood considering the following example graph:
     //
     //   v ->* x -> y ->* u

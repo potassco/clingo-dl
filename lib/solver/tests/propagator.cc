@@ -73,9 +73,14 @@ template <class N> auto solve(std::string_view str) -> MV {
     auto &prp = ctl.register_propagator(std::make_unique<DLPropagator<N>>(lib, sts, cfg));
     {
         auto prg = Clingo::AST::Program{lib};
-        Clingo::AST::parse(lib, str, [&]<class T>(T &&stm) {
-            rewrite(lib, std::forward<T>(stm), [&]<class U>(U &&stm) { prg.add(std::forward<U>(stm)); }, true);
-        });
+        Clingo::AST::parse(lib, str,
+                           // NOLINTNEXTLINE
+                           [&]<class T>(T &&stm) -> auto {
+                               rewrite(
+                                   lib, std::forward<T>(stm),
+                                   // NOLINTNEXTLINE
+                                   [&]<class U>(U &&stm) -> auto { prg.add(std::forward<U>(stm)); }, true);
+                           });
         ctl.join(prg);
     }
     ctl.ground();
@@ -88,7 +93,7 @@ template <class N> auto solve(std::string_view str) -> MV {
 
 TEST_CASE("propagator", "[propagator]") {
     REQUIRE(solve<int>(R"(
-        &diff { a - b } < 0 :- a. 
+        &diff { a - b } < 0 :- a.
         &diff { b - a } < 0 :- b.
         1 {a; b}.
         )") == MV{
@@ -96,7 +101,7 @@ TEST_CASE("propagator", "[propagator]") {
                    {"b", "dl(a,1)", "dl(b,0)"},
                });
     REQUIRE(solve<double>(R"(
-        &diff { a - b } <= -"0.1" :- a. 
+        &diff { a - b } <= -"0.1" :- a.
         &diff { b - a } <= -"0.1" :- b.
         1 {a; b}.
         )") == MV{

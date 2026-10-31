@@ -28,6 +28,7 @@
 
 #include <limits>
 #include <sstream>
+#include <utility>
 
 #ifdef CLINGODL_PROFILE
 #include <gperftools/profiler.h>
@@ -38,7 +39,7 @@ namespace ClingoDL {
 //! Application class to run clingo-dl.
 class App : public Clingo::App, private Clingo::SolveEventHandler {
   public:
-    App(Clingo::Library const &lib) : lib_{lib} {}
+    explicit App(Clingo::Library lib) : lib_{std::move(lib)} {}
     App(App &&other) = delete;
     //! Set program name to clingo-dl.
     auto do_program_name() noexcept -> std::string_view override { return "clingo-dl"; }
@@ -122,10 +123,10 @@ class App : public Clingo::App, private Clingo::SolveEventHandler {
                     "      <arg>     : <variable>[,<initial>]\n"
                     "      <variable>: the variable to minimize\n"
                     "      <initial> : upper bound for the variable",
-                    [this](std::string_view value) { return parse_bound(value); });
+                    [this](std::string_view value) -> bool { return parse_bound(value); });
         options.add(
             group, "minimize-factor", "Factor to adjust minimization step size [1]",
-            [this](std::string_view value) { return parse_factor(value); }, false, "<factor>");
+            [this](std::string_view value) -> bool { return parse_factor(value); }, false, "<factor>");
     }
     //! Validate options of the theory.
     void do_validate_options() override { theory_.validate_options(); }
@@ -142,6 +143,7 @@ class App : public Clingo::App, private Clingo::SolveEventHandler {
 auto main(int argc, char *argv[]) -> int { // NOLINT(bugprone-exception-escape)
     Clingo::Library lib;
     ClingoDL::App app{lib};
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     auto args = std::vector<std::string_view>{argv + 1, argv + argc};
     return Clingo::main(lib, args, &app);
 }

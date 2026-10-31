@@ -8,6 +8,7 @@ namespace PyClingoDL {
 namespace {
 
 auto create_theory() -> pybind11::object {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     return pybind11::capsule{reinterpret_cast<void *>(&clingodl_create), "clingo_theory_create"};
 }
 

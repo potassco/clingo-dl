@@ -72,7 +72,7 @@ template <typename T> class DLPropagator : public Clingo::Heuristic {
     //! Get the symbol associated with a vertex index.
     [[nodiscard]] auto symbol(vertex_t index) const -> Clingo::Symbol const &;
     //! Lookup the index of a vertex.
-    auto lookup(Clingo::Symbol symbol) -> vertex_t;
+    auto lookup(const Clingo::Symbol &symbol) -> vertex_t;
     //! Check if the given vertex has a lower bound in the given thread.
     [[nodiscard]] auto has_lower_bound(id_t thread_id, vertex_t index) const -> bool;
     //! Get the lower bound of a vertex in the given thread.

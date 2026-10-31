@@ -43,7 +43,7 @@ auto rewrite(std::string_view prg) -> V {
     auto ret = V{};
     auto lib = Clingo::Library{};
     auto stm = Clingo::AST::parse(lib, prg);
-    ClingoDL::rewrite(lib, stm, [&]<class T>(T &&node) { ret.emplace_back(node.to_string()); }, true);
+    ClingoDL::rewrite(lib, stm, [&]<class T>(T const &node) -> auto { ret.emplace_back(node.to_string()); }, true);
     return ret;
 }
 
@@ -54,7 +54,7 @@ template <class N> auto parse(std::string_view str) -> V {
     auto ctl = Clingo::Control{lib};
     auto prg = Clingo::AST::Program{lib};
     auto stm = Clingo::AST::parse(lib, str);
-    ClingoDL::rewrite(lib, stm, [&]<class T>(T &&node) { prg.add(std::forward<T>(node)); }, true);
+    ClingoDL::rewrite(lib, stm, [&]<class T>(T const &node) -> auto { prg.add(node); }, true);
     ctl.join(prg);
     ctl.parse_string(THEORY);
     ctl.ground();
@@ -64,7 +64,7 @@ template <class N> auto parse(std::string_view str) -> V {
     auto oss = std::ostringstream{};
     V ret;
     for (auto atom : ctl.base().theory()) {
-        auto edge = ClingoDL::parse<N>(lib, atom, [&](Clingo::Symbol sym) {
+        auto edge = ClingoDL::parse<N>(lib, atom, [&](const Clingo::Symbol &sym) -> auto {
             auto [it, ins] = vertex_map.try_emplace(sym, static_cast<vertex_t>(vertices.size()));
             if (ins) {
                 vertices.emplace_back(it->first);

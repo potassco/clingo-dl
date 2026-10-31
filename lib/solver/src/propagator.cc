@@ -23,6 +23,7 @@
 // }}}
 
 #include <clingo-dl/propagator.hh>
+#include <utility>
 
 #define CLINGODL_CHECKSOLUTION
 
@@ -30,13 +31,17 @@ namespace ClingoDL {
 
 namespace {
 
-template <typename T, typename std::enable_if<std::is_integral_v<T>, bool>::type = true>
-inline auto to_symbol([[maybe_unused]] Clingo::Library const &lib, T value) -> Clingo::Symbol {
+template <typename T>
+inline auto to_symbol([[maybe_unused]] Clingo::Library const &lib, T value) -> Clingo::Symbol
+    requires(std::is_integral_v<T>)
+{
     return Clingo::Number(value);
 }
 
-template <typename T, typename std::enable_if<std::is_floating_point_v<T>, bool>::type = true>
-inline auto to_symbol(Clingo::Library const &lib, T value) -> Clingo::Symbol {
+template <typename T>
+inline auto to_symbol(Clingo::Library const &lib, T value) -> Clingo::Symbol
+    requires(std::is_floating_point_v<T>)
+{
     return Clingo::String(lib, std::to_string(value));
 }
 
@@ -70,16 +75,16 @@ void Statistics::accu(Statistics const &x) {
 
 //! Struct to store vertex specific information.
 template <typename T> struct DLPropagator<T>::VertexInfo {
-    VertexInfo(Clingo::Symbol symbol) : symbol{symbol}, cc{0}, visited{0} {}
+    explicit VertexInfo(Clingo::Symbol symbol) : symbol{std::move(std::move(symbol))} {}
     //! Mark the vertex visited in the given connected component.
     void set_visited(index_t cc, bool visited) {
         this->cc = cc;
         this->visited = visited;
     }
 
-    Clingo::Symbol symbol;                //!< The symbol associated with the vertex.
-    index_t cc : sizeof(index_t) * 8 - 1; //!< The connected component the vertex is in.
-    index_t visited : 1;                  //!< Whether the vertex has been visited.
+    Clingo::Symbol symbol;                      //!< The symbol associated with the vertex.
+    index_t cc : (sizeof(index_t) * 8) - 1 {0}; //!< The connected component the vertex is in.
+    index_t visited : 1 {0};                    //!< Whether the vertex has been visited.
 };
 
 //! Struct to store thread specific state.
@@ -121,7 +126,7 @@ template <typename T> auto DLPropagator<T>::symbol(vertex_t index) const -> Clin
     return vertex_info_[index].symbol;
 }
 
-template <typename T> auto DLPropagator<T>::lookup(Clingo::Symbol symbol) -> vertex_t {
+template <typename T> auto DLPropagator<T>::lookup(const Clingo::Symbol &symbol) -> vertex_t {
     auto it = vert_map_inv_.find(symbol);
     return it != vert_map_inv_.end() ? it->second : num_vertices();
 }
@@ -238,7 +243,7 @@ auto DLPropagator<T>::add_constraints_(Clingo::Assignment ass, Clingo::Propagate
     for (auto atom : init.base().theory()) {
         auto term = atom.name();
         if (match(term, "__diff_h", 0) || match(term, "__diff_b", 0)) {
-            auto edge = parse<T>(lib_, atom, [this](Clingo::Symbol const &sym) { return map_vertex_(sym); });
+            auto edge = parse<T>(lib_, atom, [this](Clingo::Symbol const &sym) -> auto { return map_vertex_(sym); });
             literal_t lit = init.solver_literal(atom.literal());
             if (!normalize_constraint_(ass, init, lit, edge.lhs, edge.rel, edge.rhs, edge.strict)) {
                 return false;
@@ -566,7 +571,7 @@ void DLPropagator<T>::calculate_mutexes_(Clingo::Assignment ass, Clingo::Propaga
                 auto st_id = it->second;
                 auto &st = edges_[st_id];
                 auto st_truth = ass.value(st.lit);
-                if ((st_id > start_id && !st_truth.has_value()) || st_truth == false) {
+                if ((st_id > start_id && !st_truth.has_value()) || !static_cast<bool>(st_truth)) {
                     continue;
                 }
                 auto w = rs_state.weight + st.weight;
@@ -666,7 +671,7 @@ template <typename T> auto DLPropagator<T>::cost_(SortMode mode, Graph const &gr
 
 template <typename T> void DLPropagator<T>::sort_edges(SortMode mode, ThreadState &state) {
     std::sort(state.todo_edges.begin(), state.todo_edges.end(),
-              [&](edge_t l, edge_t r) { return cost_(mode, state.graph, l) < cost_(mode, state.graph, r); });
+              [&](edge_t l, edge_t r) -> auto { return cost_(mode, state.graph, l) < cost_(mode, state.graph, r); });
 }
 
 template <typename T>

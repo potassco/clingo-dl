@@ -54,8 +54,7 @@ class Optimizer : private Clingo::SolveEventHandler {
     using EventHandler = Clingo::SolveEventHandler;
 
   public:
-    Optimizer(Clingo::Library const &lib, OptimizerConfig const &opt_cfg, EventHandler &handler,
-              Clingo::Theory const &theory);
+    Optimizer(Clingo::Library lib, OptimizerConfig const &opt_cfg, EventHandler &handler, Clingo::Theory const &theory);
     //! Run the optimization algorithm.
     //!
     //! \note

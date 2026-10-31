@@ -48,7 +48,7 @@ using literal_t = Clingo::ProgramLiteral;
 //! Type for ids.
 using id_t = Clingo::ProgramId;
 
-enum class Relation {
+enum class Relation : uint8_t {
     less_than,
     less_equal,
     greater_than,

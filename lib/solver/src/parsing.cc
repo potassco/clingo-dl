@@ -31,7 +31,7 @@ namespace ClingoDL {
 namespace {
 
 //! Negate a relation symbol.
-auto negate_relation(std::string_view op) -> std::string_view {
+[[maybe_unused]] auto negate_relation(std::string_view op) -> std::string_view {
     if (op == "=") {
         return "!=";
     }
@@ -112,14 +112,15 @@ auto shift_rule(Clingo::Library &lib, Clingo::AST::Node ast) -> Clingo::AST::Nod
         auto guard = lit.optional_node(Attribute::right);
         check_syntax(guard.has_value());
         if (lit.number(Attribute::sign) != Sign::single) {
-            guard = guard->update<NodeType::theory_right_guard>(lib, [&]<Attribute Attr>() {
+            // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+            guard = guard->update<NodeType::theory_right_guard>(lib, [&]<Attribute Attr>() -> auto {
                 if constexpr (Attr == Attribute::theory_operator) {
                     return negate_relation(guard->string(Attribute::theory_operator));
                 }
             });
         }
         body.erase(it);
-        return ast.update<NodeType::statement_rule>(lib, [&]<Attribute Attr>() {
+        return ast.update<NodeType::statement_rule>(lib, [&]<Attribute Attr>() -> auto {
             if constexpr (Attr == Attribute::head) {
                 return Node::create<NodeType::head_theory_atom>(lib, lit.location(Attribute::location), name, elems,
                                                                 guard);
@@ -133,9 +134,10 @@ auto shift_rule(Clingo::Library &lib, Clingo::AST::Node ast) -> Clingo::AST::Nod
 }
 
 //! Tag terms depending on whether they occur in heads or bodies.
-auto tag_terms(Clingo::Library const &lib, Clingo::AST::Node const &ast, std::string_view tag) -> Clingo::AST::Node {
+[[maybe_unused]] auto tag_terms(Clingo::Library const &lib, Clingo::AST::Node const &ast, std::string_view tag)
+    -> Clingo::AST::Node {
     using namespace Clingo::AST;
-    auto tag_string = [tag](std::string_view str) {
+    auto tag_string = [tag](std::string_view str) -> std::string {
         auto res = std::string{"__"};
         res.reserve(res.size() + str.size() + tag.size());
         res += str;
@@ -149,7 +151,7 @@ auto tag_terms(Clingo::Library const &lib, Clingo::AST::Node const &ast, std::st
         return Node::create<NodeType::term_symbolic>(lib, ast.location(Attribute::location), sym);
     }
     if (ast.type() == NodeType::term_function) {
-        return ast.update<NodeType::term_function>(lib, [&]<Attribute Attr>() {
+        return ast.update<NodeType::term_function>(lib, [&]<Attribute Attr>() -> auto {
             if constexpr (Attr == Attribute::name) {
                 return tag_string(ast.string(Attribute::name));
             }
@@ -211,7 +213,7 @@ constexpr int INVALID_VAR{std::numeric_limits<int>::max()};
 
 //! Parse a string to a number.
 template <class T> [[nodiscard]] auto parse_number(std::string_view name) -> std::optional<T> {
-#if defined(_LIBCPP_VERSION)
+#ifdef _LIBCPP_VERSION
     auto res = T{};
     auto iss = std::istringstream{std::string{name}};
     iss >> res;
@@ -247,23 +249,27 @@ template <class T> [[nodiscard]] auto to_number(Clingo::Symbol const &a) -> T {
 template <class N> [[nodiscard]] auto evaluate(Clingo::Library &lib, Clingo::TheoryTerm const &term) -> Clingo::Symbol;
 
 //! Evaluate two theory terms involved involved in a binary operation to an integral number.
-template <class N, class F, typename std::enable_if<std::is_integral_v<N>, bool>::type = true>
+template <class N, class F>
 [[nodiscard]] auto evaluate_binary(Clingo::Library &lib, Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b,
-                                   F &&f) -> Clingo::Symbol {
+                                   F &&f) -> Clingo::Symbol
+    requires(std::is_integral_v<N>)
+{
     auto ea = evaluate<N>(lib, a);
     check_syntax(ea.type() == Clingo::SymbolType::number);
     auto eb = evaluate<N>(lib, b);
     check_syntax(eb.type() == Clingo::SymbolType::number);
-    return Clingo::Number(f(to_number<N>(ea), to_number<N>(eb)));
+    return Clingo::Number(std::forward<F>(f)(to_number<N>(ea), to_number<N>(eb)));
 }
 
 //! Evaluate two theory terms involved involved in a binary operation to a floating point number.
-template <class N, class F, typename std::enable_if<std::is_floating_point_v<N>, bool>::type = true>
+template <class N, class F>
 [[nodiscard]] auto evaluate_binary(Clingo::Library &lib, Clingo::TheoryTerm const &a, Clingo::TheoryTerm const &b,
-                                   F &&f) -> Clingo::Symbol {
+                                   F &&f) -> Clingo::Symbol
+    requires(std::is_floating_point_v<N>)
+{
     auto ea = evaluate<N>(lib, a);
     auto eb = evaluate<N>(lib, b);
-    return Clingo::String(lib, std::to_string(f(to_number<N>(ea), to_number<N>(eb))));
+    return Clingo::String(lib, std::to_string(std::invoke(std::forward<F>(f), to_number<N>(ea), to_number<N>(eb))));
 }
 
 template <class N> auto evaluate(Clingo::Library &lib, Clingo::TheoryTerm const &term) -> Clingo::Symbol {
@@ -397,9 +403,8 @@ template <class N> [[nodiscard]] auto simplify(CoVarVec<N> &vec) -> N {
         if (!is_valid_var(var)) {
             rhs = safe_sub<N>(rhs, co);
         } else {
-            auto r = seen.emplace(var, jt);
-            auto kt = r.first;
-            auto ins = r.second;
+            auto [kt, ins] = seen.emplace(var, jt);
+
             if (!ins) {
                 kt->second->first = safe_add<N>(kt->second->first, co);
             } else {
@@ -411,7 +416,7 @@ template <class N> [[nodiscard]] auto simplify(CoVarVec<N> &vec) -> N {
         }
     }
 
-    jt = std::remove_if(vec.begin(), jt, [](auto &co_var) { return co_var.first == 0; });
+    jt = std::remove_if(vec.begin(), jt, [](auto &co_var) -> auto { return co_var.first == 0; });
     vec.erase(jt, vec.end());
     return rhs;
 }
@@ -448,10 +453,12 @@ auto parse(Clingo::Library &lib, Clingo::TheoryAtom const &atom,
         throw_syntax_error("strict semantics not available with floating point numbers");
     }
     CoVarVec<N> covec;
+    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
     parse_elem(lib, guard->second, map_vert, covec);
     for (auto &[co, var] : covec) {
         co = safe_inv<N>(co);
     }
+    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
     auto rel = guard->first;
 
     auto elems = atom.elements();
