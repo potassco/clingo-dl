@@ -25,18 +25,18 @@ keywords = [
     "CSP",
     "Potassco",
     "clingo",
-    "clingcon",
+    "clingo-dl",
     "solver",
 ]
 dependencies = ["clingo>=6.0.0"]
 
 [project.urls]
 Homepage = "https://potassco.org"
-Repository = "https://github.com/potassco/clingcon"
+Repository = "https://github.com/potassco/clingo-dl"
 Documentation = "https://github.com/potassco/guide"
 
 [project.scripts]
-pyclingcon = "clingcon:_pyclingcon"
+pyclingodl = "clingodl:_pyclingodl"
 
 [build-system]
 requires = ["scikit-build-core>=1.0", "pybind11", "clingo>=6.0.0"]
