@@ -33,7 +33,7 @@ endif
 ifeq ($(BUILD_TYPE),debug)
 	cmake_options += -DCMAKE_BUILD_TYPE="Debug"
 else ifeq ($(BUILD_TYPE),profile)
-	cmake_options += -DCMAKE_BUILD_TYPE="RelWithDebInfo" -DCLINGCON_PROFILE=On
+	cmake_options += -DCMAKE_BUILD_TYPE="RelWithDebInfo" -DCLINGODL_PROFILE=On
 else
 	cmake_options += -DCMAKE_BUILD_TYPE="Release"
 endif
