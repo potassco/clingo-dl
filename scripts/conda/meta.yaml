@@ -21,9 +21,7 @@ requirements:
   host:
   - clingo
   - python
-  - libpython
   run:
-  - libpython
   - python
   - clingo
 

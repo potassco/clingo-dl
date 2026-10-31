@@ -62,3 +62,4 @@ jobs:
         run: |
           cmake --install build --config Release
           clingo-dl --version
+          python -c 'import clingodl; clingodl._pyclingodl()' --version
