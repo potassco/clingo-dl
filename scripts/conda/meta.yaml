@@ -42,13 +42,10 @@ about:
   description: >-
     Clingo-dl is an extension of the clingo answer set programming solver that
     combines logical rules with difference constraints over integers or reals.
-
     This makes it useful for problems where choices and timing or numeric
     relationships need to be reasoned about together, such as scheduling and
-    timetabling.
-
-    Its focused constraint language can make these relationships easier to
-    express within an ASP model.
+    timetabling. Its focused constraint language can make these relationships
+    easier to express within an ASP model.
   license_file: LICENSE.md
   doc_url: https://potassco.org/
   dev_url: https://github.com/potassco/{{ name }}/
