@@ -18,8 +18,6 @@ echo $version
 echo $message
 echo $dir
 
-exit
-
 function sync() {
     rsync -a --exclude '.git' --exclude '.gitmodules' "../$1/" "$1/"
     git add "$1"
