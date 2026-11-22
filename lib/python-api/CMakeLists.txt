@@ -7,11 +7,15 @@ set(source
     ${source-group})
 # ]]]
 
-pybind11_add_module(pyclingo-dl)
-target_sources(pyclingo-dl PRIVATE ${source})
+if(TARGET Python::SABIModule)
+    set(pyclingodl_sabi USE_SABI 3.11)
+else()
+    set(pyclingodl_sabi)
+endif()
+Python_add_library(pyclingo-dl MODULE WITH_SOABI ${pyclingodl_sabi} "${source}")
 clingodl_target_properties(TARGET pyclingo-dl FOLDER "lib" SUBDIR "python")
 set_target_properties(pyclingo-dl PROPERTIES OUTPUT_NAME "clingodl")
-target_link_libraries(pyclingo-dl PRIVATE clingo-dl Python::Module)
+target_link_libraries(pyclingo-dl PRIVATE clingo-dl)
 
 if(CLINGODL_INSTALL_WHEEL)
     install(TARGETS pyclingo-dl

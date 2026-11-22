@@ -4,6 +4,7 @@ dynamic = ["version"]
 description = "Python bindings to the clingo-dl solver."
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [{ name = "Roland Kaminski", email = "kaminski@cs.uni-potsdam.de" }]
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -39,7 +40,7 @@ Documentation = "https://github.com/potassco/guide"
 pyclingodl = "clingodl:_pyclingodl"
 
 [build-system]
-requires = ["scikit-build-core>=1.0", "pybind11", "clingo>=6.0.0"]
+requires = ["scikit-build-core>=1.0", "clingo>=6.0.0"]
 build-backend = "scikit_build_core.build"
 
 [[tool.dynamic-metadata]]
@@ -47,6 +48,10 @@ provider = { path = "scripts", module = "meta" }
 
 [tool.scikit-build.sdist]
 include = [".git_hash"]
+
+[tool.scikit-build.wheel]
+py-api = "cp311"
+exclude = ["bin/*", "share/*"]
 
 [tool.pytest.ini_options]
 addopts = ["--ignore=third_party", "--ignore=doc", "--ignore=.git"]
@@ -60,6 +65,10 @@ min-public-methods = 1
 
 [tool.cibuildwheel]
 enable = ["pypy"]
+skip = ["cp3??t-*"]
+test-requires = ["pytest"]
+test-sources = ["lib/python-api/tests"]
+test-command = "python -m pytest lib/python-api/tests"
 
 [tool.cibuildwheel.linux]
 archs = ["auto", "aarch64", "ppc64le"]

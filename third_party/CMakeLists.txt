@@ -1,7 +1,3 @@
-if (CLINGODL_BUILD_PYTHON AND NOT DEFINED SKBUILD)
-    add_subdirectory(pybind11)
-endif()
-
 if (CLINGODL_BUILD_TESTS)
     if (NOT TARGET Catch2::Catch2WithMain)
         if (CLINGODL_USE_LOCAL_CATCH)

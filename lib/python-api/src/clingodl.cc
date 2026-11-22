@@ -1,23 +1,64 @@
+#include <Python.h>
+
 #include <clingo-dl.h>
 
-#include <pybind11/eval.h>
-#include <pybind11/pybind11.h>
-
-namespace PyClingoDL {
+#include <array>
+#include <utility>
 
 namespace {
 
-auto create_theory() -> pybind11::object {
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-    return pybind11::capsule{reinterpret_cast<void *>(&clingodl_create), "clingo_theory_create"};
+template <class T, auto Destroy> class Guard {
+  public:
+    constexpr explicit Guard(T v = {}) noexcept : value_{v} {}
+
+    Guard(Guard const &other) = delete;
+    auto operator=(Guard const &other) -> Guard & = delete;
+    constexpr Guard(Guard &&other) noexcept : value_{std::exchange(other.value_, T{})} {}
+    constexpr auto operator=(Guard &&other) noexcept -> Guard & {
+        if (this != &other) {
+            destroy_();
+            value_ = std::exchange(other.value_, T{});
+        }
+        return *this;
+    }
+
+    ~Guard() noexcept { destroy_(); }
+
+    [[nodiscard]] constexpr auto get() noexcept -> T & { return value_; }
+
+    auto release() noexcept -> T {
+        auto v = value_;
+        value_ = T{};
+        return v;
+    }
+
+  private:
+    void destroy_() {
+        if (value_ != T{}) {
+            Destroy(value_);
+        }
+    }
+    T value_{};
+};
+
+using PyGuard = Guard<PyObject *, Py_DECREF>;
+
+auto steal(PyObject *obj) -> PyGuard { return PyGuard(obj); }
+
+auto borrow(PyObject *obj) -> PyGuard {
+    Py_XINCREF(obj);
+    return PyGuard(obj);
 }
 
-auto main() {
-    pybind11::exec(
-        R"py(
+auto create_theory([[maybe_unused]] PyObject *module, [[maybe_unused]] PyObject *arg) -> PyObject * {
+    // NOLINTNEXTLINE
+    return PyCapsule_New(reinterpret_cast<void *>(&clingodl_create), "clingo_theory_create", nullptr);
+}
+
+auto run_app([[maybe_unused]] PyObject *module, [[maybe_unused]] PyObject *arg) -> PyObject * {
+    static const char *source = R"py(
 import sys
-from sys import stdout
-from typing import Callable, Sequence
+from typing import Sequence
 
 from clingo import ast
 from clingo.app import App, AppOptions, clingo_main
@@ -38,9 +79,6 @@ class ClingoDLApp(App):
         globals()["THEORY"] = theory
 
     def main(self, control: Control, files: Sequence[str]) -> None:
-        """
-        Run the main execution flow of the application.
-        """
         self._theory.register(control)
         self._theory.rewrite_files(self._lib, control, files)
         if control.mode != ControlMode.Solve or "main" in globals():
@@ -48,18 +86,13 @@ class ClingoDLApp(App):
         else:
             control.ground()
             self._theory.prepare(control)
-            control.solve(on_model=self._theory.on_model, on_stats=self._theory.on_stats)
+            control.solve(on_model=self._theory.on_model,
+                          on_stats=self._theory.on_stats)
 
     def register_options(self, options: AppOptions) -> None:
-        """
-        Register command-line options for the application.
-        """
         self._theory.register_options(options)
 
     def validate_options(self) -> None:
-        """
-        Validate the options passed to the application.
-        """
         self._theory.validate_options()
 
 
@@ -71,17 +104,62 @@ def run():
 
 
 run()
-)py");
+)py";
+    auto main = borrow(PyImport_AddModule("__main__"));
+    if (main.get() == nullptr) {
+        return nullptr;
+    }
+    auto scope = borrow(PyModule_GetDict(main.get()));
+    if (scope.get() == nullptr) {
+        return nullptr;
+    }
+    auto src = steal(PyBytes_FromString(source));
+    if (src.get() == nullptr) {
+        return nullptr;
+    }
+    auto compiled = steal(Py_CompileString(PyBytes_AsString(src.get()), "<string>", Py_file_input));
+    if (compiled.get() == nullptr) {
+        return nullptr;
+    }
+
+    auto res = steal(PyEval_EvalCode(compiled.get(), scope.get(), scope.get()));
+    if (res.get() == nullptr) {
+        return nullptr;
+    }
+    Py_RETURN_NONE;
 }
+
+// NOLINTNEXTLINE
+auto methods = std::to_array<PyMethodDef>({
+    {
+        "create_theory",
+        create_theory,
+        METH_NOARGS,
+        "Get the theory constructor.",
+    },
+    {
+        "_pyclingodl",
+        run_app,
+        METH_NOARGS,
+        "Run clingo-dl.",
+    },
+    {nullptr, nullptr, 0, nullptr},
+});
+
+// NOLINTNEXTLINE
+PyModuleDef module = {
+    PyModuleDef_HEAD_INIT,
+    "clingodl",
+    "The clingo-dl Python module.",
+    -1,
+    methods.data(),
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+};
 
 } // namespace
 
-void register_clingodl(pybind11::module &m) {
-    m.doc() = R"doc(The clingo-dl python module.)doc";
-    m.def("create_theory", create_theory, R"(Get the theory constructor.)");
-    m.def("_pyclingodl", main, R"(Run clingo-dl.)");
-}
-
-} // namespace PyClingoDL
-
-PYBIND11_MODULE(clingodl, m) { PyClingoDL::register_clingodl(m); }
+// NOLINTNEXTLINE
+PyMODINIT_FUNC PyInit_clingodl() { return PyModule_Create(&module); }
