@@ -18,10 +18,11 @@ requirements:
   host:
   - pytest
   - python
-  - clingo
+  - clingo >=6
+  # the exact pin on clingo comes from the run_exports of clingo
   run:
   - python
-  - clingo
+  - clingo >=6
 
 build:
   number: {{ build }}
