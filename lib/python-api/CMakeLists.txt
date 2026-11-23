@@ -13,9 +13,20 @@ else()
     set(pyclingodl_sabi)
 endif()
 Python_add_library(pyclingo-dl MODULE WITH_SOABI ${pyclingodl_sabi} "${source}")
+# FindPython may pick the abi3t suffix for Python 3.15 and later but the
+# module targets abi3, which is only compatible with GIL-enabled builds
+get_target_property(pyclingodl_suffix pyclingo-dl SUFFIX)
+if(pyclingodl_sabi AND pyclingodl_suffix AND NOT Python_FREE_THREADED)
+    string(REPLACE ".abi3t" ".abi3" pyclingodl_suffix "${pyclingodl_suffix}")
+    set_target_properties(pyclingo-dl PROPERTIES SUFFIX "${pyclingodl_suffix}")
+endif()
 clingodl_target_properties(TARGET pyclingo-dl FOLDER "lib" SUBDIR "python")
 set_target_properties(pyclingo-dl PROPERTIES OUTPUT_NAME "clingodl")
 target_link_libraries(pyclingo-dl PRIVATE clingo-dl)
+if(WIN32)
+    # rely on CMake for linking instead of the pragma in pyconfig.h (Python 3.14+)
+    target_compile_definitions(pyclingo-dl PRIVATE Py_NO_LINK_LIB)
+endif()
 
 if(CLINGODL_INSTALL_WHEEL)
     install(TARGETS pyclingo-dl
@@ -52,10 +63,10 @@ elseif(CLINGODL_INSTALL_DEFAULT)
     endif()
     message(STATUS "Python module path: ${python_install_dir}")
     file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/INSTALLER" "pip\n")
-    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/METADATA" "Metadata-Version: 1.1\nName: clingo\nVersion: ${CLINGODL_VERSION}\n")
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/METADATA" "Metadata-Version: 1.1\nName: clingo-dl\nVersion: ${CLINGODL_VERSION}\n")
     install(
         FILES "${CMAKE_CURRENT_BINARY_DIR}/INSTALLER" "${CMAKE_CURRENT_BINARY_DIR}/METADATA"
-        DESTINATION "${python_install_dir}/clingodl-${CLINGODL_VERSION}.dist-info")
+        DESTINATION "${python_install_dir}/clingo_dl-${CLINGODL_VERSION}.dist-info")
     install(
         TARGETS pyclingo-dl
         RUNTIME DESTINATION "${python_install_dir}"

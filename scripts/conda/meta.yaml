@@ -13,13 +13,12 @@ requirements:
   build:
   - cmake
   - ninja
-  - python
-  - pytest
   - {{ compiler('c') }}
   - {{ compiler('cxx') }}
   host:
-  - clingo
+  - pytest
   - python
+  - clingo
   run:
   - python
   - clingo

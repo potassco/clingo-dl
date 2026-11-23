@@ -3,64 +3,25 @@
 #include <clingo-dl.h>
 
 #include <array>
-#include <utility>
+#include <memory>
 
 namespace {
 
-template <class T, auto Destroy> class Guard {
-  public:
-    constexpr explicit Guard(T v = {}) noexcept : value_{v} {}
-
-    Guard(Guard const &other) = delete;
-    auto operator=(Guard const &other) -> Guard & = delete;
-    constexpr Guard(Guard &&other) noexcept : value_{std::exchange(other.value_, T{})} {}
-    constexpr auto operator=(Guard &&other) noexcept -> Guard & {
-        if (this != &other) {
-            destroy_();
-            value_ = std::exchange(other.value_, T{});
-        }
-        return *this;
-    }
-
-    ~Guard() noexcept { destroy_(); }
-
-    [[nodiscard]] constexpr auto get() noexcept -> T & { return value_; }
-
-    auto release() noexcept -> T {
-        auto v = value_;
-        value_ = T{};
-        return v;
-    }
-
-  private:
-    void destroy_() {
-        if (value_ != T{}) {
-            Destroy(value_);
-        }
-    }
-    T value_{};
+struct Decref {
+    void operator()(PyObject *obj) const noexcept { Py_DECREF(obj); }
 };
 
-using PyGuard = Guard<PyObject *, Py_DECREF>;
+using PyRef = std::unique_ptr<PyObject, Decref>;
 
-auto steal(PyObject *obj) -> PyGuard { return PyGuard(obj); }
-
-auto borrow(PyObject *obj) -> PyGuard {
-    Py_XINCREF(obj);
-    return PyGuard(obj);
-}
-
-auto create_theory([[maybe_unused]] PyObject *module, [[maybe_unused]] PyObject *arg) -> PyObject * {
-    // NOLINTNEXTLINE
+auto create_theory([[maybe_unused]] PyObject *mod, [[maybe_unused]] PyObject *arg) -> PyObject * {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     return PyCapsule_New(reinterpret_cast<void *>(&clingodl_create), "clingo_theory_create", nullptr);
 }
 
-auto run_app([[maybe_unused]] PyObject *module, [[maybe_unused]] PyObject *arg) -> PyObject * {
-    static const char *source = R"py(
+constexpr char const *app_source = R"py(
 import sys
 from typing import Sequence
 
-from clingo import ast
 from clingo.app import App, AppOptions, clingo_main
 from clingo.control import Control, ControlMode
 from clingo.core import Library
@@ -86,8 +47,7 @@ class ClingoDLApp(App):
         else:
             control.ground()
             self._theory.prepare(control)
-            control.solve(on_model=self._theory.on_model,
-                          on_stats=self._theory.on_stats)
+            control.solve(on_model=self._theory.on_model, on_stats=self._theory.on_stats)
 
     def register_options(self, options: AppOptions) -> None:
         self._theory.register_options(options)
@@ -100,58 +60,42 @@ def run():
     lib = Library()
     enable_python(lib)
     app = ClingoDLApp(lib)
-    clingo_main(lib, sys.argv[1:], app)
+    sys.exit(clingo_main(lib, sys.argv[1:], app))
 
 
 run()
 )py";
-    auto main = borrow(PyImport_AddModule("__main__"));
-    if (main.get() == nullptr) {
-        return nullptr;
-    }
-    auto scope = borrow(PyModule_GetDict(main.get()));
-    if (scope.get() == nullptr) {
-        return nullptr;
-    }
-    auto src = steal(PyBytes_FromString(source));
-    if (src.get() == nullptr) {
-        return nullptr;
-    }
-    auto compiled = steal(Py_CompileString(PyBytes_AsString(src.get()), "<string>", Py_file_input));
-    if (compiled.get() == nullptr) {
-        return nullptr;
-    }
 
-    auto res = steal(PyEval_EvalCode(compiled.get(), scope.get(), scope.get()));
-    if (res.get() == nullptr) {
+auto run_app([[maybe_unused]] PyObject *mod, [[maybe_unused]] PyObject *arg) -> PyObject * {
+    auto main = PyRef{PyImport_ImportModule("__main__")};
+    if (!main) {
+        return nullptr;
+    }
+    auto code = PyRef{Py_CompileString(app_source, "<clingodl>", Py_file_input)};
+    if (!code) {
+        return nullptr;
+    }
+    auto *scope = PyModule_GetDict(main.get());
+    auto res = PyRef{PyEval_EvalCode(code.get(), scope, scope)};
+    if (!res) {
         return nullptr;
     }
     Py_RETURN_NONE;
 }
 
-// NOLINTNEXTLINE
-auto methods = std::to_array<PyMethodDef>({
-    {
-        "create_theory",
-        create_theory,
-        METH_NOARGS,
-        "Get the theory constructor.",
-    },
-    {
-        "_pyclingodl",
-        run_app,
-        METH_NOARGS,
-        "Run clingo-dl.",
-    },
-    {nullptr, nullptr, 0, nullptr},
-});
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+auto methods = std::array{
+    PyMethodDef{"create_theory", create_theory, METH_NOARGS, PyDoc_STR("Get the theory constructor.")},
+    PyMethodDef{"_pyclingodl", run_app, METH_NOARGS, PyDoc_STR("Run clingo-dl.")},
+    PyMethodDef{nullptr, nullptr, 0, nullptr},
+};
 
-// NOLINTNEXTLINE
-PyModuleDef module = {
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+PyModuleDef module_def = {
     PyModuleDef_HEAD_INIT,
     "clingodl",
-    "The clingo-dl Python module.",
-    -1,
+    PyDoc_STR("The clingo-dl Python module."),
+    0,
     methods.data(),
     nullptr,
     nullptr,
@@ -161,5 +105,5 @@ PyModuleDef module = {
 
 } // namespace
 
-// NOLINTNEXTLINE
-PyMODINIT_FUNC PyInit_clingodl() { return PyModule_Create(&module); }
+// NOLINTNEXTLINE(modernize-use-trailing-return-type)
+PyMODINIT_FUNC PyInit_clingodl() { return PyModuleDef_Init(&module_def); }
