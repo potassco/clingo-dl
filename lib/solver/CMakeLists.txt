@@ -36,7 +36,7 @@ set(test
     ${test-group-tests})
 # ]]]
 
-add_library(clingo-dl-solver STATIC)
+add_library(clingo-dl-solver OBJECT)
 clingodl_target_properties(TARGET clingo-dl-solver FOLDER "lib" TYPE extra)
 target_sources(clingo-dl-solver PRIVATE ${header} ${source})
 target_include_directories(clingo-dl-solver PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")

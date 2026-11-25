@@ -23,7 +23,7 @@ set(test
     ${test-group-tests})
 # ]]]
 
-add_library(clingo-dl-optimizer STATIC)
+add_library(clingo-dl-optimizer OBJECT)
 clingodl_target_properties(TARGET clingo-dl-optimizer FOLDER "lib" TYPE extra)
 target_sources(clingo-dl-optimizer PRIVATE ${header} ${source})
 target_link_libraries(clingo-dl-optimizer PUBLIC clingo-dl)

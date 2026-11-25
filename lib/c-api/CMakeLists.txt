@@ -37,7 +37,7 @@ target_sources(clingo-dl PRIVATE ${header} ${source})
 target_include_directories(clingo-dl PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
-target_link_libraries(clingo-dl PUBLIC clingo::clingo PRIVATE clingodl-hash clingo-dl-solver)
+target_link_libraries(clingo-dl PUBLIC clingo::clingo PRIVATE $<BUILD_INTERFACE:clingodl-hash> clingo-dl-solver)
 if(CLINGODL_USE_VISIBILITY)
     target_compile_definitions(clingo-dl PRIVATE "$<BUILD_INTERFACE:CLINGODL_BUILD_LIBRARY>")
 else()
